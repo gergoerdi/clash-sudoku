@@ -39,6 +39,11 @@ getUnique = fold propagate . zipWith start (reverse indicesI) . bitCoerce
     propagate x        Unset    = x
     propagate _        _ = Conflict
 
+isUnique :: (KnownNat n) => BitVector (n + 1) -> Bool
+isUnique x = case getUnique x of
+  Unique{} -> True
+  _ -> False
+
 showSquare :: (KnownNat n, n <= 8) => Square (n + 1) -> Char
 showSquare x = case getUnique x of
     _ | x == maxBound -> '_'
@@ -143,13 +148,13 @@ others :: (1 <= n) => Vec n a -> Vec n (Vec (n - 1) a)
 others (Cons x Nil) = Nil :> Nil
 others (Cons x xs@(Cons _ _)) = xs :> map (x :>) (others xs)
 
-simplify :: forall n k k0. (KnownNat n, 1 <= n, KnownNat k, k ~ k0 + 1) => Vec n (Square k) -> WriterT Any Maybe (Vec n (Square k))
+simplify :: forall n k k0. (KnownNat n, 1 <= n, KnownNat k, k ~ k0 + 1) => Vec n (Square k) -> WriterT (Any, All) Maybe (Vec n (Square k))
 simplify xs = traverse (uncurry simplifySquare) (zip xs (others xs))
   where
-    simplifySquare :: forall n. Square k -> Vec n (Square k) -> WriterT Any Maybe (Square k)
+    simplifySquare :: forall n. Square k -> Vec n (Square k) -> WriterT (Any, All) Maybe (Square k)
     simplifySquare x xs = do
         guard $ x' /= 0
-        tell $ Any $ x' /= x
+        tell (Any $ x' /= x, All $ isUnique x')
         pure x'
       where
         x' = foldl f x xs
@@ -158,7 +163,7 @@ simplify xs = traverse (uncurry simplifySquare) (zip xs (others xs))
 
 propagate1
     :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
-    => Sudoku n m -> WriterT Any Maybe (Sudoku n m)
+    => Sudoku n m -> WriterT (Any, All) Maybe (Sudoku n m)
 propagate1 s = do
     (s :: Sudoku n m) <- fmap Sudoku . rowwise simplify . getSudoku $ s
     (s :: Sudoku n m) <- fmap Sudoku . columnwise simplify . getSudoku $ s
@@ -167,7 +172,7 @@ propagate1 s = do
 
 propagate
     :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
-    => Sudoku n m -> Maybe (Sudoku n m)
+    => Sudoku n m -> Maybe (Sudoku n m, Bool)
 propagate s = do
-    (s', Any changed) <- runWriterT $ propagate1 s
-    (if changed then propagate else pure) s'
+    (s', (Any changed, All solved)) <- runWriterT $ propagate1 s
+    if changed then propagate s' else pure (s', solved)
