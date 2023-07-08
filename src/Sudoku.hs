@@ -12,6 +12,7 @@ import Data.Char (isDigit)
 import Clash.Sized.Vector (unsafeFromList)
 import Control.Monad (guard)
 import Control.Monad.Writer
+import Control.Monad.State
 
 type Matrix n m a = Vec n (Vec m a)
 type Square n = BitVector n
@@ -170,9 +171,47 @@ propagate1 s = do
     (s :: Sudoku n m) <- fmap Sudoku . squarewise @n @m simplify . getSudoku $ s
     return s
 
+commit1
+    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
+    => Sudoku n m -> (Sudoku n m, Maybe (Sudoku n m))
+commit1 s = (Sudoku next, Sudoku <$> after)
+  where
+    next = map (map fst) r
+    after = traverse (traverse snd) r
+
+    r = flip evalState False . traverse (traverse f) . getSudoku $ s
+
+    f :: Square (n * m) -> State Bool (Square (n * m), Maybe (Square (n * m)))
+    f x
+      | Unique{} <- getUnique x = pure (x, Just x)
+      | otherwise = do
+            changed <- get
+            let mb_i = elemIndex True (reverse . bitCoerce $ x)
+            case (changed, mb_i) of
+                (False, Just i) -> do
+                    put True
+                    let x' = oneHot i
+                        x'' = x .&. complement x'
+                    pure (x', x'' <$ guard (x'' /= 0))
+                _ -> pure (x, Just x)
+
 propagate
     :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
     => Sudoku n m -> Maybe (Sudoku n m, Bool)
 propagate s = do
     (s', (Any changed, All solved)) <- runWriterT $ propagate1 s
     if changed then propagate s' else pure (s', solved)
+
+solve1
+    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
+    => Sudoku n m -> Maybe (Sudoku n m)
+solve1 = (Just . fst . commit1) <=< (fmap fst . propagate)
+
+solve
+    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
+    => Sudoku n m -> Maybe (Sudoku n m)
+solve s = do
+    (s' , solved) <- propagate s
+    if solved then pure s' else do
+        let (next, after) = commit1 s'
+        (solve next) <|> (solve =<< after)
