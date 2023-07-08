@@ -1,23 +1,16 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE BlockArguments #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
 module Sudoku where
 
 import Clash.Prelude
 import Data.Bits
 import Data.Char (isDigit)
--- import qualified Data.List as L
 import Clash.Sized.Vector (unsafeFromList)
 
 type Matrix n m a = Vec n (Vec m a)
-type Square = BitVector
-type Area n m a = Matrix n m (Matrix m n a)
-type Sudoku n m = Area n m (Square (n * m))
-type Addr n m = (Index n, Index m, Index m, Index n)
-type Neighbours n m = Vec (3 * ((n * m) - 1)) (Addr n m)
-type Adj n m = Area n m (Neighbours n m)
-type Sudoku' = Sudoku 3 3
+type Square n = BitVector n
+newtype Sudoku n m = Sudoku{ getSudoku :: Matrix (n * m) (m * n) (Square (n * m)) }
 
 wild :: (KnownNat n) => BitVector n
 wild = 0
@@ -31,7 +24,7 @@ data Unique a
     | Unset
     deriving (Show)
 
-getUnique :: (KnownNat n) => Square (n + 1) -> Unique (Index (n + 1))
+getUnique :: (KnownNat n) => BitVector (n + 1) -> Unique (Index (n + 1))
 getUnique = fold propagate . zipWith start (reverse indicesI) . bitCoerce
   where
     start i True = Unique i
@@ -54,8 +47,8 @@ readSquare n = oneHot $ fromInteger (read [n] - 1)
 
 showBoard'
     :: (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
-    => Sudoku n m -> Matrix (n * m) (n * m) Char
-showBoard' = concatMap \rowBlocks -> map (\i -> map showSquare $ concatMap (!! i) rowBlocks) indicesI
+    => Sudoku n m -> Matrix (n * m) (m * n) Char
+showBoard' = map (map showSquare) . getSudoku
 
 showBoard
     :: (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
@@ -63,13 +56,10 @@ showBoard
 showBoard = unlines . fmap toList . toList . showBoard'
 
 readBoard'
-    :: forall n m k. (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
+    :: (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
     => Vec ((n * m) * (n * m)) (Square (n * m))
     -> Sudoku n m
-readBoard' s =
-  map (transpose . map ({-map (map readSquare) . -} unconcatI @m @n)) lines
-  where
-    lines = unconcatI @n @m . unconcatI @(n * m) @(n * m) $ s
+readBoard' = Sudoku . unconcatI
 
 readBoard
     :: (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
@@ -91,26 +81,3 @@ board = readBoard . filter isDigit . unlines $
     , "0 5 1  0 0 7  0 0 0"
     ]
 
-data Propagate a
-    = Unsolvable
-    | Underspecified
-    | Progress a
-
-adj
-    :: (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1))
-    => Adj n m
-adj =
-    flip map indicesI \x ->
-    flip map indicesI \y ->
-    flip map indicesI \z ->
-    flip map indicesI \q -> concat $
-      unsafeFromList [(x, y, z', q') | z' <- toList indicesI, q' <- toList indicesI, (z', q') /= (z, q)] :>
-      unsafeFromList [(x, y', z, q') | y' <- toList indicesI, q' <- toList indicesI, (y', q') /= (y, q)] :>
-      unsafeFromList [(x', y, z', q) | x' <- toList indicesI, z' <- toList indicesI, (x', z') /= (x, z)] :>
-      Nil
-
-
--- propagate1
---     :: forall n m k. (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1))
---     => Sudoku n m -> _ -- Propagate (Sudoku n m)
--- propagate1 = zipWith (zipWith (zipWith (zipWith _))) adj
