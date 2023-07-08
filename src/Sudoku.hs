@@ -11,6 +11,7 @@ import Data.Bits
 import Data.Char (isDigit)
 import Clash.Sized.Vector (unsafeFromList)
 import Control.Monad (guard)
+import Control.Monad.Writer
 
 type Matrix n m a = Vec n (Vec m a)
 type Square n = BitVector n
@@ -142,11 +143,14 @@ others :: (1 <= n) => Vec n a -> Vec n (Vec (n - 1) a)
 others (Cons x Nil) = Nil :> Nil
 others (Cons x xs@(Cons _ _)) = xs :> map (x :>) (others xs)
 
-simplify :: forall n k k0. (KnownNat n, 1 <= n, KnownNat k, k ~ k0 + 1) => Vec n (Square k) -> Maybe (Vec n (Square k))
+simplify :: forall n k k0. (KnownNat n, 1 <= n, KnownNat k, k ~ k0 + 1) => Vec n (Square k) -> WriterT Any Maybe (Vec n (Square k))
 simplify xs = traverse (uncurry simplifySquare) (zip xs (others xs))
   where
-    simplifySquare :: forall n. Square k -> Vec n (Square k) -> Maybe (Square k)
-    simplifySquare x xs = x' <$ guard (x' /= 0)
+    simplifySquare :: forall n. Square k -> Vec n (Square k) -> WriterT Any Maybe (Square k)
+    simplifySquare x xs = do
+        guard $ x' /= 0
+        tell $ Any $ x' /= x
+        pure x'
       where
         x' = foldl f x xs
         f x y | Unique{} <- getUnique y = x .&. complement y
@@ -154,9 +158,16 @@ simplify xs = traverse (uncurry simplifySquare) (zip xs (others xs))
 
 propagate1
     :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
-    => Sudoku n m -> Maybe (Sudoku n m)
+    => Sudoku n m -> WriterT Any Maybe (Sudoku n m)
 propagate1 s = do
     (s :: Sudoku n m) <- fmap Sudoku . rowwise simplify . getSudoku $ s
     (s :: Sudoku n m) <- fmap Sudoku . columnwise simplify . getSudoku $ s
     (s :: Sudoku n m) <- fmap Sudoku . squarewise @n @m simplify . getSudoku $ s
     return s
+
+propagate
+    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
+    => Sudoku n m -> Maybe (Sudoku n m)
+propagate s = do
+    (s', Any changed) <- runWriterT $ propagate1 s
+    (if changed then propagate else pure) s'
