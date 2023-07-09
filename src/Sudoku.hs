@@ -1,12 +1,13 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE PartialTypeSignatures #-}
-{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE StandaloneDeriving #-}
 module Sudoku where
 
-import Clash.Prelude
+import Clash.Prelude hiding (lift)
 import Data.Bits
 import Data.Char (isDigit)
 import Clash.Sized.Vector (unsafeFromList)
@@ -16,7 +17,9 @@ import Control.Monad.State
 
 type Matrix n m a = Vec n (Vec m a)
 type Square n = BitVector n
+
 newtype Sudoku n m = Sudoku{ getSudoku :: Matrix (n * m) (m * n) (Square (n * m)) }
+  deriving (Generic, NFDataX)
 
 wild :: (KnownNat n) => BitVector n
 wild = maxBound
@@ -207,11 +210,47 @@ solve1
     => Sudoku n m -> Maybe (Sudoku n m)
 solve1 = (Just . fst . commit1) <=< (fmap fst . propagate)
 
-solve
+type StackPtr n m = Index ((n * m) * (m * n))
+type Stack n m = Vec ((n * m) * (m * n)) (Sudoku n m)
+
+data Phase n m
+    = Init
+    | Propagate (Sudoku n m)
+    | Try (Sudoku n m)
+    | Solved (Sudoku n m)
+
+data StackCmd n m
+    = Pop
+    | Push (Sudoku n m)
+
+solver1
     :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
-    => Sudoku n m -> Maybe (Sudoku n m)
-solve s = do
-    (s' , solved) <- propagate s
-    if solved then pure s' else do
-        let (next, after) = commit1 s'
-        (solve next) <|> (solve =<< after)
+    => Maybe (Sudoku n m)
+    -> State (Phase n m) (Maybe (Sudoku n m), Maybe (StackCmd n m))
+solver1 (Just popBoard) = do
+    put $ Propagate popBoard
+    return (Nothing, Nothing)
+solver1 Nothing = get >>= \case
+    Init -> do
+        return (Nothing, Just Pop)
+    Solved board -> do
+        return (Just board, Nothing)
+    Propagate board -> case runWriterT $ propagate1 board of
+        Nothing -> do
+            return (Nothing, Just Pop)
+        Just (board', (Any changed, All solved)) -> do
+            put $ if
+                | solved    -> Solved board'
+                | changed   -> Propagate board'
+                | otherwise -> Try board'
+            return (Nothing, Nothing)
+    Try board -> do
+        let (next, after) = commit1 board
+        put $ Propagate next
+        return (Nothing, Push <$> after)
+
+data Result n m
+    = Working
+    | Solution (Sudoku n m)
+    | Unsolvable
+deriving instance (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8) => Show (Result n m)
