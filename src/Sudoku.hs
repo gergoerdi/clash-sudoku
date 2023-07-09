@@ -255,11 +255,8 @@ data Result n m
     = Working
     | Solution (Sudoku n m)
     | Unsolvable
+    deriving (Generic, NFDataX)
 deriving instance (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8) => Show (Result n m)
-
-type StackSize n m = ((n * m) * (m * n))
-type StackPtr n m = Index (StackSize n m)
-type Stack n m = Vec (StackSize n m) (Sudoku n m)
 
 stack
     :: forall n a. (KnownNat n, NFDataX a)
@@ -270,14 +267,32 @@ stack
     -> ( Signal dom (Maybe a)
        , Signal dom Bool
        )
-stack size x0 cmd = (enable en rd, underflow)
+stack size x0 cmd = (enable (delay False en) rd, underflow)
   where
     sp = register (0 :: Index n) sp'
     (sp', en, wr, underflow) = unbundle $ interpret <$> sp <*> cmd
 
-    interpret sp = \case
+    interpret sp cmd = case cmd of
         Nothing -> (sp, False, Nothing, False)
         Just Pop -> (sp - 1, True, Nothing, sp == 0)
         Just (Push x) -> (sp + 1, False, Just x, False)
 
     rd = blockRam (replicate size x0) sp' (packWrite <$> sp' <*> wr)
+
+type StackSize n m = ((n * m) * (m * n))
+
+circuit
+    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
+    => forall dom. (HiddenClockResetEnable dom)
+    => Signal dom (Maybe (Sudoku n m))
+    -> Signal dom (Result n m)
+circuit newBoard = result <$> underflow <*> solution
+  where
+    (solution, stackCmd) = mealyStateB solver1 Init (newBoard .<|>. stackRd)
+    (stackRd, underflow) = stack (SNat @(StackSize n m)) (Sudoku . repeat . repeat $ 0) stackCmd
+
+    result True _ = Unsolvable
+    result False (Just board) = Solution board
+    result False Nothing = Working
+
+foo = simulate @System (circuit @3 @3)
