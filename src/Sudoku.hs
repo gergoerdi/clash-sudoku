@@ -8,8 +8,11 @@
 module Sudoku where
 
 import Clash.Prelude hiding (lift)
+import RetroClash.Utils hiding (oneHot)
+
 import Data.Bits
 import Data.Char (isDigit)
+import Data.Maybe
 import Clash.Sized.Vector (unsafeFromList)
 import Control.Monad (guard)
 import Control.Monad.Writer
@@ -210,23 +213,22 @@ solve1
     => Sudoku n m -> Maybe (Sudoku n m)
 solve1 = (Just . fst . commit1) <=< (fmap fst . propagate)
 
-type StackPtr n m = Index ((n * m) * (m * n))
-type Stack n m = Vec ((n * m) * (m * n)) (Sudoku n m)
-
 data Phase n m
     = Init
     | Propagate (Sudoku n m)
     | Try (Sudoku n m)
     | Solved (Sudoku n m)
+    deriving (Generic, NFDataX)
 
-data StackCmd n m
+data StackCmd a
     = Pop
-    | Push (Sudoku n m)
+    | Push a
+    deriving (Show, Generic, NFDataX)
 
 solver1
     :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
     => Maybe (Sudoku n m)
-    -> State (Phase n m) (Maybe (Sudoku n m), Maybe (StackCmd n m))
+    -> State (Phase n m) (Maybe (Sudoku n m), Maybe (StackCmd (Sudoku n m)))
 solver1 (Just popBoard) = do
     put $ Propagate popBoard
     return (Nothing, Nothing)
@@ -254,3 +256,28 @@ data Result n m
     | Solution (Sudoku n m)
     | Unsolvable
 deriving instance (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8) => Show (Result n m)
+
+type StackSize n m = ((n * m) * (m * n))
+type StackPtr n m = Index (StackSize n m)
+type Stack n m = Vec (StackSize n m) (Sudoku n m)
+
+stack
+    :: forall n a. (KnownNat n, NFDataX a)
+    => forall dom. (HiddenClockResetEnable dom)
+    => SNat n
+    -> a
+    -> Signal dom (Maybe (StackCmd a))
+    -> ( Signal dom (Maybe a)
+       , Signal dom Bool
+       )
+stack size x0 cmd = (enable en rd, underflow)
+  where
+    sp = register (0 :: Index n) sp'
+    (sp', en, wr, underflow) = unbundle $ interpret <$> sp <*> cmd
+
+    interpret sp = \case
+        Nothing -> (sp, False, Nothing, False)
+        Just Pop -> (sp - 1, True, Nothing, sp == 0)
+        Just (Push x) -> (sp + 1, False, Just x, False)
+
+    rd = blockRam (replicate size x0) sp' (packWrite <$> sp' <*> wr)
