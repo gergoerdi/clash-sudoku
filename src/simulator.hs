@@ -4,8 +4,11 @@ module Main where
 
 import Clash.Prelude hiding (lift)
 
+import Sudoku.Matrix
+import Sudoku.Board
 import Sudoku
 import Control.Monad.State
+import Data.Char (isDigit)
 
 solveRec
     :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
@@ -52,6 +55,39 @@ solveStack board = flip evalState Init $ flip evalStateT (False, mempty) $ do
     go (Solution board) = return $ Just board
     go Unsolvable = return Nothing
     go Working = solver Nothing >>= go
+
+board1 :: Sudoku 3 3
+board1 = readBoard . filter isDigit . unlines $
+    [ "0 2 0  9 0 8  0 0 0"
+    , "8 7 0  0 0 1  0 5 4"
+    , "5 0 6  4 0 0  0 1 0"
+    , ""
+    , "0 0 2  0 0 0  0 9 5"
+    , "0 0 0  0 0 0  0 0 0"
+    , "9 4 0  0 0 0  8 0 0"
+    , ""
+    , "0 8 0  0 0 4  5 0 3"
+    , "1 3 0  2 0 0  0 8 6"
+    , "0 0 0  3 0 7  0 2 0"
+    ]
+
+board2 :: Sudoku 3 3
+board2 = readBoard . filter isDigit . unlines $
+    [ "0 0 0  6 0 0  5 0 0"
+    , "0 6 0  0 0 8  0 4 0"
+    , "0 0 0  7 0 4  0 0 0"
+    , ""
+    , "0 0 2  8 0 0  0 0 9"
+    , "0 9 0  0 0 0  0 7 0"
+    , "8 0 0  0 0 9  1 0 0"
+    , ""
+    , "0 0 0  2 0 6  0 0 0"
+    , "0 0 0  5 0 0  0 1 0"
+    , "0 5 1  0 0 7  0 0 0"
+    ]
+
+
+foo = simulate @System (circuit @3 @3)
 
 main :: IO ()
 main = do
