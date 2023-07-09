@@ -8,13 +8,17 @@
 module Sudoku where
 
 import Clash.Prelude hiding (lift)
+import Clash.Annotations.TH
+
 import Sudoku.Matrix
 import Sudoku.Board
+
 import RetroClash.Utils hiding (oneHot)
+import RetroClash.SerialRx
+import RetroClash.SerialTx
 
 import Data.Bits
 import Data.Maybe
-import Clash.Sized.Vector (unsafeFromList)
 import Control.Monad (guard)
 import Control.Monad.Writer
 import Control.Monad.State
@@ -162,3 +166,40 @@ circuit newBoard = result <$> underflow <*> solution
     result True _ = Unsolvable
     result False (Just board) = Solution board
     result False Nothing = Working
+
+serialReader
+    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
+    => Maybe (Unsigned 8)
+    -> State (Index ((n * m) * (m * n)), Vec ((n * m) * (m * n)) (Unsigned 8)) (Maybe (Sudoku n m))
+serialReader = undefined
+
+serialIn
+    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
+    => forall dom. (HiddenClockResetEnable dom)
+    => Signal dom (Maybe (Unsigned 8))
+    -> Signal dom (Maybe (Sudoku n m))
+serialIn nextChar = undefined
+
+serialOut
+    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
+    => forall dom. (HiddenClockResetEnable dom)
+    => Signal dom Bool
+    -> Signal dom (Result n m)
+    -> Signal dom (Maybe (Unsigned 8))
+serialOut outReady = undefined
+
+topEntity
+    :: "CLK_100MHZ" ::: Clock System
+    -> "RESET"      ::: Reset System
+    -> "RX"         ::: Signal System Bit
+    -> "TX"         ::: Signal System Bit
+topEntity = withEnableGen board
+  where
+    board rx = tx
+      where
+        inByte = fmap unpack <$> serialRx @8 @9600 @System (SNat @9600) rx
+        (tx, outReady) = serialTx (SNat @9600) (fmap pack <$> outByte)
+
+        outByte = serialOut outReady . circuit @3 @3 . serialIn $ inByte
+
+makeTopEntity 'topEntity

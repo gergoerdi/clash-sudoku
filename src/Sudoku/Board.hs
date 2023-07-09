@@ -5,6 +5,7 @@ import Clash.Prelude
 import Sudoku.Matrix
 
 import Clash.Sized.Vector (unsafeFromList)
+import Data.Char (ord, chr)
 
 type Square n = BitVector n
 
@@ -35,17 +36,21 @@ isUnique x = case getUnique x of
   Unique{} -> True
   _ -> False
 
-showSquare :: (KnownNat n, n <= 8) => Square (n + 1) -> Char
-showSquare x = case getUnique x of
-    _ | x == maxBound -> '_'
-    Unset -> '?'
-    Unique x -> ('1' :> '2' :> '3' :> '4' :> '5' :> '6' :> '7' :> '8' :> '9' :> Nil) !! x
-    Conflict -> 'x'
+ascii :: Char -> Unsigned 8
+ascii = fromIntegral . ord
 
-parseSquare :: (KnownNat n, n <= 8) => Char -> Square (n + 1)
-parseSquare '0' = wild
-parseSquare '_' = wild
-parseSquare n = oneHot $ fromInteger (read [n] - 1)
+showSquare :: (KnownNat n, n <= 8) => Square (n + 1) -> Unsigned 8
+showSquare x = case getUnique x of
+    _ | x == maxBound -> ascii '_'
+    Unset -> ascii '?'
+    Unique x -> ascii '0' + 1 + fromIntegral x
+    Conflict -> ascii 'x'
+
+parseSquare :: (KnownNat n, n <= 8) => Unsigned 8 -> Square (n + 1)
+parseSquare x
+  | x == ascii '0' = wild
+  | x == ascii '_' = wild
+  | otherwise = oneHot $ fromIntegral $ x - ascii '0' - 1
 
 newtype Sudoku n m = Sudoku{ getSudoku :: Matrix (n * m) (m * n) (Square (n * m)) }
   deriving (Generic, NFDataX)
@@ -53,14 +58,14 @@ newtype Sudoku n m = Sudoku{ getSudoku :: Matrix (n * m) (m * n) (Square (n * m)
 showBoard'
     :: (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
     => Sudoku n m -> Matrix (n * m) (m * n) Char
-showBoard' = map (map showSquare) . getSudoku
+showBoard' = map (map (chr . fromIntegral . showSquare)) . getSudoku
 
 instance (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8) => Show (Sudoku n m) where
     show = showBoard
 
 parseBoard
     :: (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
-    => Vec ((n * m) * (n * m)) (Square (n * m))
+    => Vec ((n * m) * (m * n)) (Square (n * m))
     -> Sudoku n m
 parseBoard = Sudoku . unconcatI
 
@@ -72,4 +77,4 @@ showBoard = unlines . fmap toList . toList . showBoard'
 readBoard
     :: (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
     => String -> Sudoku n m
-readBoard = parseBoard . map parseSquare . unsafeFromList
+readBoard = parseBoard . map (parseSquare . fromIntegral . ord) . unsafeFromList
