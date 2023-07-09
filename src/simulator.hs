@@ -10,6 +10,14 @@ import Sudoku
 import Control.Monad.State
 import Data.Char (isDigit)
 
+readBoard :: String -> Maybe (Sudoku 3 3)
+readBoard = flip evalState (0, repeat 0) . go
+  where
+    go [] = return Nothing
+    go (c:cs) = do
+        r <- serialReader . Just . ascii $ c
+        maybe (go cs) (return . Just) r
+
 solveRec
     :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
     => Sudoku n m -> Maybe (Sudoku n m)
@@ -57,7 +65,7 @@ solveStack board = flip evalState Init $ flip evalStateT (False, mempty) $ do
     go Working = solver Nothing >>= go
 
 board1 :: Sudoku 3 3
-board1 = readBoard . filter isDigit . unlines $
+Just board1 = readBoard . unlines $
     [ "0 2 0  9 0 8  0 0 0"
     , "8 7 0  0 0 1  0 5 4"
     , "5 0 6  4 0 0  0 1 0"
@@ -72,7 +80,7 @@ board1 = readBoard . filter isDigit . unlines $
     ]
 
 board2 :: Sudoku 3 3
-board2 = readBoard . filter isDigit . unlines $
+Just board2 = readBoard . unlines $
     [ "0 0 0  6 0 0  5 0 0"
     , "0 6 0  0 0 8  0 4 0"
     , "0 0 0  7 0 4  0 0 0"

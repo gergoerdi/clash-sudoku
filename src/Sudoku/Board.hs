@@ -65,16 +65,11 @@ instance (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8) => Show
 
 parseBoard
     :: (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
-    => Vec ((n * m) * (m * n)) (Square (n * m))
+    => Vec ((n * m) * (m * n)) (Unsigned 8)
     -> Sudoku n m
-parseBoard = Sudoku . unconcatI
+parseBoard = Sudoku . unconcatI . map parseSquare
 
 showBoard
     :: (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
     => Sudoku n m -> String
 showBoard = unlines . fmap toList . toList . showBoard'
-
-readBoard
-    :: (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
-    => String -> Sudoku n m
-readBoard = parseBoard . map (parseSquare . fromIntegral . ord) . unsafeFromList

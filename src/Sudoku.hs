@@ -171,7 +171,19 @@ serialReader
     :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
     => Maybe (Unsigned 8)
     -> State (Index ((n * m) * (m * n)), Vec ((n * m) * (m * n)) (Unsigned 8)) (Maybe (Sudoku n m))
-serialReader = undefined
+serialReader nextChar = do
+    (ptr, buf) <- get
+    case nextChar of
+        Just char | char == ascii '_' || (ascii '0' <= char && char <= ascii '9') -> do
+            let buf' = buf <<+ char
+            case succIdx ptr of
+              Nothing -> do
+                  put (0, buf')
+                  return $ Just $ parseBoard buf'
+              Just ptr' -> do
+                  put (ptr', buf')
+                  return $ Nothing
+        otherwise -> return Nothing
 
 serialIn
     :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
