@@ -9,6 +9,7 @@ module Sudoku where
 
 import Clash.Prelude hiding (lift)
 import Clash.Annotations.TH
+import Clash.Class.Counter
 
 import Sudoku.Board
 
@@ -208,13 +209,76 @@ serialIn
     -> Signal dom (Maybe (Sudoku n m))
 serialIn = mealyState serialReader (0, repeat 0)
 
+type Sec n space a = (Index n, Either a (Index space))
+type Ptr n m = Sec n 1 (Sec m 1 (Sec m 1 (Sec n 1 (Index 1))))
+
+startPtr :: (KnownNat n, KnownNat m) => Ptr n m
+startPtr =
+    (minBound,) . Left $
+    (minBound,) . Left $
+    (minBound,) . Left $
+    (minBound,) . Left $
+    minBound
+
+serialWriter
+    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    => forall k k'. (KnownNat k, (n * m) ~ (k + 1), k <= 8)
+    => forall k'. (KnownNat k', (n * m) * (m * n) ~ (k' + 1))
+    => Bool
+    -> Result n m
+    -> State (Maybe (Ptr n m), Vec ((n * m) * (m * n)) (Square (n * m))) (Maybe (Unsigned 8))
+serialWriter txReady result
+    | not txReady = return Nothing
+    | otherwise = do
+          (ptr, buf) <- get
+          case ptr of
+              Nothing -> do
+                  case result of
+                      Working -> put (Nothing, repeat 0)
+                      Unsolvable -> put (Just startPtr, repeat 0)
+                      Solution board -> put (Just startPtr, concat . getSudoku $ board)
+                  return Nothing
+              Just ptr -> do
+                  -- () <- traceShowM ptr
+                  let (x, buf')
+                          | (_, Right{}) <- ptr = (ascii '\n', buf)
+                          | (_, Left (_, Right{})) <- ptr = (ascii '\n', buf)
+                          | (_, Left (_, Left (_, Right{}))) <- ptr = (ascii ' ', buf)
+                          | (_, Left (_, Left (_, Left (_, Right{})))) <- ptr = (ascii ' ', buf)
+                          | otherwise = (showSquare $ head buf, buf <<+ 0)
+                      ptr' = countSuccChecked ptr
+                  put (ptr', buf')
+                  return (Just x)
+  where
+    next :: forall n m. (KnownNat n, KnownNat m, 0 <= m) => Either (Index n) (Index m) -> Maybe (Either (Index n) (Index m))
+    next (Left x) = Just $ maybe (Right 0) Left $ succIdx x
+    next (Right y) = Right <$> succIdx y
+
+    countSuccChecked cnt = cnt' <$ guard (cnt' /= startPtr)
+      where
+        cnt' = countSucc cnt
+
+serialWriter'
+    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    => forall k. (KnownNat k, (n * m) ~ (k + 1), k <= 8)
+    => forall k'. (KnownNat k', (n * m) * (m * n) ~ (k' + 1))
+    => Bool
+    -> Result n m
+    -> State (Maybe (Ptr n m), Vec ((n * m) * (m * n)) (Square (n * m))) (Maybe (Unsigned 8), Bool)
+serialWriter' txReady result = do
+    x <- serialWriter txReady result
+    ready <- gets $ isNothing . fst
+    return (x, ready)
+
 serialOut
-    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
+    :: forall n m k k'. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1), k <= 8, KnownNat k', (n * m) * (m * n) ~ (k' + 1))
     => forall dom. (HiddenClockResetEnable dom)
     => Signal dom Bool
     -> Signal dom (Result n m)
-    -> Signal dom (Maybe (Unsigned 8))
-serialOut outReady = undefined
+    -> ( Signal dom (Maybe (Unsigned 8))
+      , Signal dom Bool
+      )
+serialOut = curry $ mealyStateB (uncurry serialWriter') (Nothing, repeat 0)
 
 topEntity
     :: "CLK_100MHZ" ::: Clock System
@@ -226,8 +290,8 @@ topEntity = withEnableGen board
     board rx = tx
       where
         inByte = fmap unpack <$> serialRx @8 @9600 @System (SNat @9600) rx
-        (tx, outReady) = serialTx (SNat @9600) (fmap pack <$> outByte)
+        (tx, txReady) = serialTx (SNat @9600) (fmap pack <$> outByte)
 
-        outByte = serialOut outReady . circuit @3 @3 . serialIn $ inByte
+        (outByte, outReady) = serialOut txReady . circuit @3 @3 . serialIn $ inByte
 
 makeTopEntity 'topEntity

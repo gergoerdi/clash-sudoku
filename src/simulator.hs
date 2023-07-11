@@ -9,6 +9,9 @@ import Sudoku.Board
 import Sudoku
 import Control.Monad.State
 import Data.Char (isDigit)
+import Data.Char (chr)
+import Data.Maybe (catMaybes)
+import Control.Monad.Loops
 
 readBoard :: String -> Maybe (Sudoku 3 3)
 readBoard = flip evalState (0, repeat 0) . go
@@ -17,6 +20,13 @@ readBoard = flip evalState (0, repeat 0) . go
     go (c:cs) = do
         r <- serialReader . Just . ascii $ c
         maybe (go cs) (return . Just) r
+
+showBoard :: Sudoku 3 3 -> String
+showBoard board = fmap (chr . fromIntegral) . catMaybes $ flip evalState (Nothing, repeat 0) $ do
+    let step = serialWriter' True
+    (c, _) <- step (Solution board)
+    cs <- fmap fst <$> unfoldWhileM (\ (_, ready) -> not ready) (step Working)
+    pure (c:cs)
 
 solveRec
     :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
