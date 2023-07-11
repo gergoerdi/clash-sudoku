@@ -10,7 +10,6 @@ module Sudoku where
 import Clash.Prelude hiding (lift)
 import Clash.Annotations.TH
 
-import Sudoku.Matrix
 import Sudoku.Board
 
 import RetroClash.Utils hiding (oneHot)
@@ -27,7 +26,11 @@ others :: (1 <= n) => Vec n a -> Vec n (Vec (n - 1) a)
 others (Cons x Nil) = Nil :> Nil
 others (Cons x xs@(Cons _ _)) = xs :> map (x :>) (others xs)
 
-simplify :: forall n k k0. (KnownNat n, 1 <= n, KnownNat k, k ~ k0 + 1) => Vec n (Square k) -> WriterT (Any, All) Maybe (Vec n (Square k))
+simplify
+    :: forall n k. (KnownNat n, 1 <= n, KnownNat k)
+    => forall k0. (k ~ k0 + 1)
+    => Vec n (Square k)
+    -> WriterT (Any, All) Maybe (Vec n (Square k))
 simplify xs = traverse (uncurry simplifySquare) (zip xs (others xs))
   where
     simplifySquare :: forall n. Square k -> Vec n (Square k) -> WriterT (Any, All) Maybe (Square k)
@@ -41,17 +44,21 @@ simplify xs = traverse (uncurry simplifySquare) (zip xs (others xs))
               | otherwise = x
 
 propagate1
-    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
-    => Sudoku n m -> WriterT (Any, All) Maybe (Sudoku n m)
+    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    => forall k. (KnownNat k, (n * m) ~ (k + 1))
+    => Sudoku n m
+    -> WriterT (Any, All) Maybe (Sudoku n m)
 propagate1 s = do
-    (s :: Sudoku n m) <- fmap Sudoku . rowwise simplify . getSudoku $ s
-    (s :: Sudoku n m) <- fmap Sudoku . columnwise simplify . getSudoku $ s
-    (s :: Sudoku n m) <- fmap Sudoku . squarewise @n @m simplify . getSudoku $ s
+    (s :: Sudoku n m) <- rowwise  simplify s
+    (s :: Sudoku n m) <- columnwise simplify s
+    (s :: Sudoku n m) <- squarewise simplify s
     return s
 
 commit1
-    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
-    => Sudoku n m -> (Sudoku n m, Maybe (Sudoku n m))
+    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    => forall k. (KnownNat k, (n * m) ~ (k + 1))
+    => Sudoku n m
+    -> (Sudoku n m, Maybe (Sudoku n m))
 commit1 s = (Sudoku next, Sudoku <$> after)
   where
     next = map (map fst) r
@@ -74,15 +81,19 @@ commit1 s = (Sudoku next, Sudoku <$> after)
                 _ -> pure (x, Just x)
 
 propagate
-    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
-    => Sudoku n m -> Maybe (Sudoku n m, Bool)
+    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    => forall k. (KnownNat k, (n * m) ~ (k + 1))
+    => Sudoku n m
+    -> Maybe (Sudoku n m, Bool)
 propagate s = do
     (s', (Any changed, All solved)) <- runWriterT $ propagate1 s
     if changed then propagate s' else pure (s', solved)
 
 solve1
-    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
-    => Sudoku n m -> Maybe (Sudoku n m)
+    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    => forall k. (KnownNat k, (n * m) ~ (k + 1))
+    => Sudoku n m
+    -> Maybe (Sudoku n m)
 solve1 = (Just . fst . commit1) <=< (fmap fst . propagate)
 
 data Phase n m
@@ -98,7 +109,8 @@ data StackCmd a
     deriving (Show, Generic, NFDataX)
 
 solver1
-    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
+    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    => forall k. (KnownNat k, (n * m) ~ (k + 1))
     => Maybe (Sudoku n m)
     -> State (Phase n m) (Maybe (Sudoku n m), Maybe (StackCmd (Sudoku n m)))
 solver1 (Just popBoard) = do
@@ -154,7 +166,8 @@ stack size x0 cmd = (enable (delay False en) rd, underflow)
 type StackSize n m = ((n * m) * (m * n))
 
 circuit
-    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
+    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    => forall k. (KnownNat k, (n * m) ~ (k + 1), k <= 8)
     => forall dom. (HiddenClockResetEnable dom)
     => Signal dom (Maybe (Sudoku n m))
     -> Signal dom (Result n m)
@@ -168,7 +181,8 @@ circuit newBoard = result <$> underflow <*> solution
     result False Nothing = Working
 
 serialReader
-    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
+    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    => forall k. (KnownNat k, (n * m) ~ (k + 1), k <= 8)
     => Maybe (Unsigned 8)
     -> State (Index ((n * m) * (m * n)), Vec ((n * m) * (m * n)) (Unsigned 8)) (Maybe (Sudoku n m))
 serialReader nextChar = do
@@ -186,7 +200,8 @@ serialReader nextChar = do
         otherwise -> return Nothing
 
 serialIn
-    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1), k <= 8)
+    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    => forall k. (KnownNat k, (n * m) ~ (k + 1), k <= 8)
     => forall dom. (HiddenClockResetEnable dom)
     => Signal dom (Maybe (Unsigned 8))
     -> Signal dom (Maybe (Sudoku n m))
