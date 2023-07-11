@@ -6,7 +6,11 @@ import Clash.Prelude hiding (lift)
 
 import Sudoku.Matrix
 import Sudoku.Board
-import Sudoku
+import Sudoku.Serial
+import Sudoku.Solve
+import Sudoku.Stack
+
+import Control.Monad.Writer
 import Control.Monad.State
 import Data.Char (isDigit)
 import Data.Char (chr)
@@ -24,9 +28,18 @@ readBoard = flip evalState (0, repeat 0) . go
 showBoard :: Sudoku 3 3 -> String
 showBoard board = fmap (chr . fromIntegral) . catMaybes $ flip evalState (Nothing, repeat 0) $ do
     let step = serialWriter' True
-    (c, _) <- step (Solution board)
-    cs <- fmap fst <$> unfoldWhileM (\ (_, ready) -> not ready) (step Working)
+    (c, _) <- step (Just board)
+    cs <- fmap fst <$> unfoldWhileM (\ (_, ready) -> not ready) (step Nothing)
     pure (c:cs)
+
+propagate
+    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    => forall k. (KnownNat k, (n * m) ~ (k + 1))
+    => Sudoku n m
+    -> Maybe (Sudoku n m, Bool)
+propagate s = do
+    (s', (Any changed, All solved)) <- runWriterT $ propagate1 s
+    if changed then propagate s' else pure (s', solved)
 
 solveRec
     :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
@@ -104,8 +117,6 @@ Just board2 = readBoard . unlines $
     , "0 5 1  0 0 7  0 0 0"
     ]
 
-
-foo = simulate @System (circuit @3 @3)
 
 main :: IO ()
 main = do
