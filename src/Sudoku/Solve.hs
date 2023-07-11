@@ -35,7 +35,7 @@ simplify xs = traverse (uncurry simplifySquare) (zip xs (others xs))
         pure x'
       where
         x' = foldl f x xs
-        f x y | Unique{} <- getUnique y = x .&. complement y
+        f x y | isUnique y = x .&. complement y
               | otherwise = x
 
 propagate1
@@ -43,11 +43,7 @@ propagate1
     => forall k. (KnownNat k, (n * m) ~ (k + 1))
     => Sudoku n m
     -> WriterT (Any, All) Maybe (Sudoku n m)
-propagate1 s = do
-    (s :: Sudoku n m) <- rowwise  simplify s
-    (s :: Sudoku n m) <- columnwise simplify s
-    (s :: Sudoku n m) <- squarewise simplify s
-    return s
+propagate1 = rowwise simplify >=> columnwise simplify >=> squarewise simplify
 
 commit1
     :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
@@ -63,7 +59,7 @@ commit1 s = (Sudoku next, Sudoku <$> after)
 
     f :: Square (n * m) -> State Bool (Square (n * m), Maybe (Square (n * m)))
     f x
-      | Unique{} <- getUnique x = pure (x, Just x)
+      | isUnique x = pure (x, Just x)
       | otherwise = do
             changed <- get
             let mb_i = elemIndex True (reverse . bitCoerce $ x)

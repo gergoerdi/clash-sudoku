@@ -32,9 +32,7 @@ getUnique = fold propagate . zipWith start (reverse indicesI) . bitCoerce
     propagate _        _ = Conflict
 
 isUnique :: (KnownNat n) => BitVector (n + 1) -> Bool
-isUnique x = case getUnique x of
-  Unique{} -> True
-  _ -> False
+isUnique x = popCount x == 1
 
 ascii :: Char -> Unsigned 8
 ascii = fromIntegral . ord
