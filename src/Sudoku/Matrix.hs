@@ -1,49 +1,35 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE BlockArguments #-}
 module Sudoku.Matrix where
 
-import Clash.Prelude hiding (lift)
-import RetroClash.Utils hiding (oneHot)
+import Clash.Prelude
 
-import Data.Bits
-import Data.Char (isDigit)
-import Data.Maybe
-import Clash.Sized.Vector (unsafeFromList)
-import Control.Monad (guard)
-import Control.Monad.Writer
-import Control.Monad.State
+newtype Matrix n m a = FromRows{ matrixRows :: Vec n (Vec m a) }
+    deriving (Generic, NFDataX, BitPack)
 
-type Matrix n m a = Vec n (Vec m a)
+instance Functor (Matrix n m) where
+    fmap f = FromRows . fmap (fmap f) . matrixRows
 
-rowwise
-    :: (KnownNat n, KnownNat m, 1 <= n, Applicative f)
-    => (Vec m a -> f (Vec m b))
-    -> Matrix n m a
-    -> f (Matrix n m b)
-rowwise f = traverse f
+instance (KnownNat n, KnownNat m) => Applicative (Matrix n m) where
+    pure x = FromRows . pure . pure $ x
+    mf <*> mx = FromRows $ zipWith (<*>) (matrixRows mf) (matrixRows mx)
 
-columnwise
-    :: (KnownNat n, KnownNat m, 1 <= m, Applicative f)
-    => (Vec n a -> f (Vec n b))
-    -> Matrix n m a
-    -> f (Matrix n m b)
-columnwise f = fmap transpose . traverse f . transpose
+instance (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Foldable (Matrix n m) where
+    foldMap f = foldMap (foldMap f) . matrixRows
 
-toSquares
-    :: (KnownNat n, KnownNat m)
-    => Matrix (n * m) (m * n) a
-    -> Matrix n m (Vec (n * m) a)
-toSquares = map (map concat . transpose . map unconcatI) . unconcatI
+instance (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Traversable (Matrix n m) where
+    traverse f = fmap FromRows . traverse (traverse f) . matrixRows
 
-fromSquares
-    :: (KnownNat n, KnownNat m)
-    => Matrix n m (Vec (n * m) a)
-    -> Matrix (n * m) (m * n) a
-fromSquares = concat . map (map concat . transpose . map unconcatI)
+instance (KnownNat n, KnownNat m) => Bundle (Matrix n m a) where
+    type Unbundled dom (Matrix n m a) = Matrix n m (Signal dom a)
 
-squarewise
-    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
-    => forall f a b. (Applicative f)
-    => (Vec (n * m) a -> f (Vec (n * m) b))
-    -> Matrix (n * m) (m * n) a
-    -> f (Matrix (n * m) (m * n) b)
-squarewise f = fmap fromSquares . traverse (traverse f) . toSquares @n @m
+    bundle = fmap FromRows . bundle . fmap bundle . matrixRows
+    unbundle = FromRows . fmap unbundle . unbundle . fmap matrixRows
+
+generateMatrix :: (KnownNat n, KnownNat m) => (Index n -> Index m -> a) -> Matrix n m a
+generateMatrix f = FromRows $
+    flip map indicesI \i ->
+    flip map indicesI \j ->
+    f i j
+
+rowFirst :: Matrix n m a -> Vec (n * m) a
+rowFirst = concat . matrixRows

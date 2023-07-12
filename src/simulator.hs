@@ -18,7 +18,7 @@ import Data.Maybe (catMaybes)
 import Control.Monad.Loops
 
 readBoard :: String -> Maybe (Sudoku 3 3)
-readBoard = flip evalState (0, repeat 0) . go
+readBoard = flip evalState (0, pure conflicted) . go
   where
     go [] = return Nothing
     go (c:cs) = do
@@ -26,7 +26,7 @@ readBoard = flip evalState (0, repeat 0) . go
         maybe (go cs) (return . Just) r
 
 showBoard :: Sudoku 3 3 -> String
-showBoard board = fmap (chr . fromIntegral) . catMaybes $ flip evalState (Nothing, repeat 0) $ do
+showBoard board = fmap (chr . fromIntegral) . catMaybes $ flip evalState (Nothing, pure conflicted) $ do
     let step = serialWriter' True
     (c, _) <- step (Just board)
     cs <- fmap fst <$> unfoldWhileM (\ (_, ready) -> not ready) (step Nothing)

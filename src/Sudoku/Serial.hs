@@ -15,16 +15,16 @@ serialReader
     :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
     => forall k. (KnownNat k, (n * m) ~ (k + 1), k <= 8)
     => Maybe (Unsigned 8)
-    -> State (Index ((n * m) * (m * n)), Vec ((n * m) * (m * n)) (Square (n * m))) (Maybe (Sudoku n m))
+    -> State (Index ((n * m) * (m * n)), Vec ((n * m) * (m * n)) (Space n m)) (Maybe (Sudoku n m))
 serialReader nextChar = do
     (ptr, buf) <- get
     case nextChar of
         Just char | char == ascii '_' || (ascii '0' <= char && char <= ascii '9') -> do
-            let buf' = buf <<+ parseSquare char
+            let buf' = buf <<+ parseSpace char
             case succIdx ptr of
               Nothing -> do
                   put (0, buf')
-                  return $ Just $ parseBoard $ buf'
+                  return $ Just $ unflattenBoard buf'
               Just ptr' -> do
                   put (ptr', buf')
                   return $ Nothing
@@ -43,12 +43,12 @@ startPtr =
     minBound
 
 serialWriter
-    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
-    => forall k k'. (KnownNat k, (n * m) ~ (k + 1), k <= 8)
-    => forall k'. (KnownNat k', (n * m) * (m * n) ~ (k' + 1))
+    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, (n * m) <= 9)
+    => forall k. (KnownNat k, (n * m) ~ (k + 1))
+    => forall k'. (KnownNat k', (n * m * m * n) ~ k' + 1)
     => Bool
     -> Maybe (Sudoku n m)
-    -> State (Maybe (Ptr n m), Vec ((n * m) * (m * n)) (Square (n * m))) (Maybe (Unsigned 8))
+    -> State (Maybe (Ptr n m), Vec (n * m * m * n) (Space n m)) (Maybe (Unsigned 8))
 serialWriter txReady load
     | not txReady = return Nothing
     | otherwise = do
@@ -56,8 +56,8 @@ serialWriter txReady load
           case ptr of
               Nothing -> do
                   case load of
-                      Nothing -> put (Nothing, repeat 0)
-                      Just board -> put (Just startPtr, concat . getSudoku $ board)
+                      Nothing -> put (Nothing, pure conflicted)
+                      Just new_board -> put (Just startPtr, flattenBoard new_board)
                   return Nothing
               Just ptr -> do
                   -- () <- traceShowM ptr
@@ -66,7 +66,7 @@ serialWriter txReady load
                           | (_, Left (_, Right{})) <- ptr = (ascii '\n', buf)
                           | (_, Left (_, Left (_, Right{}))) <- ptr = (ascii ' ', buf)
                           | (_, Left (_, Left (_, Left (_, Right{})))) <- ptr = (ascii ' ', buf)
-                          | otherwise = (showSquare $ head buf, buf <<+ 0)
+                          | (_, Left (_, Left (_, Left (_, Left{})))) <- ptr = (showSpace $ head buf, buf <<+ conflicted)
                       ptr' = countSuccChecked ptr
                   put (ptr', buf')
                   return (Just x)
@@ -80,12 +80,12 @@ serialWriter txReady load
         cnt' = countSucc cnt
 
 serialWriter'
-    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
-    => forall k. (KnownNat k, (n * m) ~ (k + 1), k <= 8)
-    => forall k'. (KnownNat k', (n * m) * (m * n) ~ (k' + 1))
+    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, (n * m) <= 9)
+    => forall k. (KnownNat k, (n * m) ~ (k + 1))
+    => forall k'. (KnownNat k', (n * m * m * n) ~ k' + 1)
     => Bool
     -> Maybe (Sudoku n m)
-    -> State (Maybe (Ptr n m), Vec ((n * m) * (m * n)) (Square (n * m))) (Maybe (Unsigned 8), Bool)
+    -> State (Maybe (Ptr n m), Vec (n * m * m * n) (Space n m)) (Maybe (Unsigned 8), Bool)
 serialWriter' txReady load = do
     x <- serialWriter txReady load
     ready <- gets $ isNothing . fst

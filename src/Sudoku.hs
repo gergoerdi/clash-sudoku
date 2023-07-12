@@ -16,15 +16,16 @@ import RetroClash.SerialTx
 type StackSize n m = ((n * m) * (m * n))
 
 circuit
-    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= (n * m) * (m * n))
-    => forall k. (KnownNat k, (n * m) ~ (k + 1), k <= 8)
-    => forall dom. (HiddenClockResetEnable dom)
+    :: forall n m dom k n' m'. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    => (KnownNat k, (n * m) ~ (k + 1), 1 <= k)
+    => (KnownNat m', m ~ m' + 1, KnownNat n', n ~ n' + 1)
+    => (HiddenClockResetEnable dom)
     => Signal dom (Maybe (Sudoku n m))
     -> Signal dom (Result n m)
 circuit newBoard = result <$> underflow <*> solution
   where
     (solution, stackCmd) = mealyStateB solver1 Init (newBoard .<|>. stackRd)
-    (stackRd, underflow) = stack (SNat @(StackSize n m)) (Sudoku . repeat . repeat $ 0) stackCmd
+    (stackRd, underflow) = stack (SNat @(StackSize n m)) (pure conflicted) stackCmd
 
     result True _ = Unsolvable
     result False (Just board) = Solution board
@@ -32,21 +33,23 @@ circuit newBoard = result <$> underflow <*> solution
 
 serialIn
     :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
-    => forall k. (KnownNat k, (n * m) ~ (k + 1), k <= 8)
+    => forall k. (KnownNat k, (n * m) ~ (k + 1), (n * m) <= 9)
     => forall dom. (HiddenClockResetEnable dom)
     => Signal dom (Maybe (Unsigned 8))
     -> Signal dom (Maybe (Sudoku n m))
-serialIn = mealyState serialReader (0, repeat 0)
+serialIn = mealyState serialReader (0, pure conflicted)
 
 serialOut
-    :: forall n m k k'. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1), k <= 8, KnownNat k', (n * m) * (m * n) ~ (k' + 1))
+    :: forall n m k k'. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, (n * m) <= 9)
+    => forall k. (KnownNat k, (n * m) ~ (k + 1))
+    => forall k'. (KnownNat k', (n * m * m * n) ~ k' + 1)
     => forall dom. (HiddenClockResetEnable dom)
     => Signal dom Bool
     -> Signal dom (Maybe (Sudoku n m))
     -> ( Signal dom (Maybe (Unsigned 8))
       , Signal dom Bool
       )
-serialOut = curry $ mealyStateB (uncurry serialWriter') (Nothing, repeat 0)
+serialOut = curry $ mealyStateB (uncurry serialWriter') (Nothing, pure conflicted)
 
 topEntity
     :: "CLK_100MHZ" ::: Clock System
@@ -63,7 +66,7 @@ topEntity = withEnableGen board
         (outByte, outReady) = serialOut txReady . fmap fromResult . circuit @3 @3 . serialIn $ inByte
 
         fromResult Working = Nothing
-        fromResult Unsolvable = Just $ Sudoku $ repeat . repeat $ 0
+        fromResult Unsolvable = Just emptySudoku
         fromResult (Solution board) = Just board
 
 makeTopEntity 'topEntity

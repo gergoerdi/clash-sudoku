@@ -22,61 +22,56 @@ others (Cons x Nil) = Nil :> Nil
 others (Cons x xs@(Cons _ _)) = xs :> map (x :>) (others xs)
 
 simplify
-    :: forall n k. (KnownNat n, 1 <= n, KnownNat k)
-    => forall k0. (k ~ k0 + 1)
-    => Vec n (Square k)
-    -> WriterT (Any, All) Maybe (Vec n (Square k))
-simplify xs = traverse (uncurry simplifySquare) (zip xs (others xs))
+    :: forall n m k. (KnownNat m, KnownNat n, KnownNat k, 1 <= k)
+    => Vec k (Space n m)
+    -> WriterT (Any, All) Maybe (Vec k (Space n m))
+simplify xs = traverse (uncurry simplifySpace) (zip xs (others xs))
   where
-    simplifySquare :: forall n. Square k -> Vec n (Square k) -> WriterT (Any, All) Maybe (Square k)
-    simplifySquare x xs = do
-        guard $ x' /= 0
+    simplifySpace :: forall k. Space n m -> Vec k (Space n m) -> WriterT (Any, All) Maybe (Space n m)
+    simplifySpace x xs = do
+        guard $ x' /= conflicted
         tell (Any $ x' /= x, All $ isUnique x')
         pure x'
       where
-        x' = foldl f x xs
-        f x y | isUnique y = x .&. complement y
-              | otherwise = x
+        x' = combine x $ fmap (\x -> if isUnique x then x else conflicted) xs
 
 propagate1
     :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
     => forall k. (KnownNat k, (n * m) ~ (k + 1))
     => Sudoku n m
     -> WriterT (Any, All) Maybe (Sudoku n m)
-propagate1 = rowwise simplify >=> columnwise simplify >=> squarewise simplify
+propagate1 = rowwise simplify >=> columnwise simplify >=> fieldwise simplify
 
 commit1
     :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
     => forall k. (KnownNat k, (n * m) ~ (k + 1))
     => Sudoku n m
     -> (Sudoku n m, Maybe (Sudoku n m))
-commit1 s = (Sudoku next, Sudoku <$> after)
+commit1 s = (next, after)
   where
-    next = map (map fst) r
-    after = traverse (traverse snd) r
+    next = fmap fst r
+    after = traverse snd r
 
-    r = flip evalState False . traverse (traverse f) . getSudoku $ s
+    r = flip evalState False . traverse f $ s
 
-    f :: Square (n * m) -> State Bool (Square (n * m), Maybe (Square (n * m)))
+    f :: Space n m -> State Bool (Space n m, Maybe (Space n m))
     f x
       | isUnique x = pure (x, Just x)
       | otherwise = do
             changed <- get
-            let mb_i = elemIndex True (reverse . bitCoerce $ x)
-            case (changed, mb_i) of
-                (False, Just i) -> do
+            case (changed, splitSpace x) of
+                (False, Just (next, after)) -> do
                     put True
-                    let x' = oneHot i
-                        x'' = x .&. complement x'
-                    pure (x', x'' <$ guard (x'' /= 0))
-                _ -> pure (x, Just x)
+                    pure (next, after <$ guard (after /= conflicted))
+                _ -> do
+                    pure (x, Just x)
 
 data Result n m
     = Working
     | Solution (Sudoku n m)
     | Unsolvable
     deriving (Generic, NFDataX)
-deriving instance (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8) => Show (Result n m)
+-- deriving instance (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8) => Show (Result n m)
 
 data Phase n m
     = Init
