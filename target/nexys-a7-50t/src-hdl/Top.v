@@ -1,4 +1,4 @@
-module Sudoku(
+module Top(
            input        CLK100MHZ,
            input        UART_TXD_IN,
            output       UART_RXD_OUT

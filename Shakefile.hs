@@ -2,7 +2,7 @@
 import Clash.Shake
 import Clash.Shake.Xilinx as Xilinx
 import Clash.Shake.Intel as Intel
-import qualified Clash.Shake.SymbiFlow as F4PGA
+import qualified Clash.Shake.F4PGA as F4PGA
 
 import Development.Shake
 import Development.Shake.FilePath
