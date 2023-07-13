@@ -32,18 +32,13 @@ circuit newBoard = result <$> underflow <*> solution
     result False Nothing = Working
 
 serialIn
-    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
-    => forall k. (KnownNat k, (n * m) ~ (k + 1), (n * m) <= 9)
-    => forall dom. (HiddenClockResetEnable dom)
+    :: (Readable n m k, HiddenClockResetEnable dom)
     => Signal dom (Maybe (Unsigned 8))
     -> Signal dom (Maybe (Sudoku n m))
 serialIn = mealyState serialReader (0, pure conflicted)
 
 serialOut
-    :: forall n m k k'. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, (n * m) <= 9)
-    => forall k. (KnownNat k, (n * m) ~ (k + 1))
-    => forall k'. (KnownNat k', (n * m * m * n) ~ k' + 1)
-    => forall dom. (HiddenClockResetEnable dom)
+    :: (Writeable n m k k', HiddenClockResetEnable dom)
     => Signal dom Bool
     -> Signal dom (Maybe (Sudoku n m))
     -> ( Signal dom (Maybe (Unsigned 8))

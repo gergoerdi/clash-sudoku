@@ -11,7 +11,7 @@ import Control.Monad (guard)
 newtype Space n m = Space{ spaceBits :: BitVector (n * m) }
     deriving stock (Generic)
     deriving anyclass (NFDataX)
-    deriving newtype (Eq)
+    deriving newtype (Eq, Show)
 deriving anyclass instance (KnownNat n, KnownNat m, 1 <= (n * m)) => BitPack (Space n m)
 
 wild :: (KnownNat n, KnownNat m) => Space n m

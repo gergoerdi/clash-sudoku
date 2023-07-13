@@ -25,7 +25,7 @@ readBoard = flip evalState (0, pure conflicted) . go
         r <- serialReader . Just . ascii $ c
         maybe (go cs) (return . Just) r
 
-showBoard :: Sudoku 3 3 -> String
+showBoard :: (Writeable n m k k') => Sudoku n m -> String
 showBoard board = fmap (chr . fromIntegral) . catMaybes $ flip evalState (Nothing, pure conflicted) $ do
     let step = serialWriter' True
     (c, _) <- step (Just board)

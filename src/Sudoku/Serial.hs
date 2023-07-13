@@ -11,9 +11,10 @@ import Data.Maybe
 import Control.Monad (guard)
 import Control.Monad.State
 
+type Readable n m k = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, (n * m) <= 9, KnownNat k, (n * m) ~ k + 1)
+
 serialReader
-    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
-    => forall k. (KnownNat k, (n * m) ~ (k + 1), k <= 8)
+    :: (Readable n m k)
     => Maybe (Unsigned 8)
     -> State (Index ((n * m) * (m * n)), Vec ((n * m) * (m * n)) (Space n m)) (Maybe (Sudoku n m))
 serialReader nextChar = do
@@ -42,10 +43,10 @@ startPtr =
     (minBound,) . Left $
     minBound
 
+type Writeable n m k k' = (Readable n m k, KnownNat k', (n * m * m * n) ~ k' + 1)
+
 serialWriter
-    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, (n * m) <= 9)
-    => forall k. (KnownNat k, (n * m) ~ (k + 1))
-    => forall k'. (KnownNat k', (n * m * m * n) ~ k' + 1)
+    :: (Writeable n m k k')
     => Bool
     -> Maybe (Sudoku n m)
     -> State (Maybe (Ptr n m), Vec (n * m * m * n) (Space n m)) (Maybe (Unsigned 8))
