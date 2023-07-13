@@ -69,11 +69,12 @@ showSpace x = case getUnique x of
     Unique x -> ascii '0' + 1 + fromIntegral x
     Conflict -> ascii '?'
 
-parseSpace :: (KnownNat n, KnownNat m, (n * m) <= 9, KnownNat k, (n * m) ~ k + 1) => Unsigned 8 -> Space n m
+parseSpace :: (KnownNat n, KnownNat m, (n * m) <= 9, KnownNat k, (n * m) ~ k + 1) => Unsigned 8 -> Maybe (Space n m)
 parseSpace x
-  | x == ascii '0' = wild
-  | x == ascii '_' = wild
-  | otherwise = unique $ fromIntegral $ x - ascii '0' - 1
+    | x == ascii '0' = Just wild
+    | x == ascii '_' = Just wild
+    | ascii '1' <= x && x <= ascii '9' = Just $ unique $ fromIntegral $ x - ascii '1'
+    | otherwise = Nothing
 
 newtype Board n m a = Board{ getBoard :: Matrix n m (Matrix m n a) }
     deriving stock (Generic)

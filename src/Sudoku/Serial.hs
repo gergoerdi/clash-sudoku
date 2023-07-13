@@ -19,9 +19,9 @@ serialReader
     -> State (Index ((n * m) * (m * n)), Vec ((n * m) * (m * n)) (Space n m)) (Maybe (Sudoku n m))
 serialReader nextChar = do
     (ptr, buf) <- get
-    case nextChar of
-        Just char | char == ascii '_' || (ascii '0' <= char && char <= ascii '9') -> do
-            let buf' = buf <<+ parseSpace char
+    case parseSpace =<< nextChar of
+        Just x -> do
+            let buf' = buf <<+ x
             case succIdx ptr of
               Nothing -> do
                   put (0, buf')
@@ -29,11 +29,11 @@ serialReader nextChar = do
               Just ptr' -> do
                   put (ptr', buf')
                   return $ Nothing
-        otherwise -> do
+        Nothing -> do
             return Nothing
 
 type Sec n space a = (Index n, Either a (Index space))
-type Ptr n m = Sec n 1 (Sec m 1 (Sec m 1 (Sec n 1 (Index 1))))
+type Ptr n m = Sec n 2 (Sec m 2 (Sec m 1 (Sec n 1 (Index 1))))
 
 startPtr :: (KnownNat n, KnownNat m) => Ptr n m
 startPtr =
@@ -63,8 +63,10 @@ serialWriter txReady load
               Just ptr -> do
                   -- () <- traceShowM ptr
                   let (x, buf')
-                          | (_, Right{}) <- ptr = (ascii '\n', buf)
-                          | (_, Left (_, Right{})) <- ptr = (ascii '\n', buf)
+                          | (_, Right 0) <- ptr = (ascii '\r', buf)
+                          | (_, Right 1) <- ptr = (ascii '\n', buf)
+                          | (_, Left (_, Right 0)) <- ptr = (ascii '\r', buf)
+                          | (_, Left (_, Right 1)) <- ptr = (ascii '\n', buf)
                           | (_, Left (_, Left (_, Right{}))) <- ptr = (ascii ' ', buf)
                           | (_, Left (_, Left (_, Left (_, Right{})))) <- ptr = (ascii ' ', buf)
                           | (_, Left (_, Left (_, Left (_, Left{})))) <- ptr = (showSpace $ head buf, buf <<+ conflicted)
