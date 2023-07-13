@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TupleSections, ViewPatterns #-}
 module Sudoku.Serial where
 
 import Clash.Prelude hiding (lift)
@@ -73,14 +73,11 @@ serialWriter txReady load
                       ptr' = countSuccChecked ptr
                   put (ptr', buf')
                   return (Just x)
-  where
-    next :: forall n m. (KnownNat n, KnownNat m, 0 <= m) => Either (Index n) (Index m) -> Maybe (Either (Index n) (Index m))
-    next (Left x) = Just $ maybe (Right 0) Left $ succIdx x
-    next (Right y) = Right <$> succIdx y
 
-    countSuccChecked cnt = cnt' <$ guard (cnt' /= startPtr)
-      where
-        cnt' = countSucc cnt
+countSuccChecked :: Counter a => a -> Maybe a
+countSuccChecked x = x' <$ guard (not overflow)
+  where
+    (unpack -> overflow, x') = countSucc (pack False, x)
 
 serialWriter'
     :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, (n * m) <= 9)
