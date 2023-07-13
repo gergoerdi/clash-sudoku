@@ -28,4 +28,4 @@ stack size x0 cmd = (enable (delay False en) rd, delay False underflow)
         Just Pop -> (satPred SatBound sp, True, Nothing, sp == 0)
         Just (Push x) -> (sp + 1, False, Just x, False)
 
-    rd = blockRam (replicate size x0) sp (packWrite <$> sp' <*> wr)
+    rd = blockRamU NoClearOnReset size (\_ -> x0) sp (packWrite <$> sp' <*> wr)
