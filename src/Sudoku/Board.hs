@@ -33,14 +33,13 @@ data Unique a
     deriving (Show)
 
 getUnique :: (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ k + 1) => Space n m -> Unique (Index (n * m))
-getUnique = fold propagate . zipWith start (reverse indicesI) . bitCoerce
+getUnique = foldl propagate Unset . zip (reverse indicesI) . bv2v . spaceBits
   where
-    start i True = Unique i
-    start i False = Unset
-
-    propagate Unset    y        = y
-    propagate x        Unset    = x
-    propagate _        _ = Conflict
+    propagate :: Unique a -> (a, Bit) -> Unique a
+    propagate Unset      (x, b) | b == high = Unique x
+                                | b == low  = Unset
+    propagate (Unique y) (_, b) | b == low  = Unique y
+    propagate _          _                 = Conflict
 
 isUnique :: (KnownNat n, KnownNat m) => Space n m -> Bool
 isUnique x = popCount (spaceBits x) == 1
