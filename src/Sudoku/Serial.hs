@@ -62,17 +62,23 @@ serialWriter txReady load
                   return Nothing
               Just ptr -> do
                   -- () <- traceShowM ptr
-                  let (x, buf')
-                          | (_, Right 0) <- ptr = (ascii '\r', buf)
-                          | (_, Right 1) <- ptr = (ascii '\n', buf)
-                          | (_, Left (_, Right 0)) <- ptr = (ascii '\r', buf)
-                          | (_, Left (_, Right 1)) <- ptr = (ascii '\n', buf)
-                          | (_, Left (_, Left (_, Right{}))) <- ptr = (ascii ' ', buf)
-                          | (_, Left (_, Left (_, Left (_, Right{})))) <- ptr = (ascii ' ', buf)
-                          | (_, Left (_, Left (_, Left (_, Left{})))) <- ptr = (showSpace $ head buf, buf <<+ conflicted)
-                      ptr' = countSuccChecked ptr
-                  put (ptr', buf')
-                  return (Just x)
+                  let ptr' = countSuccChecked ptr
+                  case punctuate ptr of
+                      Just punctuation -> do
+                          put (ptr', buf)
+                          return $ Just punctuation
+                      Nothing -> do
+                          put (ptr', buf <<+ conflicted)
+                          return $ Just $ showSpace $ head buf
+  where
+    punctuate ptr
+        | (_, Right 0) <- ptr                               = Just $ ascii '\r'
+        | (_, Right 1) <- ptr                               = Just $ ascii '\n'
+        | (_, Left (_, Right 0)) <- ptr                     = Just $ ascii '\r'
+        | (_, Left (_, Right 1)) <- ptr                     = Just $ ascii '\n'
+        | (_, Left (_, Left (_, Right{}))) <- ptr           = Just $ ascii ' '
+        | (_, Left (_, Left (_, Left (_, Right{})))) <- ptr = Just $ ascii ' '
+        | (_, Left (_, Left (_, Left (_, Left{})))) <- ptr  = Nothing
 
 countSuccChecked :: Counter a => a -> Maybe a
 countSuccChecked x = x' <$ guard (not overflow)
