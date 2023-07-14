@@ -24,7 +24,7 @@ conflicted :: (KnownNat n, KnownNat m) => Space n m
 conflicted = Space 0
 
 unique :: (KnownNat n, KnownNat m) => Index (n * m) -> Space n m
-unique n = Space $ 1 `shiftL` fromIntegral n
+unique n = Space $ 1 `rotateR` 1 `rotateR` fromIntegral n
 
 data Unique a
     = Unique a
@@ -33,13 +33,12 @@ data Unique a
     deriving (Show)
 
 getUnique :: (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ k + 1) => Space n m -> Unique (Index (n * m))
-getUnique = foldl propagate Unset . zip (reverse indicesI) . bv2v . spaceBits
+getUnique = foldl propagate Unset . zip indicesI . bv2v . spaceBits
   where
     propagate :: Unique a -> (a, Bit) -> Unique a
-    propagate Unset      (x, b) | b == high = Unique x
-                                | b == low  = Unset
-    propagate (Unique y) (_, b) | b == low  = Unique y
-    propagate _          _                 = Conflict
+    propagate u (x, b) | Unset <- u, b == high = Unique x
+                       | b == low             = u
+                       | otherwise            = Conflict
 
 isUnique :: (KnownNat n, KnownNat m) => Space n m -> Bool
 isUnique x = popCount (spaceBits x) == 1
