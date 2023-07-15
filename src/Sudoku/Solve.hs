@@ -11,12 +11,6 @@ import Sudoku.Stack
 import Control.Arrow (second, (***))
 import Data.Maybe
 
-data Result n m
-    = Working
-    | Solution (Sudoku n m)
-    | Unsolvable
-    deriving (Generic, NFDataX)
-
 data Step n m
     = Load (Sudoku n m)
     | Propagate

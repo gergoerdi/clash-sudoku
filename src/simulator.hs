@@ -109,6 +109,7 @@ main = do
 foo = fmap niceR $ simulate @System (circuit @3 @3) $
     L.replicate 3 Nothing <> [Just grid1] <> L.repeat Nothing
   where
+    niceR Idle = "Idle"
     niceR (Solution grid) = showGrid grid
     niceR Working = "Working"
     niceR Unsolvable = "Unsolvable"
