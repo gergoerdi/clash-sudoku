@@ -11,10 +11,10 @@ import Data.Maybe
 import Control.Monad (guard)
 import Control.Monad.State
 
-type Readable n m k = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= (n * m) * (m * n), (n * m) <= 9, KnownNat k, (n * m) ~ k + 1)
+type Readable n m = (KnownNat n, KnownNat m, 1 <= (n * m) * (m * n), (n * m) <= 9)
 
 serialIn
-    :: forall n m k dom. (Readable n m k, HiddenClockResetEnable dom)
+    :: forall n m dom. (Readable n m, HiddenClockResetEnable dom)
     => Signal dom (Maybe (Unsigned 8))
     -> Signal dom (Maybe (Sudoku n m))
 serialIn nextChar = enable ready (unflattenBoard <$> buf')
@@ -44,10 +44,10 @@ startPtr =
     (minBound,) . Left $
     minBound
 
-type Writeable n m k k' = (Readable n m k, KnownNat k', (n * m * m * n) ~ k' + 1)
+type Writeable n m k = (Readable n m, 1 <= n, 1 <= m, KnownNat k, (n * m * m * n) ~ k + 1)
 
 serialWriter
-    :: (Writeable n m k k')
+    :: (Writeable n m k)
     => Bool
     -> Maybe (Sudoku n m)
     -> State (Maybe (Ptr n m), Vec (n * m * m * n) (Space n m)) (Maybe (Unsigned 8))
@@ -88,7 +88,7 @@ countSuccChecked x = x' <$ guard (not overflow)
     (unpack -> overflow, x') = countSucc (pack False, x)
 
 serialOut
-    :: forall n m k k' dom. (Writeable n m k k', HiddenClockResetEnable dom)
+    :: forall n m k dom. (Writeable n m k, HiddenClockResetEnable dom)
     => Signal dom Bool
     -> Signal dom (Maybe (Sudoku n m))
     -> ( Signal dom (Maybe (Unsigned 8))

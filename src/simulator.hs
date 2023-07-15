@@ -17,7 +17,7 @@ import Control.Monad.Loops
 
 import qualified Data.List as L
 
-readBoard :: (Readable n m k) => String -> Maybe (Sudoku n m)
+readBoard :: (Readable n m) => String -> Maybe (Sudoku n m)
 readBoard s = consume input $ simulate @System serialIn input
   where
     input = fmap (Just . ascii) s
@@ -27,7 +27,7 @@ readBoard s = consume input $ simulate @System serialIn input
     consume (_:xs) (y:ys) = y <|> consume xs ys
 
 
-showBoard :: (Writeable n m k k') => Sudoku n m -> String
+showBoard :: (Writeable n m k) => Sudoku n m -> String
 showBoard board = toString . consume $ simulateB @System (serialOut (pure True)) input
   where
     input = Just board : L.repeat Nothing
@@ -35,7 +35,7 @@ showBoard board = toString . consume $ simulateB @System (serialOut (pure True))
     consume ((c, ready):xs) = c : if ready then [] else consume xs
     toString = fmap (chr . fromIntegral) . catMaybes
 
-printBoard :: (Writeable n m k k') => Sudoku n m -> IO ()
+printBoard :: (Writeable n m k) => Sudoku n m -> IO ()
 printBoard = putStr . showBoard
 
 propagate

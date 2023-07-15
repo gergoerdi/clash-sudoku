@@ -12,7 +12,7 @@ newtype Space n m = Space{ spaceBits :: BitVector (n * m) }
     deriving stock (Generic)
     deriving anyclass (NFDataX)
     deriving newtype (Eq, Show)
-deriving anyclass instance (KnownNat n, KnownNat m, 1 <= (n * m)) => BitPack (Space n m)
+deriving anyclass instance (KnownNat n, KnownNat m) => BitPack (Space n m)
 
 wild :: (KnownNat n, KnownNat m) => Space n m
 wild = Space maxBound
@@ -32,7 +32,7 @@ data Unique a
     | Unset
     deriving (Show)
 
-getUnique :: (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ k + 1) => Space n m -> Unique (Index (n * m))
+getUnique :: (KnownNat n, KnownNat m) => Space n m -> Unique (Index (n * m))
 getUnique = foldl propagate Unset . zip indicesI . bv2v . spaceBits
   where
     propagate :: Unique a -> (a, Bit) -> Unique a
@@ -59,7 +59,7 @@ splitSpace (Space s) = do
 ascii :: Char -> Unsigned 8
 ascii = fromIntegral . ord
 
-showSpace :: (KnownNat n, KnownNat m, (n * m) <= 9, KnownNat k, (n * m) ~ k + 1) => Space n m -> Unsigned 8
+showSpace :: (KnownNat n, KnownNat m, (n * m) <= 9) => Space n m -> Unsigned 8
 showSpace x = case getUnique x of
     _ | x == wild -> ascii '_'
     _ | x == conflicted -> ascii 'x'
@@ -67,7 +67,7 @@ showSpace x = case getUnique x of
     Unique x -> ascii '0' + 1 + fromIntegral x
     Conflict -> ascii '?'
 
-parseSpace :: (KnownNat n, KnownNat m, (n * m) <= 9, KnownNat k, (n * m) ~ k + 1) => Unsigned 8 -> Maybe (Space n m)
+parseSpace :: (KnownNat n, KnownNat m, (n * m) <= 9) => Unsigned 8 -> Maybe (Space n m)
 parseSpace x
     | x == ascii '0' = Just wild
     | x == ascii '_' = Just wild
@@ -118,7 +118,7 @@ type Sudoku n m = Board n m (Space n m)
 --         getSudoku
 
 showSudoku
-    :: (KnownNat n, KnownNat m, KnownNat k, (n * m) <= 9, (n * m) ~ k + 1)
+    :: (KnownNat n, KnownNat m, (n * m) <= 9)
     => Sudoku n m
     -> String
 showSudoku =
@@ -144,19 +144,19 @@ generateBoard f = Board $
     f (i, j, k, l)
 
 boardToRows
-    :: (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    :: (KnownNat n, KnownNat m)
     => Board n m a
     -> Vec (n * m) (Vec (m * n) a)
 boardToRows = concatMap (fmap rowFirst) . matrixRows . getBoard
 
 boardFromRows
-    :: (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    :: (KnownNat n, KnownNat m)
     => Vec (n * m) (Vec (m * n) a)
     -> Board n m a
 boardFromRows = Board . FromRows . unconcatI . fmap (FromRows . unconcatI)
 
 rowwise
-    :: (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= (n * m), Applicative f)
+    :: (KnownNat n, KnownNat m, 1 <= (n * m), Applicative f)
     => (Vec (m * n) a -> f (Vec (m * n) b))
     -> Board n m a
     -> f (Board n m b)
@@ -169,20 +169,20 @@ transposeMatrix
 transposeMatrix = FromRows . transpose . matrixRows
 
 transposeBoard
-    :: (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    :: (KnownNat n, KnownNat m)
     => Board n m a
     -> Board m n a
 transposeBoard = boardFromRows . transpose . boardToRows
 
 columnwise
-    :: (KnownNat n, KnownNat m, 1 <= m, 1 <= n, 1 <= (n * m), Applicative f)
+    :: (KnownNat n, KnownNat m, 1 <= (n * m), Applicative f)
     => (Vec (n * m) a -> f (Vec (n * m) b))
     -> Board n m a
     -> f (Board n m b)
 columnwise f = fmap transposeBoard . rowwise f . transposeBoard
 
 toFields
-    :: (KnownNat n, KnownNat m, 1 <= n)
+    :: (KnownNat n, KnownNat m)
     => Board n m a
     -> Matrix n m (Vec (n * m) a)
 toFields = FromRows . fmap (fmap concat . transpose . fmap matrixRows) . matrixRows . getBoard
