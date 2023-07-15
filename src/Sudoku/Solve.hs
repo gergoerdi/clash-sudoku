@@ -1,4 +1,4 @@
-{-# LANGUAGE BlockArguments, ViewPatterns #-}
+{-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf #-}
 {-# LANGUAGE ApplicativeDo #-}
 module Sudoku.Solve where
 
@@ -33,7 +33,7 @@ propagator
     -> ( Signal dom (Sudoku n m)
        , Signal dom (Maybe PropagatorResult)
        )
-propagator load = (bundle $ fmap (\(c, _, _, _) -> c) units, result <$> solved <*> changed <*> failed)
+propagator load = (bundle $ fmap (\(c, _, _, _) -> c) units, result)
   where
     units :: Grid n m (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool, Signal dom Bool)
     units = generateGrid unit
@@ -42,11 +42,17 @@ propagator load = (bundle $ fmap (\(c, _, _, _) -> c) units, result <$> solved <
     changed = foldGrid (liftA2 (.|.)) . fmap (\ (_, _, changed, _) -> changed) $ units
     failed =  foldGrid (liftA2 (.|.)) . fmap (\ (_, _, _, failed) -> failed) $ units
 
-    result solved changed failed
-        | failed = Just Failure
-        | solved = Just Success
-        | not changed = Just Stuck
-        | otherwise = Nothing
+    result = do
+        fresh <- register False $ isJust <$> load
+        solved <- solved
+        changed <- changed
+        failed <- failed
+        pure $ if
+            | fresh     -> Nothing
+            | failed    -> Just Failure
+            | solved    -> Just Success
+            | not changed -> Just Stuck
+            | otherwise -> Nothing
 
     unit :: Coord n m -> (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool, Signal dom Bool)
     unit idx@(i, j, k, l) = (r, isUnique <$> r, register False changed, (== conflicted) <$> r)
