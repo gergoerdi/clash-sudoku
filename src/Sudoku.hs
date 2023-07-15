@@ -16,7 +16,7 @@ import RetroClash.SerialTx
 type StackSize n m = ((n * m) * (m * n))
 
 circuit
-    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= (n * m) * (m * n))
     => forall k. (KnownNat k, (n * m) ~ (k + 1), k <= 8)
     => forall dom. (HiddenClockResetEnable dom)
     => Signal dom (Maybe (Sudoku n m))
