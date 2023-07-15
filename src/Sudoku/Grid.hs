@@ -139,8 +139,8 @@ type Coord n m = (Index n, Index m, Index m, Index n)
 (!!!) :: (KnownNat n) => Vec n a -> Index n -> a
 (!!!) = (!!)
 
-boardAt :: (KnownNat n, KnownNat m) => Grid n m a -> Coord n m -> a
-boardAt board (i, j, k, l) = matrixRows (matrixRows (getGrid board) !!! i !!! j) !!! k !!! l
+gridAt :: (KnownNat n, KnownNat m) => Grid n m a -> Coord n m -> a
+gridAt grid (i, j, k, l) = matrixRows (matrixRows (getGrid grid) !!! i !!! j) !!! k !!! l
 
 generateGrid :: (KnownNat n, KnownNat m) => (Coord n m -> a) -> Grid n m a
 generateGrid f = Grid $
@@ -148,24 +148,24 @@ generateGrid f = Grid $
     generateMatrix \k l ->
     f (i, j, k, l)
 
-boardToRows
+gridToRows
     :: (KnownNat n, KnownNat m)
     => Grid n m a
     -> Vec (n * m) (Vec (m * n) a)
-boardToRows = concatMap (fmap rowFirst) . matrixRows . getGrid
+gridToRows = concatMap (fmap rowFirst) . matrixRows . getGrid
 
-boardFromRows
+gridFromRows
     :: (KnownNat n, KnownNat m)
     => Vec (n * m) (Vec (m * n) a)
     -> Grid n m a
-boardFromRows = Grid . FromRows . unconcatI . fmap (FromRows . unconcatI)
+gridFromRows = Grid . FromRows . unconcatI . fmap (FromRows . unconcatI)
 
 rowwise
     :: (KnownNat n, KnownNat m, 1 <= (n * m), Applicative f)
     => (Vec (m * n) a -> f (Vec (m * n) b))
     -> Grid n m a
     -> f (Grid n m b)
-rowwise f = fmap boardFromRows . traverse f . boardToRows
+rowwise f = fmap gridFromRows . traverse f . gridToRows
 
 transposeMatrix
     :: (KnownNat n, KnownNat m)
@@ -177,7 +177,7 @@ transposeGrid
     :: (KnownNat n, KnownNat m)
     => Grid n m a
     -> Grid m n a
-transposeGrid = boardFromRows . transpose . boardToRows
+transposeGrid = gridFromRows . transpose . gridToRows
 
 columnwise
     :: (KnownNat n, KnownNat m, 1 <= (n * m), Applicative f)

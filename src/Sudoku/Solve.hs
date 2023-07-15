@@ -1,108 +1,117 @@
-{-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE StandaloneDeriving #-}
-module Sudoku.Solve
-    ( Result(..), Phase(..)
-    , solver1
-    , propagate1
-    , commit1
-    ) where
+{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE ApplicativeDo #-}
+module Sudoku.Solve where
 
-import Clash.Prelude hiding (lift)
+import Clash.Prelude
 
+import Sudoku.Matrix
 import Sudoku.Grid
-import Sudoku.Serial
 import Sudoku.Stack
 
-import Control.Monad.Writer
-import Control.Monad.State
-
-others :: (1 <= n) => Vec n a -> Vec n (Vec (n - 1) a)
-others (Cons x Nil) = Nil :> Nil
-others (Cons x xs@(Cons _ _)) = xs :> map (x :>) (others xs)
-
-simplify
-    :: forall n m k. (KnownNat m, KnownNat n, KnownNat k, 1 <= k)
-    => Vec k (Cell n m)
-    -> WriterT (Any, All) Maybe (Vec k (Cell n m))
-simplify xs = traverse (uncurry simplifyCell) (zip xs (others xs))
-  where
-    simplifyCell :: forall k. Cell n m -> Vec k (Cell n m) -> WriterT (Any, All) Maybe (Cell n m)
-    simplifyCell x xs = do
-        guard $ x' /= conflicted
-        tell (Any $ x' /= x, All $ isUnique x')
-        pure x'
-      where
-        x' = combine x $ fmap (\x -> if isUnique x then x else conflicted) xs
-
-propagate1
-    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
-    => forall k. (KnownNat k, (n * m) ~ (k + 1))
-    => Sudoku n m
-    -> WriterT (Any, All) Maybe (Sudoku n m)
-propagate1 = rowwise simplify >=> columnwise simplify >=> boxwise simplify
-
-commit1
-    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
-    => forall k. (KnownNat k, (n * m) ~ (k + 1))
-    => Sudoku n m
-    -> (Sudoku n m, Maybe (Sudoku n m))
-commit1 s = (next, after)
-  where
-    next = fmap fst r
-    after = traverse snd r
-
-    r = flip evalState False . traverse f $ s
-
-    f :: Cell n m -> State Bool (Cell n m, Maybe (Cell n m))
-    f x
-      | isUnique x = pure (x, Just x)
-      | otherwise = do
-            changed <- get
-            case (changed, splitCell x) of
-                (False, Just (next, after)) -> do
-                    put True
-                    pure (next, after <$ guard (after /= conflicted))
-                _ -> do
-                    pure (x, Just x)
+import Control.Arrow (second, (***))
+import Data.Maybe
 
 data Result n m
     = Working
     | Solution (Sudoku n m)
     | Unsolvable
     deriving (Generic, NFDataX)
--- deriving instance (KnownNat n, KnownNat m, KnownNat k, (n * m) ~ (k + 1), k <= 8) => Show (Result n m)
 
-data Phase n m
-    = Init
-    | Propagate (Sudoku n m)
-    | Try (Sudoku n m)
-    | Solved (Sudoku n m)
+data Step n m
+    = Load (Sudoku n m)
+    | Propagate
     deriving (Generic, NFDataX)
 
-solver1
-    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
-    => forall k. (KnownNat k, (n * m) ~ (k + 1))
-    => Maybe (Sudoku n m)
-    -> State (Phase n m) (Maybe (Sudoku n m), Maybe (StackCmd (Sudoku n m)))
-solver1 (Just popGrid) = do
-    put $ Propagate popGrid
-    return (Nothing, Nothing)
-solver1 Nothing = get >>= \case
-    Init -> do
-        return (Nothing, Just Pop)
-    Solved grid -> do
-        return (Just grid, Nothing)
-    Propagate grid -> case runWriterT $ propagate1 grid of
-        Nothing -> do
-            return (Nothing, Just Pop)
-        Just (grid', (Any changed, All solved)) -> do
-            put $ if
-                | solved    -> Solved grid'
-                | changed   -> Propagate grid'
-                | otherwise -> Try grid'
-            return (Nothing, Nothing)
-    Try grid -> do
-        let (next, after) = commit1 grid
-        put $ Propagate next
-        return (Nothing, Push <$> after)
+foldGrid :: (n * m * m * n ~ k + 1) => (a -> a -> a) -> Grid n m a -> a
+foldGrid f = fold f . flattenGrid
+
+unzipMatrix :: Matrix n m (a, b) -> (Matrix n m a, Matrix n m b)
+unzipMatrix = (FromRows *** FromRows) . unzip . fmap unzip . matrixRows
+
+unzipGrid :: Grid n m (a, b) -> (Grid n m a, Grid n m b)
+unzipGrid = (Grid *** Grid) . unzipMatrix . fmap unzipMatrix . getGrid
+
+propagator
+    :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, n * m * m * n ~ k + 1)
+    => (HiddenClockResetEnable dom)
+    => Signal dom (Step n m)
+    -> ( Signal dom (Sudoku n m)
+       , Signal dom Bool
+       , Signal dom Bool
+       )
+propagator step = (bundle $ fmap (\(r, _, _) -> r) cells, changed, solved)
+  where
+    cells :: Grid n m (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool)
+    cells = generateGrid cell
+
+    solved = foldGrid (liftA2 (.&.)) . fmap (\ (_, solved, _) -> solved) $ cells
+    changed = foldGrid (liftA2 (.|.)) . fmap (\ (_, _, changed) -> changed) $ cells
+
+    cell :: Coord n m -> (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool)
+    cell idx@(i, j, k, l) = (r, isUnique <$> r, register False changed)
+      where
+        r :: Signal dom (Cell n m)
+        r = register conflicted r'
+
+        (r', changed) = unbundle do
+            step <- step
+            this <- r
+            row_masks <- traverse neighbour row'
+            col_masks <- traverse neighbour col'
+            square_masks <- traverse neighbour square'
+            pure $ case step of
+                Load grid -> (gridAt grid idx, True)
+                Propagate -> (this', this' /= this)
+                  where
+                    new = combine this (row_masks ++ col_masks ++ square_masks)
+                    this' | new /= conflicted = new
+                          | otherwise = this
+
+        neighbour idx = mux is_unique value (pure conflicted)
+          where
+            (value, is_unique, _) = gridAt cells idx
+
+        row, col, square :: Vec (n * m) (Coord n m)
+        row = concatMap (\k -> map (\l -> (i, j, k, l)) indicesI) indicesI
+        col = concatMap (\i -> map (\j -> (i, j, k, l)) indicesI) indicesI
+        square = concatMap (\j -> map (\l -> (i, j, k, l)) indicesI) indicesI
+
+        row', col', square' :: Vec ((n * m) - 1) (Coord n m)
+        row' = unconcatI (others row) !!! k !!! l
+        col' = unconcatI (others col) !!! i !!! j
+        square' = unconcatI (others square) !!! j !!! l
+
+controller
+    :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, n * m * m * n ~ k + 1)
+    => (HiddenClockResetEnable dom)
+    => Signal dom (Maybe (Sudoku n m))
+    -> ( Signal dom (Sudoku n m)
+       , Signal dom Bool
+       , Signal dom (Maybe (StackCmd (Sudoku n m)))
+       )
+controller load = (grid, solved, stack_cmd)
+  where
+    (grid, changed, solved) = propagator step
+
+    plan = second (unflattenGrid @n @m) . mapAccumL f False . flattenGrid <$> grid
+      where
+        f :: Bool -> Cell n m -> (Bool, (Cell n m, Cell n m))
+        f found s | not found , Just (s', s'') <- splitCell s = (True, (s', s''))
+                  | otherwise                              = (found, (s, s))
+    (can_try, nextAfter) = unbundle plan
+    (next, after) = unbundle . fmap unzipGrid $ nextAfter
+
+    step =
+        mux (changed .||. solved) (pure Propagate) $
+        mux can_try (Load <$> next) $
+        maybe Propagate Load <$> load
+
+    stack_cmd =
+        mux (changed .||. solved) (pure Nothing) $
+        mux can_try (Just . Push <$> after) $
+        mux (isJust <$> load) (pure Nothing) $
+        pure $ Just Pop
+
+others :: (1 <= n) => Vec n a -> Vec n (Vec (n - 1) a)
+others (Cons x Nil) = Nil :> Nil
+others (Cons x xs@(Cons _ _)) = xs :> map (x :>) (others xs)

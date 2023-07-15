@@ -17,6 +17,8 @@ import Control.Monad.Loops
 
 import qualified Data.List as L
 
+import Sudoku -- (controller, circuit')
+
 readGrid :: (Readable n m) => String -> Maybe (Sudoku n m)
 readGrid s = consume input $ simulate @System serialIn input
   where
@@ -37,61 +39,6 @@ showGrid grid = toString . consume $ simulateB @System (serialOut (pure True)) i
 
 printGrid :: (Writeable n m k) => Sudoku n m -> IO ()
 printGrid = putStr . showGrid
-
-propagate
-    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
-    => forall k. (KnownNat k, (n * m) ~ (k + 1))
-    => Sudoku n m
-    -> Maybe (Sudoku n m, Bool)
-propagate s = do
-    (s', (Any changed, All solved)) <- runWriterT $ propagate1 s
-    if changed then propagate s' else pure (s', solved)
-
-solveRec
-    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
-    => Sudoku n m -> Maybe (Sudoku n m)
-solveRec s = do
-    (s' , solved) <- propagate s
-    if solved then pure s' else do
-        let (next, after) = commit1 s'
-        (solveRec next) <|> (solveRec =<< after)
-
-solver
-    :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
-    => Maybe (Sudoku n m)
-    -> StateT (Bool, [Sudoku n m]) (State (Phase n m)) (Result n m)
-solver newGrid = do
-    read <- do
-        (pop, ~(top:stack)) <- get
-        if pop then do
-            put (False, stack)
-            return $ Just top
-          else do
-            return Nothing
-    (result, cmd) <- lift $ solver1 (read <|> newGrid)
-    case (result, cmd) of
-      (Just grid, _) -> do
-          return $ Solution grid
-      (Nothing, Nothing) -> do
-          return Working
-      (Nothing, Just (Push grid)) -> do
-          modify \(_, stack) -> (False, grid:stack)
-          return Working
-      (Nothing, Just Pop) -> do
-          modify \(_, stack) -> (True, stack)
-          return Working
-
-solveStack
-    :: (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
-    => Sudoku n m
-    -> Maybe (Sudoku n m)
-solveStack grid = flip evalState Init $ flip evalStateT (False, mempty) $ do
-    res <- solver (Just grid)
-    go res
-  where
-    go (Solution grid) = return $ Just grid
-    go Unsolvable = return Nothing
-    go Working = solver Nothing >>= go
 
 grid1 :: Sudoku 3 3
 Just grid1 = readGrid . unlines $
@@ -139,6 +86,45 @@ Just hard = readGrid . unlines $
     , ". . . |. . . |. . . "
     ]
 
+solve :: Sudoku 3 3 -> Maybe (Sudoku 3 3)
+solve grid = go $ simulate @System (circuit @3 @3) $ Just grid : L.repeat Nothing
+  where
+    go (Working:xs) = go xs
+    go (Unsolvable:_) = Nothing
+    go (Solution grid:_) = Just grid
+
+doSolve :: Sudoku 3 3 -> IO ()
+doSolve grid = case solve grid of
+    Nothing -> putStrLn "Unsolvable"
+    Just grid -> putStrLn "Solution:" >> printGrid grid
+
 main :: IO ()
 main = do
+    printGrid grid1
+    doSolve grid1
+    printGrid grid2
+    doSolve grid2
     return ()
+
+foo = fmap niceR $ simulate @System (circuit @3 @3) $
+    L.replicate 3 Nothing <> [Just grid1] <> L.repeat Nothing
+  where
+    niceR (Solution grid) = showGrid grid
+    niceR Working = "Working"
+    niceR Unsolvable = "Unsolvable"
+
+baz = fmap nice $ simulate @System (bundle . controller @3 @3) $
+    L.replicate 3 Nothing <> [Just grid1] <> L.repeat Nothing
+  where
+    nice (grid, solved, cmd) = unlines
+        [ -- show (bitCoerce @_ @(Sudoku 3 3) <$> grid)
+          case cmd of
+              Nothing -> "NoStack"
+              Just Pop -> "Pop"
+              Just (Push grid) -> "Push"
+        ]
+
+bar = fmap nice $ simulate @System (bundle . propagator @3 @3) $
+    L.replicate 10 Propagate <> [Load grid1] <> L.repeat Propagate
+  where
+    nice (grid, changed, solved) = showGrid grid
