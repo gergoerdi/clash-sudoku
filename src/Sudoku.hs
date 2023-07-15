@@ -31,21 +31,6 @@ circuit newBoard = result <$> underflow <*> solution
     result False (Just board) = Solution board
     result False Nothing = Working
 
-serialIn
-    :: (Readable n m k, HiddenClockResetEnable dom)
-    => Signal dom (Maybe (Unsigned 8))
-    -> Signal dom (Maybe (Sudoku n m))
-serialIn = mealyState serialReader (0, pure conflicted)
-
-serialOut
-    :: (Writeable n m k k', HiddenClockResetEnable dom)
-    => Signal dom Bool
-    -> Signal dom (Maybe (Sudoku n m))
-    -> ( Signal dom (Maybe (Unsigned 8))
-      , Signal dom Bool
-      )
-serialOut = curry $ mealyStateB (uncurry serialWriter') (Nothing, pure conflicted)
-
 topEntity
     :: "CLK_100MHZ" ::: Clock System
     -> "RESET"      ::: Reset System

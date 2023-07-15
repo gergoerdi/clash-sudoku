@@ -1,8 +1,9 @@
-{-# LANGUAGE TupleSections, ViewPatterns #-}
+{-# LANGUAGE TupleSections, ViewPatterns, ApplicativeDo, BlockArguments #-}
 module Sudoku.Serial where
 
 import Clash.Prelude hiding (lift)
 import Clash.Class.Counter
+import RetroClash.Utils (enable, mealyStateB)
 
 import Sudoku.Board
 
@@ -12,24 +13,25 @@ import Control.Monad.State
 
 type Readable n m k = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= (n * m) * (m * n), (n * m) <= 9, KnownNat k, (n * m) ~ k + 1)
 
-serialReader
-    :: (Readable n m k)
-    => Maybe (Unsigned 8)
-    -> State (Index ((n * m) * (m * n)), Vec ((n * m) * (m * n)) (Space n m)) (Maybe (Sudoku n m))
-serialReader nextChar = do
-    (ptr, buf) <- get
-    case parseSpace =<< nextChar of
-        Just x -> do
-            let buf' = buf <<+ x
-            case countSuccChecked ptr of
-              Nothing -> do
-                  put (0, buf')
-                  return $ Just $ unflattenBoard buf'
-              Just ptr' -> do
-                  put (ptr', buf')
-                  return Nothing
-        Nothing -> do
-            return Nothing
+serialIn
+    :: forall n m k dom. (Readable n m k, HiddenClockResetEnable dom)
+    => Signal dom (Maybe (Unsigned 8))
+    -> Signal dom (Maybe (Sudoku n m))
+serialIn nextChar = enable ready (unflattenBoard <$> buf')
+  where
+    ptr = register (0 :: Index ((n * m) * (m * n))) ptr''
+    buf = register (pure conflicted) buf'
+
+    nextSpace = (parseSpace =<<) <$> nextChar
+    (buf', ptr') = unbundle $ do
+        nextSpace <- nextSpace
+        buf <- buf
+        ptr <- ptr
+        pure $ case nextSpace of
+            Nothing -> (buf, Just ptr)
+            Just x -> (buf <<+ x, countSuccChecked ptr)
+
+    (ready, ptr'') = unbundle $ maybe (True, 0) (False,) <$> ptr'
 
 type Sec n space a = (Index n, Either a (Index space))
 type Ptr n m = Sec n 2 (Sec m 2 (Sec m 1 (Sec n 1 (Index 1))))
@@ -85,14 +87,17 @@ countSuccChecked x = x' <$ guard (not overflow)
   where
     (unpack -> overflow, x') = countSucc (pack False, x)
 
-serialWriter'
-    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, (n * m) <= 9)
-    => forall k. (KnownNat k, (n * m) ~ (k + 1))
-    => forall k'. (KnownNat k', (n * m * m * n) ~ k' + 1)
-    => Bool
-    -> Maybe (Sudoku n m)
-    -> State (Maybe (Ptr n m), Vec (n * m * m * n) (Space n m)) (Maybe (Unsigned 8), Bool)
-serialWriter' txReady load = do
-    x <- serialWriter txReady load
-    ready <- gets $ isNothing . fst
-    return (x, ready)
+serialOut
+    :: forall n m k k' dom. (Writeable n m k k', HiddenClockResetEnable dom)
+    => Signal dom Bool
+    -> Signal dom (Maybe (Sudoku n m))
+    -> ( Signal dom (Maybe (Unsigned 8))
+      , Signal dom Bool
+      )
+serialOut = curry $ mealyStateB (uncurry serialWriter') (Nothing, pure conflicted)
+  where
+    serialWriter' :: Bool -> Maybe (Sudoku n m) -> State (Maybe (Ptr n m), Vec (n * m * m * n) (Space n m)) (Maybe (Unsigned 8), Bool)
+    serialWriter' txReady load = do
+        x <- serialWriter txReady load
+        ready <- gets $ isNothing . fst
+        return (x, ready)

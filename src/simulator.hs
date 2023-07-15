@@ -5,8 +5,7 @@ module Main where
 import Clash.Prelude hiding (lift)
 
 import Sudoku.Board
-import Sudoku.Serial (Readable, Writeable)
-import Sudoku (serialIn, serialOut)
+import Sudoku.Serial (Readable, Writeable, serialIn, serialOut)
 import Sudoku.Solve
 import Sudoku.Stack
 
