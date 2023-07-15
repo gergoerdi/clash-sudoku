@@ -69,10 +69,14 @@ showSpace x = case getUnique x of
 
 parseSpace :: (KnownNat n, KnownNat m, (n * m) <= 9) => Unsigned 8 -> Maybe (Space n m)
 parseSpace x
-    | x == ascii '0' = Just wild
-    | x == ascii '_' = Just wild
-    | ascii '1' <= x && x <= ascii '9' = Just $ unique $ fromIntegral $ x - ascii '1'
-    | otherwise = Nothing
+    | x `elem` [ascii '0', ascii '_', ascii '.']
+    = Just wild
+
+    | ascii '1' <= x && x <= ascii '9'
+    = Just $ unique $ fromIntegral $ x - ascii '1'
+
+    | otherwise
+    = Nothing
 
 newtype Board n m a = Board{ getBoard :: Matrix n m (Matrix m n a) }
     deriving stock (Generic)
