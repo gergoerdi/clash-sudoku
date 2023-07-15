@@ -3,7 +3,6 @@ module Sudoku.Serial where
 
 import Clash.Prelude hiding (lift)
 import Clash.Class.Counter
-import RetroClash.Utils (succIdx)
 
 import Sudoku.Board
 
@@ -11,7 +10,7 @@ import Data.Maybe
 import Control.Monad (guard)
 import Control.Monad.State
 
-type Readable n m k = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, (n * m) <= 9, KnownNat k, (n * m) ~ k + 1)
+type Readable n m k = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= (n * m) * (m * n), (n * m) <= 9, KnownNat k, (n * m) ~ k + 1)
 
 serialReader
     :: (Readable n m k)
@@ -22,13 +21,13 @@ serialReader nextChar = do
     case parseSpace =<< nextChar of
         Just x -> do
             let buf' = buf <<+ x
-            case succIdx ptr of
+            case countSuccChecked ptr of
               Nothing -> do
                   put (0, buf')
                   return $ Just $ unflattenBoard buf'
               Just ptr' -> do
                   put (ptr', buf')
-                  return $ Nothing
+                  return Nothing
         Nothing -> do
             return Nothing
 
