@@ -4,33 +4,40 @@ module Main where
 
 import Clash.Prelude hiding (lift)
 
-import Sudoku.Matrix
 import Sudoku.Board
-import Sudoku.Serial
+import Sudoku.Serial (Readable, Writeable)
+import Sudoku (serialIn, serialOut)
 import Sudoku.Solve
 import Sudoku.Stack
 
 import Control.Monad.Writer
 import Control.Monad.State
-import Data.Char (isDigit)
 import Data.Char (chr)
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, maybeToList)
 import Control.Monad.Loops
 
-readBoard :: String -> Maybe (Sudoku 3 3)
-readBoard = flip evalState (0, pure conflicted) . go
+import qualified Data.List as L
+
+readBoard :: (Readable n m k) => String -> Maybe (Sudoku n m)
+readBoard s = consume input $ simulate @System serialIn input
   where
-    go [] = return Nothing
-    go (c:cs) = do
-        r <- serialReader . Just . ascii $ c
-        maybe (go cs) (return . Just) r
+    input = fmap (Just . ascii) s
+
+    consume :: [Maybe a] -> [Maybe b] -> Maybe b
+    consume [] _ = Nothing
+    consume (_:xs) (y:ys) = y <|> consume xs ys
+
 
 showBoard :: (Writeable n m k k') => Sudoku n m -> String
-showBoard board = fmap (chr . fromIntegral) . catMaybes $ flip evalState (Nothing, pure conflicted) $ do
-    let step = serialWriter' True
-    (c, _) <- step (Just board)
-    cs <- fmap fst <$> unfoldWhileM (\ (_, ready) -> not ready) (step Nothing)
-    pure (c:cs)
+showBoard board = toString . consume $ simulateB @System (serialOut (pure True)) input
+  where
+    input = Just board : L.repeat Nothing
+
+    consume ((c, ready):xs) = c : if ready then [] else consume xs
+    toString = fmap (chr . fromIntegral) . catMaybes
+
+printBoard :: (Writeable n m k k') => Sudoku n m -> IO ()
+printBoard = putStr . showBoard
 
 propagate
     :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
