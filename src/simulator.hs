@@ -126,6 +126,7 @@ baz = fmap nice $ simulate @System (bundle . controller @3 @3) $
         ]
 
 bar = fmap nice $ simulate @System (bundle . propagator @3 @3) $
-    L.replicate 10 Propagate <> [Load grid1] <> L.repeat Propagate
+    L.replicate 5 Nothing <> [Just grid1] <> L.repeat Nothing
   where
-    nice (grid, changed, solved) = showGrid grid
+    -- nice (grid, prop_res) = showGrid grid
+    nice (grid, prop_res) = show prop_res
