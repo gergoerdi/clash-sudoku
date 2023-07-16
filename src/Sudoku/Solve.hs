@@ -3,6 +3,7 @@
 module Sudoku.Solve where
 
 import Clash.Prelude
+import RetroClash.Utils
 
 import Sudoku.Matrix
 import Sudoku.Grid
@@ -100,18 +101,17 @@ controller load = (grid, solved, stack_cmd)
 
     plan = second (unflattenGrid @n @m) . mapAccumL f False . flattenGrid <$> grid
       where
-        f :: Bool -> Cell n m -> (Bool, (Cell n m, Cell n m))
-        f found s | not found , Just (s', s'') <- splitCell s = (True, (s', s''))
-                  | otherwise                              = (found, (s, s))
+        f :: Bool -> Space n m -> (Bool, (Space n m, Space n m))
+        f found s | not found , Just (s', s'') <- splitSpace s = (True, (s', s''))
+                  | otherwise                               = (found, (s, s))
+    (can_try, unbundle . fmap unzipGrid -> (next, after)) = unbundle plan
 
-    (step, stack_cmd, solved) = unbundle $ f <$> result <*> grid <*> load <*> plan
-      where
-        f result grid load (can_try, unzipGrid -> (next, after)) = case result of
-            _ | Just grid' <- load -> (Just grid', Nothing, False)
-            Just Success -> (Nothing, Nothing, True)
-            Just Stuck | can_try -> (Just next, Just $ Push after, False)
-            Just Failure -> (Nothing, Just Pop, False)
-            otherwise -> (Nothing, Nothing, False)
+    step = load .<|>. enable (can_try .&&. result .== Just Stuck) next
+    solved = result .== Just Success
+    stack_cmd =
+        mux (result .== Just Stuck .&&. can_try) (Just . Push <$> after) $
+        mux (result .== Just Failure) (pure $ Just Pop) $
+        pure Nothing
 
 others :: (1 <= n) => Vec n a -> Vec n (Vec (n - 1) a)
 others (Cons x Nil) = Nil :> Nil
