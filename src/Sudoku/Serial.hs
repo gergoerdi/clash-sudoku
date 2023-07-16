@@ -67,8 +67,9 @@ serialWriter txReady load
                           put (ptr', buf)
                           return $ Just punctuation
                       Nothing -> do
-                          put (ptr', buf <<+ conflicted)
-                          return $ Just $ showSpace $ head buf
+                          let buf' = rotateLeftS buf (SNat @1)
+                          put (ptr', buf')
+                          return $ Just $ showSpace $ last buf'
   where
     punctuate ptr
         | (_, Right 0) <- ptr                               = Just $ ascii '\r'
