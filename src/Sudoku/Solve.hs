@@ -107,12 +107,11 @@ controller load = (grid, solved, stack_cmd)
     (step, stack_cmd, solved) = unbundle $ f <$> result <*> grid <*> load <*> plan
       where
         f result grid load (can_try, unzipGrid -> (next, after)) = case result of
-            Nothing -> (Nothing, Nothing, False)
+            _ | Just grid' <- load -> (Just grid', Nothing, False)
             Just Success -> (Nothing, Nothing, True)
             Just Stuck | can_try -> (Just next, Just $ Push after, False)
-            Just Failure
-                | Just grid' <- load -> (Just grid', Nothing, False)
-                | otherwise -> (Nothing, Just Pop, False)
+            Just Failure -> (Nothing, Just Pop, False)
+            otherwise -> (Nothing, Nothing, False)
 
 others :: (1 <= n) => Vec n a -> Vec n (Vec (n - 1) a)
 others (Cons x Nil) = Nil :> Nil
