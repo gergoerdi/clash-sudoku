@@ -11,7 +11,7 @@ import Data.Maybe
 import Control.Monad (guard)
 import Control.Monad.State
 
-type Readable n m = (KnownNat n, KnownNat m, 1 <= (n * m) * (m * n), (n * m) <= 9)
+type Readable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= (n * m) * (m * n), (n * m) <= 9)
 
 serialIn
     :: forall n m dom. (Readable n m, HiddenClockResetEnable dom)
@@ -19,7 +19,7 @@ serialIn
     -> Signal dom (Maybe (Sudoku n m))
 serialIn nextChar = enable ready (unflattenGrid <$> buf')
   where
-    ptr = register (0 :: Index ((n * m) * (m * n))) ptr''
+    ptr = register (minBound :: Coord n m) ptr''
     buf = register (pure conflicted) buf'
 
     nextCell = (parseCell =<<) <$> nextChar
@@ -31,7 +31,7 @@ serialIn nextChar = enable ready (unflattenGrid <$> buf')
             Nothing -> (buf, Just ptr)
             Just x -> (buf <<+ x, countSuccChecked ptr)
 
-    (ready, ptr'') = unbundle $ maybe (True, 0) (False,) <$> ptr'
+    (ready, ptr'') = unbundle $ maybe (True, minBound) (False,) <$> ptr'
 
 type Sec n space a = (Index n, Either a (Index space))
 type Ptr n m = Sec n 2 (Sec m 2 (Sec m 1 (Sec n 1 (Index 1))))
