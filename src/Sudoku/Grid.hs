@@ -18,14 +18,26 @@ deriving anyclass instance (KnownNat n, KnownNat m) => BitPack (Cell n m)
 wild :: (KnownNat n, KnownNat m) => Cell n m
 wild = Cell maxBound
 
-combine :: (KnownNat n, KnownNat m) => Cell n m -> Vec k (Cell n m) -> Cell n m
-combine (Cell s0) xs = Cell $ fold (.&.) (s0 :> map (complement . cellBits) xs)
-
 conflicted :: (KnownNat n, KnownNat m) => Cell n m
 conflicted = Cell 0
 
 unique :: (KnownNat n, KnownNat m) => Index (n * m) -> Cell n m
 unique n = Cell $ 1 `rotateR` 1 `rotateR` fromIntegral n
+
+newtype Mask n m = Mask{ maskBits :: BitVector (n * m) }
+
+combineMask :: (KnownNat n, KnownNat m) => Mask n m -> Bool -> Space n m -> Mask n m
+combineMask mask is_unique new
+    | is_unique
+    = Mask $ maskBits mask .&. complement (spaceBits new)
+    | otherwise
+    = mask
+
+applyMasks :: (KnownNat n, KnownNat m) => Space n m -> Vec k (Mask n m) -> Space n m
+applyMasks (Space s0) xs = Space $ fold (.&.) (s0 :> map maskBits xs)
+
+wildMask :: (KnownNat n, KnownNat m) => Mask n m
+wildMask = Mask maxBound
 
 data Unique a
     = Unique a

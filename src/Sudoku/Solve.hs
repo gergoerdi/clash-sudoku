@@ -69,11 +69,12 @@ propagator load = (bundle $ fmap (\(c, _, _, _) -> c) units, result)
                 Just new_grid -> (gridAt new_grid idx, True)
                 Nothing -> (this', this' /= this)
                   where
-                    this' = combine this masks
+                    this' = applyMasks this masks
 
-        neighbour idx' = mux is_unique value (pure conflicted)
+        neighbour idx' = mux is_unique mask (pure wildMask)
           where
             (value, is_unique, _, _) = gridAt cells idx'
+            mask = Mask . complement . cellBits <$> value
 
 controller
     :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, n * m * m * n ~ k + 1)
