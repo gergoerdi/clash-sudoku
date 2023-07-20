@@ -11,13 +11,13 @@ import Data.Maybe
 import Control.Monad (guard)
 import Control.Monad.State
 
-type Readable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= (n * m) * (m * n), (n * m) <= 9)
+type Readable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, (n * m) <= 9)
 
 serialIn
     :: forall n m dom. (Readable n m, HiddenClockResetEnable dom)
     => Signal dom (Maybe (Unsigned 8))
     -> Signal dom (Maybe (Sudoku n m))
-serialIn nextChar = enable ready (unflattenGrid <$> buf')
+serialIn nextChar = enable ready buf'
   where
     ptr = register (minBound :: Coord n m) ptr''
     buf = register (pure conflicted) buf'
@@ -26,10 +26,10 @@ serialIn nextChar = enable ready (unflattenGrid <$> buf')
     (buf', ptr') = unbundle $ do
         nextCell <- nextCell
         buf <- buf
-        ptr <- ptr
+        ptr@(i, j, k, l) <- ptr
         pure $ case nextCell of
             Nothing -> (buf, Just ptr)
-            Just x -> (buf <<+ x, countSuccChecked ptr)
+            Just x -> (setGrid (i, j, k, l) x buf, countSuccChecked ptr)
 
     (ready, ptr'') = unbundle $ maybe (True, minBound) (False,) <$> ptr'
 
@@ -44,13 +44,13 @@ startPtr =
     (minBound,) . Left $
     minBound
 
-type Writeable n m k = (Readable n m, 1 <= n, 1 <= m, KnownNat k, (n * m * m * n) ~ k + 1)
+type Writeable n m = (Readable n m, 1 <= n, 1 <= m)
 
 serialWriter
-    :: (Writeable n m k)
+    :: (Writeable n m)
     => Bool
     -> Maybe (Sudoku n m)
-    -> State (Maybe (Ptr n m), Vec (n * m * m * n) (Cell n m)) (Maybe (Unsigned 8))
+    -> State (Maybe (Ptr n m), Sudoku n m) (Maybe (Unsigned 8))
 serialWriter txReady load
     | not txReady = return Nothing
     | otherwise = do
@@ -59,28 +59,27 @@ serialWriter txReady load
               Nothing -> do
                   case load of
                       Nothing -> put (Nothing, pure conflicted)
-                      Just new_grid -> put (Just startPtr, flattenGrid new_grid)
+                      Just new_grid -> put (Just startPtr, new_grid)
                   return Nothing
               Just ptr -> do
                   -- () <- traceShowM ptr
                   let ptr' = countSuccChecked ptr
                   case punctuate ptr of
-                      Just punctuation -> do
+                      Left punctuation -> do
                           put (ptr', buf)
                           return $ Just punctuation
-                      Nothing -> do
-                          let buf' = rotateLeftS buf (SNat @1)
-                          put (ptr', buf')
-                          return $ Just $ showCell $ last buf'
+                      Right (i, j, k, l) -> do
+                          put (ptr', buf)
+                          return $ Just $ showCell $ gridAt buf (i, j, k, l)
   where
     punctuate ptr
-        | (_, Right 0) <- ptr                               = Just $ ascii '\r'
-        | (_, Right 1) <- ptr                               = Just $ ascii '\n'
-        | (_, Left (_, Right 0)) <- ptr                     = Just $ ascii '\r'
-        | (_, Left (_, Right 1)) <- ptr                     = Just $ ascii '\n'
-        | (_, Left (_, Left (_, Right{}))) <- ptr           = Just $ ascii ' '
-        | (_, Left (_, Left (_, Left (_, Right{})))) <- ptr = Just $ ascii ' '
-        | (_, Left (_, Left (_, Left (_, Left{})))) <- ptr  = Nothing
+        | (_, Right 0) <- ptr                               = Left $ ascii '\r'
+        | (_, Right 1) <- ptr                               = Left $ ascii '\n'
+        | (_, Left (_, Right 0)) <- ptr                     = Left $ ascii '\r'
+        | (_, Left (_, Right 1)) <- ptr                     = Left $ ascii '\n'
+        | (_, Left (_, Left (_, Right{}))) <- ptr           = Left $ ascii ' '
+        | (_, Left (_, Left (_, Left (_, Right{})))) <- ptr = Left $ ascii ' '
+        | (i, Left (j, Left (k, Left (l, Left{})))) <- ptr  = Right (i, j, k, l)
 
 countSuccChecked :: Counter a => a -> Maybe a
 countSuccChecked x = x' <$ guard (not overflow)
@@ -88,7 +87,7 @@ countSuccChecked x = x' <$ guard (not overflow)
     (unpack -> overflow, x') = countSucc (pack False, x)
 
 serialOut
-    :: forall n m k dom. (Writeable n m k, HiddenClockResetEnable dom)
+    :: forall n m dom. (Writeable n m, HiddenClockResetEnable dom)
     => Signal dom Bool
     -> Signal dom (Maybe (Sudoku n m))
     -> ( Signal dom (Maybe (Unsigned 8))
@@ -96,7 +95,7 @@ serialOut
       )
 serialOut = curry $ mealyStateB (uncurry serialWriter') (Nothing, pure conflicted)
   where
-    serialWriter' :: Bool -> Maybe (Sudoku n m) -> State (Maybe (Ptr n m), Vec (n * m * m * n) (Cell n m)) (Maybe (Unsigned 8), Bool)
+    serialWriter' :: Bool -> Maybe (Sudoku n m) -> State (Maybe (Ptr n m), Sudoku n m) (Maybe (Unsigned 8), Bool)
     serialWriter' txReady load = do
         x <- serialWriter txReady load
         ready <- gets $ isNothing . fst

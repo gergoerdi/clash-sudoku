@@ -26,15 +26,15 @@ unique n = Cell $ 1 `rotateR` 1 `rotateR` fromIntegral n
 
 newtype Mask n m = Mask{ maskBits :: BitVector (n * m) }
 
-combineMask :: (KnownNat n, KnownNat m) => Mask n m -> Bool -> Space n m -> Mask n m
+combineMask :: (KnownNat n, KnownNat m) => Mask n m -> Bool -> Cell n m -> Mask n m
 combineMask mask is_unique new
     | is_unique
-    = Mask $ maskBits mask .&. complement (spaceBits new)
+    = Mask $ maskBits mask .&. complement (cellBits new)
     | otherwise
     = mask
 
-applyMasks :: (KnownNat n, KnownNat m) => Space n m -> Vec k (Mask n m) -> Space n m
-applyMasks (Space s0) xs = Space $ fold (.&.) (s0 :> map maskBits xs)
+applyMasks :: (KnownNat n, KnownNat m) => Cell n m -> Vec k (Mask n m) -> Cell n m
+applyMasks (Cell s0) xs = Cell $ fold (.&.) (s0 :> map maskBits xs)
 
 wildMask :: (KnownNat n, KnownNat m) => Mask n m
 wildMask = Mask maxBound
@@ -153,6 +153,15 @@ type Coord n m = (Index n, Index m, Index m, Index n)
 
 gridAt :: (KnownNat n, KnownNat m) => Grid n m a -> Coord n m -> a
 gridAt grid (i, j, k, l) = matrixRows (matrixRows (getGrid grid) !!! i !!! j) !!! k !!! l
+
+updateVec :: (KnownNat n) => Index n -> (a -> a) -> Vec n a -> Vec n a
+updateVec i f v = replace i (f (v !! i)) v
+
+setGrid :: (KnownNat n, KnownNat m) => Coord n m -> a -> Grid n m a -> Grid n m a
+setGrid (i, j, k, l) x =
+    Grid . FromRows .
+    updateVec i (updateVec j $ FromRows . updateVec k (replace l x) . matrixRows) .
+    matrixRows . getGrid
 
 neighbours :: (KnownNat n, KnownNat m, 1 <= (n * m)) => Coord n m -> Vec (3 * (n * m - 1)) (Coord n m)
 neighbours (i, j, k, l) = row ++ col ++ box

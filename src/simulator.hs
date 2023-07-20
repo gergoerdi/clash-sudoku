@@ -29,7 +29,7 @@ readGrid s = consume input $ simulate @System serialIn input
     consume (_:xs) (y:ys) = y <|> consume xs ys
 
 
-showGrid :: (Writeable n m k) => Sudoku n m -> String
+showGrid :: (Writeable n m) => Sudoku n m -> String
 showGrid grid = toString . consume $ simulateB @System (serialOut (pure True)) input
   where
     input = Just grid : L.repeat Nothing
@@ -37,7 +37,7 @@ showGrid grid = toString . consume $ simulateB @System (serialOut (pure True)) i
     consume ((c, ready):xs) = c : if ready then [] else consume xs
     toString = fmap (chr . fromIntegral) . catMaybes
 
-printGrid :: (Writeable n m k) => Sudoku n m -> IO ()
+printGrid :: (Writeable n m) => Sudoku n m -> IO ()
 printGrid = putStr . showGrid
 
 grid1 :: Sudoku 3 3

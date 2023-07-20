@@ -55,7 +55,7 @@ propagator load = (bundle $ fmap (\(c, _, _, _) -> c) units, result)
             | not changed -> Just Stuck
             | otherwise -> Nothing
 
-    unit :: Coord n m -> (Signal dom (Space n m), Signal dom Bool, Signal dom Bool, Signal dom Bool)
+    unit :: Coord n m -> (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool, Signal dom Bool)
     unit idx = (r, isUnique <$> r, register False changed, (== conflicted) <$> r)
       where
         r :: Signal dom (Cell n m)
@@ -73,7 +73,7 @@ propagator load = (bundle $ fmap (\(c, _, _, _) -> c) units, result)
 
         neighbour idx' = mux is_unique mask (pure wildMask)
           where
-            (value, is_unique, _, _) = gridAt cells idx'
+            (value, is_unique, _, _) = gridAt units idx'
             mask = Mask . complement . cellBits <$> value
 
 controller
@@ -90,8 +90,8 @@ controller load = (grid, solved, stack_cmd)
 
     plan = second (unflattenGrid @n @m) . mapAccumL f False . flattenGrid <$> grid
       where
-        f :: Bool -> Space n m -> (Bool, (Space n m, Space n m))
-        f found s | not found , Just (s', s'') <- splitSpace s = (True, (s', s''))
+        f :: Bool -> Cell n m -> (Bool, (Cell n m, Cell n m))
+        f found s | not found , Just (s', s'') <- splitCell s = (True, (s', s''))
                   | otherwise                               = (found, (s, s))
     (can_try, unbundle . fmap unzipGrid -> (next, after)) = unbundle plan
 
