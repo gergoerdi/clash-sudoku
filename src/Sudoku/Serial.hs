@@ -13,20 +13,22 @@ import Control.Monad.State
 
 type Readable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, (n * m) <= 9)
 
+type SequentialPtr n m = Coord n m
+
 serialIn
     :: forall n m dom. (Readable n m, HiddenClockResetEnable dom)
     => Signal dom (Maybe (Unsigned 8))
     -> Signal dom (Maybe (Sudoku n m))
 serialIn nextChar = enable ready buf'
   where
-    ptr = register (minBound :: Coord n m) ptr''
+    ptr = register (minBound :: SequentialPtr n m) ptr''
     buf = register (pure conflicted) buf'
 
     nextCell = (parseCell =<<) <$> nextChar
     (buf', ptr') = unbundle $ do
         nextCell <- nextCell
         buf <- buf
-        ptr@(i, j, k, l) <- ptr
+        ptr@(i, k, j, l) <- ptr
         pure $ case nextCell of
             Nothing -> (buf, Just ptr)
             Just x -> (setGrid (i, j, k, l) x buf, countSuccChecked ptr)
@@ -68,7 +70,7 @@ serialWriter txReady load
                       Left punctuation -> do
                           put (ptr', buf)
                           return $ Just punctuation
-                      Right (i, j, k, l) -> do
+                      Right (i, k, j, l) -> do
                           put (ptr', buf)
                           return $ Just $ showCell $ gridAt buf (i, j, k, l)
   where

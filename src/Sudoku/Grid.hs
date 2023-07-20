@@ -166,15 +166,15 @@ setGrid (i, j, k, l) x =
 neighbours :: (KnownNat n, KnownNat m, 1 <= (n * m)) => Coord n m -> Vec (3 * (n * m - 1)) (Coord n m)
 neighbours (i, j, k, l) = row ++ col ++ box
   where
-    row = unconcatI (others row0) !!! k !!! l
-    col = unconcatI (others col0) !!! i !!! j
-    box = unconcatI (others box0) !!! j !!! l
+    row = unconcatI (others row0) !!! j !!! l
+    col = unconcatI (others col0) !!! i !!! k
+    box = unconcatI (others box0) !!! k !!! l
 
     gen2 f = concatMap (\x -> map (\y -> f x y) indicesI) indicesI
 
-    row0 = gen2 \k' l' -> (i,  j,  k', l')
-    col0 = gen2 \i' j' -> (i', j', k,  l )
-    box0 = gen2 \j' l' -> (i,  j', k,  l')
+    row0 = gen2 \j' l' -> (i,  j', k,  l')
+    col0 = gen2 \i' k' -> (i', j,  k', l )
+    box0 = gen2 \k' l' -> (i,  j,  k', l')
 
 others :: (1 <= n) => Vec n a -> Vec n (Vec (n - 1) a)
 others (Cons x Nil) = Nil :> Nil
