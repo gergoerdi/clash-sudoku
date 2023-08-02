@@ -11,6 +11,7 @@ import Sudoku.Stack
 
 import Control.Monad.Writer
 import Control.Monad.State
+import Control.Arrow
 import Data.Char (chr)
 import Data.Maybe (catMaybes, maybeToList)
 import Control.Monad.Loops
@@ -105,28 +106,3 @@ main = do
     printGrid grid2
     doSolve grid2
     return ()
-
-foo = fmap niceR $ simulate @System (circuit @3 @3) $
-    L.replicate 3 Nothing <> [Just grid1] <> L.repeat Nothing
-  where
-    niceR Idle = "Idle"
-    niceR (Solution grid) = showGrid grid
-    niceR Working = "Working"
-    niceR Unsolvable = "Unsolvable"
-
-baz = fmap nice $ simulate @System (bundle . controller @3 @3) $
-    L.replicate 3 Nothing <> [Just grid1] <> L.repeat Nothing
-  where
-    nice (grid, solved, cmd) = unlines
-        [ -- show (bitCoerce @_ @(Sudoku 3 3) <$> grid)
-          case cmd of
-              Nothing -> "NoStack"
-              Just Pop -> "Pop"
-              Just (Push grid) -> "Push"
-        ]
-
-bar = fmap nice $ simulate @System (bundle . propagator @3 @3) $
-    L.replicate 5 Nothing <> [Just grid1] <> L.repeat Nothing
-  where
-    -- nice (grid, prop_res) = showGrid grid
-    nice (grid, prop_res) = show prop_res

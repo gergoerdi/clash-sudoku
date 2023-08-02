@@ -31,10 +31,10 @@ propagator
     :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, n * m * m * n ~ k + 1)
     => (HiddenClockResetEnable dom)
     => Signal dom (Maybe (Sudoku n m))
-    -> ( Signal dom (Sudoku n m)
+    -> ( Grid n m (Signal dom (Cell n m), Signal dom Bool)
        , Signal dom (Maybe PropagatorResult)
        )
-propagator load = (bundle $ fmap (\(c, _, _, _) -> c) units, result)
+propagator load = (fmap (\(c, solved, _, _) -> (c, solved)) units, result)
   where
     units :: Grid n m (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool, Signal dom Bool)
     units = generateGrid unit
@@ -84,20 +84,20 @@ controller
        , Signal dom Bool
        , Signal dom (Maybe (StackCmd (Sudoku n m)))
        )
-controller load = (grid, solved, stack_cmd)
+controller load = (bundle . fmap fst $ grid, solved, stack_cmd)
   where
     (grid, result) = propagator step
 
-    plan = second (unflattenGrid @n @m) . mapAccumL f False . flattenGrid <$> grid
+    (can_try, unzipGrid -> (next, after)) = second unflattenGrid . mapAccumL f (pure False) . flattenGrid $ grid
       where
-        f :: Bool -> Cell n m -> (Bool, (Cell n m, Cell n m))
-        f found s | not found , Just (s', s'') <- splitCell s = (True, (s', s''))
-                  | otherwise                               = (found, (s, s))
-    (can_try, unbundle . fmap unzipGrid -> (next, after)) = unbundle plan
+        f found (s, solved) = (found .||. this, unbundle $ mux this (splitCell <$> s) (dup <$> s))
+          where
+            this = (not <$> found) .&&. (not <$> solved)
+            dup x = (x, x)
 
-    step = load .<|>. enable (can_try .&&. result .== Just Stuck) next
+    step = load .<|>. enable (can_try .&&. result .== Just Stuck) (bundle next)
     solved = result .== Just Success
     stack_cmd =
-        mux (result .== Just Stuck .&&. can_try) (Just . Push <$> after) $
+        mux (result .== Just Stuck .&&. can_try) (Just . Push <$> bundle after) $
         mux (result .== Just Failure) (pure $ Just Pop) $
         pure Nothing

@@ -61,10 +61,8 @@ firstBit = v2bv . snd . mapAccumL (\ b x -> let x' = if b then low else x in (b 
   where
     f seen_high bit = (seen_high || bit == high, if seen_high then low else bit)
 
-splitCell :: (KnownNat n, KnownNat m) => Cell n m -> Maybe (Cell n m, Cell n m)
-splitCell (Cell s) = do
-    guard $ s' /= s && s' /= 0
-    return (Cell s', Cell (s .&. complement s'))
+splitCell :: (KnownNat n, KnownNat m) => Cell n m -> (Cell n m, Cell n m)
+splitCell (Cell s) = (Cell s', Cell (s .&. complement s'))
   where
     s' = firstBit s
 
