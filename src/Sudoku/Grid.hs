@@ -116,10 +116,10 @@ instance (KnownNat n, KnownNat m) => Bundle (Grid n m a) where
     unbundle = Grid . fmap unbundle . unbundle . fmap getGrid
 
 flattenGrid :: Grid n m a -> Vec (n * m * m * n) a
-flattenGrid = concat . rowFirst . fmap rowFirst . getGrid
+flattenGrid = concat . toRowMajorOrder . fmap toRowMajorOrder . getGrid
 
-unflattenGrid :: (KnownNat n, KnownNat m, BitPack a) => Vec (n * m * m * n) a -> Grid n m a
-unflattenGrid = Grid . bitCoerce
+unflattenGrid :: (KnownNat n, KnownNat m) => Vec (n * m * m * n) a -> Grid n m a
+unflattenGrid = Grid . fmap fromRowMajorOrder . fromRowMajorOrder . unconcatI
 
 type Sudoku n m = Grid n m (Cell n m)
 -- newtype Sudoku n m = Sudoku{ getSudoku :: Grid n m (Cell n m) }
@@ -190,7 +190,7 @@ gridToRows
     :: (KnownNat n, KnownNat m)
     => Grid n m a
     -> Vec (n * m) (Vec (m * n) a)
-gridToRows = concatMap (fmap rowFirst) . matrixRows . getGrid
+gridToRows = concatMap (fmap toRowMajorOrder) . matrixRows . getGrid
 
 gridFromRows
     :: (KnownNat n, KnownNat m)

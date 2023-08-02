@@ -32,5 +32,8 @@ generateMatrix f = FromRows $
     flip map indicesI \j ->
     f i j
 
-rowFirst :: Matrix n m a -> Vec (n * m) a
-rowFirst = concat . matrixRows
+toRowMajorOrder :: Matrix n m a -> Vec (n * m) a
+toRowMajorOrder = concat . matrixRows
+
+fromRowMajorOrder :: (KnownNat n, KnownNat m) => Vec (n * m) a -> Matrix n m a
+fromRowMajorOrder = FromRows . unconcatI
