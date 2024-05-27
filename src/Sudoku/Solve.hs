@@ -25,15 +25,17 @@ simplify
     :: forall n m k. (KnownNat m, KnownNat n, KnownNat k, 1 <= k)
     => Vec k (Space n m)
     -> WriterT (Any, All) Maybe (Vec k (Space n m))
-simplify xs = traverse (uncurry simplifySpace) (zip xs (others xs))
+simplify xs = zipWithM simplifySpace xs (others xs)
   where
     simplifySpace :: forall k. Space n m -> Vec k (Space n m) -> WriterT (Any, All) Maybe (Space n m)
     simplifySpace x xs = do
         guard $ x' /= conflicted
-        tell (Any $ x' /= x, All $ isUnique x')
+        tell (Any changed, All solved)
         pure x'
       where
         x' = combine x $ fmap (\x -> if isUnique x then x else conflicted) xs
+        changed = x' /= x
+        solved = isUnique x'
 
 propagate1
     :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
