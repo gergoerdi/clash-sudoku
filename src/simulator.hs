@@ -38,20 +38,20 @@ showGrid grid = toString . consume $ simulateB @System (serialOut (pure True)) i
 printGrid :: (Writeable n m k) => Sudoku n m -> IO ()
 printGrid = putStr . showGrid
 
-propagate
+propagate'
     :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
     => forall k. (KnownNat k, (n * m) ~ (k + 1))
     => Sudoku n m
     -> Maybe (Sudoku n m, Bool)
-propagate s = do
-    (s', (Any changed, All solved)) <- runWriterT $ propagate1 s
-    if changed then propagate s' else pure (s', solved)
+propagate' s = do
+    (s', (Any changed, All solved)) <- runWriterT $ propagate s
+    if changed then propagate' s' else pure (s', solved)
 
 solveRec
     :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
     => Sudoku n m -> Maybe (Sudoku n m)
 solveRec s = do
-    (s' , solved) <- propagate s
+    (s' , solved) <- propagate' s
     if solved then pure s' else do
         let (next, after) = commit1 s'
         (solveRec next) <|> (solveRec =<< after)

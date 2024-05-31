@@ -18,8 +18,8 @@ deriving anyclass instance (KnownNat n, KnownNat m) => BitPack (Cell n m)
 wild :: (KnownNat n, KnownNat m) => Cell n m
 wild = Cell maxBound
 
-combine :: (KnownNat n, KnownNat m) => Cell n m -> Vec k (Cell n m) -> Cell n m
-combine (Cell s0) xs = Cell $ fold (.&.) (s0 :> map (complement . cellBits) xs)
+combine :: (KnownNat n, KnownNat m) => Cell n m -> BitVector (n * m) -> Cell n m
+combine (Cell c) knowns = Cell $ c .&. complement knowns
 
 conflicted :: (KnownNat n, KnownNat m) => Cell n m
 conflicted = Cell 0

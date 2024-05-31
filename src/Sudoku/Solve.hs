@@ -1,10 +1,11 @@
 {-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 module Sudoku.Solve
     ( Result(..), Phase(..)
     , solver1
-    , propagate1
+    , propagate
     , commit1
     ) where
 
@@ -21,26 +22,34 @@ others :: (1 <= n) => Vec n a -> Vec n (Vec (n - 1) a)
 others (Cons x Nil) = Nil :> Nil
 others (Cons x xs@(Cons _ _)) = xs :> map (x :>) (others xs)
 
-simplify
+propagateNeighbours
     :: forall n m k. (KnownNat m, KnownNat n, KnownNat k, 1 <= k)
     => Vec k (Cell n m)
     -> WriterT (Any, All) Maybe (Vec k (Cell n m))
-simplify xs = traverse (uncurry simplifyCell) (zip xs (others xs))
+propagateNeighbours xs = do
+    tell (mempty, All solved)
+    zipWithM propagateCell xs (foldl (.&.) maxBound <$> others xs')
   where
-    simplifyCell :: forall k. Cell n m -> Vec k (Cell n m) -> WriterT (Any, All) Maybe (Cell n m)
-    simplifyCell x xs = do
-        guard $ x' /= conflicted
-        tell (Any $ x' /= x, All $ isUnique x')
-        pure x'
-      where
-        x' = combine x $ fmap (\x -> if isUnique x then x else conflicted) xs
+    zipWithM f xs ys = mapM (uncurry f) (zip xs ys)
 
-propagate1
-    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    (xs', solveds) = unzip $ getSolved <$> xs
+    solved = and solveds
+
+    getSolved x = let b = isUnique x in (if b then cellBits x else 0, b)
+
+    propagateCell x neighbours = do
+        let x' = combine x neighbours
+            changed = x' /= x
+        guard $ x' /= conflicted
+        tell (Any changed, mempty)
+        pure x'
+
+propagate
+    :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= m * n)
     => forall k. (KnownNat k, (n * m) ~ (k + 1))
     => Sudoku n m
     -> WriterT (Any, All) Maybe (Sudoku n m)
-propagate1 = rowwise simplify >=> columnwise simplify >=> boxwise simplify
+propagate = rowwise propagateNeighbours >=> columnwise propagateNeighbours >=> boxwise propagateNeighbours
 
 commit1
     :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
@@ -93,7 +102,7 @@ solver1 Nothing = get >>= \case
         return (Nothing, Just Pop)
     Solved grid -> do
         return (Just grid, Nothing)
-    Propagate grid -> case runWriterT $ propagate1 grid of
+    Propagate grid -> case runWriterT $ propagate grid of
         Nothing -> do
             return (Nothing, Just Pop)
         Just (grid', (Any changed, All solved)) -> do
