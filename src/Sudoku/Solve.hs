@@ -80,15 +80,15 @@ controller
     :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, n * m * m * n ~ k + 1)
     => (HiddenClockResetEnable dom)
     => Signal dom (Maybe (Sudoku n m))
-    -> ( Signal dom (Sudoku n m)
-       , Signal dom Bool
+    -> ( Signal dom (Maybe (Sudoku n m))
        , Signal dom (Maybe (StackCmd (Sudoku n m)))
        )
-controller load = (bundle . fmap fst $ grid, solved, stack_cmd)
+controller load = (enable solved grid, stack_cmd)
   where
-    (grid, result) = propagator step
+    (grid_with_unique, result) = propagator step
+    grid = bundle . fmap fst $ grid_with_unique
 
-    (can_try, unzipGrid -> (next, after)) = second unflattenGrid . mapAccumL f (pure False) . flattenGrid $ grid
+    (can_try, unzipGrid -> (next, after)) = second unflattenGrid . mapAccumL f (pure False) . flattenGrid $ grid_with_unique
       where
         f found (s, solved) = (found .||. this, unbundle $ mux this (splitCell <$> s) (dup <$> s))
           where

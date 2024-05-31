@@ -71,6 +71,21 @@ Just grid2 = readGrid . unlines $
     , "0 5 1  0 0 7  0 0 0"
     ]
 
+unsolvable :: Sudoku 3 3
+Just unsolvable = readGrid . unlines $
+    [ "0 0 0  6 0 0  5 0 0"
+    , "0 6 0  0 0 8  0 4 0"
+    , "0 0 0  7 0 4  0 0 0"
+    , ""
+    , "0 0 2  8 0 0  0 0 9"
+    , "0 9 0  0 0 0  0 7 0"
+    , "8 0 0  0 0 9  1 0 0"
+    , ""
+    , "0 0 0  2 0 6  0 0 0"
+    , "0 3 0  5 0 0  0 1 0"
+    , "9 5 1  0 0 7  0 0 0"
+    ]
+
 -- | From https://norvig.com/sudoku.html
 hard :: Sudoku 3 3
 Just hard = readGrid . unlines $
@@ -105,4 +120,6 @@ main = do
     doSolve grid1
     printGrid grid2
     doSolve grid2
+    printGrid unsolvable
+    doSolve unsolvable
     return ()

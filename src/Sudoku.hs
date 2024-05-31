@@ -40,20 +40,20 @@ circuit
     -> Signal dom (Result n m)
 circuit new_grid = result
   where
-    (grid, solved, stack_cmd) = controller load
+    (solved_grid, stack_cmd) = controller load
     load = new_grid .<|>. stack_rd
     (stack_rd, underflow) = stack (SNat @(StackSize n m)) emptySudoku stack_cmd'
 
-    result = process <$> busy <*> (isJust <$> new_grid) <*> underflow <*> solved <*> grid
+    result = process <$> busy <*> (isJust <$> new_grid) <*> underflow <*> solved_grid
     stack_cmd' = guardA busy stack_cmd
     busy = register False $ working <$> result
 
-    process :: Bool -> Bool -> Bool -> Bool -> Sudoku n m -> Result n m
-    process busy new_grid underflow solved grid
-        | not busy    = if new_grid then Working else Idle
-        | underflow = Unsolvable
-        | solved    = Solved grid
-        | otherwise = Working
+    process :: Bool -> Bool -> Bool -> Maybe (Sudoku n m) -> Result n m
+    process busy new_grid underflow solved_grid
+        | Just grid <- solved_grid  = Solved grid
+        | not busy && not new_grid = Idle
+        | underflow                = Unsolvable
+        | otherwise                = Working
 
 topEntity
     :: "CLK_100MHZ" ::: Clock System
