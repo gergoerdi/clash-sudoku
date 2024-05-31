@@ -4,7 +4,7 @@ import Clash.Prelude hiding (lift)
 import Clash.Annotations.TH
 import Clash.Class.Counter
 
-import Sudoku.Board
+import Sudoku.Grid
 import Sudoku.Serial
 import Sudoku.Solve
 import Sudoku.Stack
@@ -22,13 +22,13 @@ circuit
     => (HiddenClockResetEnable dom)
     => Signal dom (Maybe (Sudoku n m))
     -> Signal dom (Result n m)
-circuit newBoard = result <$> underflow <*> solution
+circuit newGrid = result <$> underflow <*> solution
   where
-    (solution, stackCmd) = mealyStateB solver1 Init (newBoard .<|>. stackRd)
+    (solution, stackCmd) = mealyStateB solver1 Init (newGrid .<|>. stackRd)
     (stackRd, underflow) = stack (SNat @(StackSize n m)) (pure conflicted) stackCmd
 
     result True _ = Unsolvable
-    result False (Just board) = Solution board
+    result False (Just grid) = Solution grid
     result False Nothing = Working
 
 topEntity
@@ -36,9 +36,9 @@ topEntity
     -> "RESET"      ::: Reset System
     -> "RX"         ::: Signal System Bit
     -> "TX"         ::: Signal System Bit
-topEntity = withEnableGen board
+topEntity = withEnableGen grid
   where
-    board rx = tx
+    grid rx = tx
       where
         inByte = fmap unpack <$> serialRx @8 @9600 @System (SNat @9600) rx
         (tx, txReady) = serialTx (SNat @9600) (fmap pack <$> outByte)
@@ -47,6 +47,6 @@ topEntity = withEnableGen board
 
         fromResult Working = Nothing
         fromResult Unsolvable = Just emptySudoku
-        fromResult (Solution board) = Just board
+        fromResult (Solution grid) = Just grid
 
 makeTopEntity 'topEntity

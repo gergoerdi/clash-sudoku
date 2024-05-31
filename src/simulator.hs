@@ -4,7 +4,7 @@ module Main where
 
 import Clash.Prelude hiding (lift)
 
-import Sudoku.Board
+import Sudoku.Grid
 import Sudoku.Serial (Readable, Writeable, serialIn, serialOut)
 import Sudoku.Solve
 import Sudoku.Stack
@@ -17,8 +17,8 @@ import Control.Monad.Loops
 
 import qualified Data.List as L
 
-readBoard :: (Readable n m) => String -> Maybe (Sudoku n m)
-readBoard s = consume input $ simulate @System serialIn input
+readGrid :: (Readable n m) => String -> Maybe (Sudoku n m)
+readGrid s = consume input $ simulate @System serialIn input
   where
     input = fmap (Just . ascii) s
 
@@ -27,16 +27,16 @@ readBoard s = consume input $ simulate @System serialIn input
     consume (_:xs) (y:ys) = y <|> consume xs ys
 
 
-showBoard :: (Writeable n m k) => Sudoku n m -> String
-showBoard board = toString . consume $ simulateB @System (serialOut (pure True)) input
+showGrid :: (Writeable n m k) => Sudoku n m -> String
+showGrid grid = toString . consume $ simulateB @System (serialOut (pure True)) input
   where
-    input = Just board : L.repeat Nothing
+    input = Just grid : L.repeat Nothing
 
     consume ((c, ready):xs) = c : if ready then [] else consume xs
     toString = fmap (chr . fromIntegral) . catMaybes
 
-printBoard :: (Writeable n m k) => Sudoku n m -> IO ()
-printBoard = putStr . showBoard
+printGrid :: (Writeable n m k) => Sudoku n m -> IO ()
+printGrid = putStr . showGrid
 
 propagate
     :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
@@ -60,7 +60,7 @@ solver
     :: forall n m k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
     => Maybe (Sudoku n m)
     -> StateT (Bool, [Sudoku n m]) (State (Phase n m)) (Result n m)
-solver newBoard = do
+solver newGrid = do
     read <- do
         (pop, ~(top:stack)) <- get
         if pop then do
@@ -68,14 +68,14 @@ solver newBoard = do
             return $ Just top
           else do
             return Nothing
-    (result, cmd) <- lift $ solver1 (read <|> newBoard)
+    (result, cmd) <- lift $ solver1 (read <|> newGrid)
     case (result, cmd) of
-      (Just board, _) -> do
-          return $ Solution board
+      (Just grid, _) -> do
+          return $ Solution grid
       (Nothing, Nothing) -> do
           return Working
-      (Nothing, Just (Push board)) -> do
-          modify \(_, stack) -> (False, board:stack)
+      (Nothing, Just (Push grid)) -> do
+          modify \(_, stack) -> (False, grid:stack)
           return Working
       (Nothing, Just Pop) -> do
           modify \(_, stack) -> (True, stack)
@@ -85,16 +85,16 @@ solveStack
     :: (KnownNat n, KnownNat m, 1 <= n, 1 <= m, KnownNat k, (n * m) ~ (k + 1))
     => Sudoku n m
     -> Maybe (Sudoku n m)
-solveStack board = flip evalState Init $ flip evalStateT (False, mempty) $ do
-    res <- solver (Just board)
+solveStack grid = flip evalState Init $ flip evalStateT (False, mempty) $ do
+    res <- solver (Just grid)
     go res
   where
-    go (Solution board) = return $ Just board
+    go (Solution grid) = return $ Just grid
     go Unsolvable = return Nothing
     go Working = solver Nothing >>= go
 
-board1 :: Sudoku 3 3
-Just board1 = readBoard . unlines $
+grid1 :: Sudoku 3 3
+Just grid1 = readGrid . unlines $
     [ "0 2 0  9 0 8  0 0 0"
     , "8 7 0  0 0 1  0 5 4"
     , "5 0 6  4 0 0  0 1 0"
@@ -108,8 +108,8 @@ Just board1 = readBoard . unlines $
     , "0 0 0  3 0 7  0 2 0"
     ]
 
-board2 :: Sudoku 3 3
-Just board2 = readBoard . unlines $
+grid2 :: Sudoku 3 3
+Just grid2 = readGrid . unlines $
     [ "0 0 0  6 0 0  5 0 0"
     , "0 6 0  0 0 8  0 4 0"
     , "0 0 0  7 0 4  0 0 0"
@@ -125,7 +125,7 @@ Just board2 = readBoard . unlines $
 
 -- | From https://norvig.com/sudoku.html
 hard :: Sudoku 3 3
-Just hard = readBoard . unlines $
+Just hard = readGrid . unlines $
     [ ". . . |. . 6 |. . . "
     , ". 5 9 |. . . |. . 8 "
     , "2 . . |. . 8 |. . . "

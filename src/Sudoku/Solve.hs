@@ -10,7 +10,7 @@ module Sudoku.Solve
 
 import Clash.Prelude hiding (lift)
 
-import Sudoku.Board
+import Sudoku.Grid
 import Sudoku.Serial
 import Sudoku.Stack
 
@@ -23,12 +23,12 @@ others (Cons x xs@(Cons _ _)) = xs :> map (x :>) (others xs)
 
 simplify
     :: forall n m k. (KnownNat m, KnownNat n, KnownNat k, 1 <= k)
-    => Vec k (Space n m)
-    -> WriterT (Any, All) Maybe (Vec k (Space n m))
-simplify xs = traverse (uncurry simplifySpace) (zip xs (others xs))
+    => Vec k (Cell n m)
+    -> WriterT (Any, All) Maybe (Vec k (Cell n m))
+simplify xs = traverse (uncurry simplifyCell) (zip xs (others xs))
   where
-    simplifySpace :: forall k. Space n m -> Vec k (Space n m) -> WriterT (Any, All) Maybe (Space n m)
-    simplifySpace x xs = do
+    simplifyCell :: forall k. Cell n m -> Vec k (Cell n m) -> WriterT (Any, All) Maybe (Cell n m)
+    simplifyCell x xs = do
         guard $ x' /= conflicted
         tell (Any $ x' /= x, All $ isUnique x')
         pure x'
@@ -40,7 +40,7 @@ propagate1
     => forall k. (KnownNat k, (n * m) ~ (k + 1))
     => Sudoku n m
     -> WriterT (Any, All) Maybe (Sudoku n m)
-propagate1 = rowwise simplify >=> columnwise simplify >=> fieldwise simplify
+propagate1 = rowwise simplify >=> columnwise simplify >=> boxwise simplify
 
 commit1
     :: forall n m. (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
@@ -54,12 +54,12 @@ commit1 s = (next, after)
 
     r = flip evalState False . traverse f $ s
 
-    f :: Space n m -> State Bool (Space n m, Maybe (Space n m))
+    f :: Cell n m -> State Bool (Cell n m, Maybe (Cell n m))
     f x
       | isUnique x = pure (x, Just x)
       | otherwise = do
             changed <- get
-            case (changed, splitSpace x) of
+            case (changed, splitCell x) of
                 (False, Just (next, after)) -> do
                     put True
                     pure (next, after <$ guard (after /= conflicted))
@@ -85,24 +85,24 @@ solver1
     => forall k. (KnownNat k, (n * m) ~ (k + 1))
     => Maybe (Sudoku n m)
     -> State (Phase n m) (Maybe (Sudoku n m), Maybe (StackCmd (Sudoku n m)))
-solver1 (Just popBoard) = do
-    put $ Propagate popBoard
+solver1 (Just popGrid) = do
+    put $ Propagate popGrid
     return (Nothing, Nothing)
 solver1 Nothing = get >>= \case
     Init -> do
         return (Nothing, Just Pop)
-    Solved board -> do
-        return (Just board, Nothing)
-    Propagate board -> case runWriterT $ propagate1 board of
+    Solved grid -> do
+        return (Just grid, Nothing)
+    Propagate grid -> case runWriterT $ propagate1 grid of
         Nothing -> do
             return (Nothing, Just Pop)
-        Just (board', (Any changed, All solved)) -> do
+        Just (grid', (Any changed, All solved)) -> do
             put $ if
-                | solved    -> Solved board'
-                | changed   -> Propagate board'
-                | otherwise -> Try board'
+                | solved    -> Solved grid'
+                | changed   -> Propagate grid'
+                | otherwise -> Try grid'
             return (Nothing, Nothing)
-    Try board -> do
-        let (next, after) = commit1 board
+    Try grid -> do
+        let (next, after) = commit1 grid
         put $ Propagate next
         return (Nothing, Push <$> after)

@@ -5,7 +5,7 @@ import Clash.Prelude hiding (lift)
 import Clash.Class.Counter
 import RetroClash.Utils (enable, mealyStateB)
 
-import Sudoku.Board
+import Sudoku.Grid
 
 import Data.Maybe
 import Control.Monad (guard)
@@ -17,17 +17,17 @@ serialIn
     :: forall n m dom. (Readable n m, HiddenClockResetEnable dom)
     => Signal dom (Maybe (Unsigned 8))
     -> Signal dom (Maybe (Sudoku n m))
-serialIn nextChar = enable ready (unflattenBoard <$> buf')
+serialIn nextChar = enable ready (unflattenGrid <$> buf')
   where
     ptr = register (0 :: Index ((n * m) * (m * n))) ptr''
     buf = register (pure conflicted) buf'
 
-    nextSpace = (parseSpace =<<) <$> nextChar
+    nextCell = (parseCell =<<) <$> nextChar
     (buf', ptr') = unbundle $ do
-        nextSpace <- nextSpace
+        nextCell <- nextCell
         buf <- buf
         ptr <- ptr
-        pure $ case nextSpace of
+        pure $ case nextCell of
             Nothing -> (buf, Just ptr)
             Just x -> (buf <<+ x, countSuccChecked ptr)
 
@@ -50,7 +50,7 @@ serialWriter
     :: (Writeable n m k)
     => Bool
     -> Maybe (Sudoku n m)
-    -> State (Maybe (Ptr n m), Vec (n * m * m * n) (Space n m)) (Maybe (Unsigned 8))
+    -> State (Maybe (Ptr n m), Vec (n * m * m * n) (Cell n m)) (Maybe (Unsigned 8))
 serialWriter txReady load
     | not txReady = return Nothing
     | otherwise = do
@@ -59,7 +59,7 @@ serialWriter txReady load
               Nothing -> do
                   case load of
                       Nothing -> put (Nothing, pure conflicted)
-                      Just new_board -> put (Just startPtr, flattenBoard new_board)
+                      Just new_grid -> put (Just startPtr, flattenGrid new_grid)
                   return Nothing
               Just ptr -> do
                   -- () <- traceShowM ptr
@@ -71,7 +71,7 @@ serialWriter txReady load
                       Nothing -> do
                           let buf' = rotateLeftS buf (SNat @1)
                           put (ptr', buf')
-                          return $ Just $ showSpace $ last buf'
+                          return $ Just $ showCell $ last buf'
   where
     punctuate ptr
         | (_, Right 0) <- ptr                               = Just $ ascii '\r'
@@ -96,7 +96,7 @@ serialOut
       )
 serialOut = curry $ mealyStateB (uncurry serialWriter') (Nothing, pure conflicted)
   where
-    serialWriter' :: Bool -> Maybe (Sudoku n m) -> State (Maybe (Ptr n m), Vec (n * m * m * n) (Space n m)) (Maybe (Unsigned 8), Bool)
+    serialWriter' :: Bool -> Maybe (Sudoku n m) -> State (Maybe (Ptr n m), Vec (n * m * m * n) (Cell n m)) (Maybe (Unsigned 8), Bool)
     serialWriter' txReady load = do
         x <- serialWriter txReady load
         ready <- gets $ isNothing . fst
