@@ -11,6 +11,7 @@ import Sudoku.Stack
 
 import Control.Arrow (second, (***))
 import Data.Maybe
+import Data.Monoid (Any(..), All(..))
 
 foldGrid :: (n * m * m * n ~ k + 1) => (a -> a -> a) -> Grid n m a -> a
 foldGrid f = fold f . flattenGrid
@@ -36,18 +37,17 @@ propagator
        )
 propagator load = (fmap (\(c, solved, _, _) -> (c, solved)) units, result)
   where
-    units :: Grid n m (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool, Signal dom Bool)
     units = generateGrid unitAt
 
-    solved  = foldGrid (liftA2 (.&.)) . fmap (\ (_, solved, _, _) ->  solved)  $ units
-    changed = foldGrid (liftA2 (.|.)) . fmap (\ (_, _, changed, _) -> changed) $ units
-    failed  = foldGrid (liftA2 (.|.)) . fmap (\ (_, _, _, failed) ->  failed)  $ units
+    solved  = foldGrid (liftA2 (<>)) . fmap (\ (_, is_unique, _, _) -> All <$> is_unique) $ units
+    changed = foldGrid (liftA2 (<>)) . fmap (\ (_, _, changed, _)   -> Any <$> changed)   $ units
+    failed  = foldGrid (liftA2 (<>)) . fmap (\ (_, _, _, failed)    -> Any <$> failed)    $ units
 
     result = do
         fresh <- register False $ isJust <$> load
-        solved <- solved
-        changed <- changed
-        failed <- failed
+        ~(All solved) <- solved
+        ~(Any changed) <- changed
+        ~(Any failed) <- failed
         pure $ if
             | fresh     -> Nothing
             | failed    -> Just Failure
@@ -66,7 +66,7 @@ propagator load = (fmap (\(c, solved, _, _) -> (c, solved)) units, result)
             this <- r
             masks <- traverse neighbourMask (neighbours idx)
             pure $ case load of
-                Just new_grid -> (gridAt new_grid idx, True)
+                Just new_grid -> (gridAt new_grid idx, False)
                 Nothing -> (this', this' /= this)
                   where
                     this' = applyMasks this masks
@@ -90,9 +90,9 @@ controller load = (bundle . fmap fst $ grid, solved, stack_cmd)
 
     (can_try, unzipGrid -> (next, after)) = second unflattenGrid . mapAccumL f (pure False) . flattenGrid $ grid
       where
-        f found (s, solved) = (found .||. this, unbundle $ mux this (splitCell <$> s) (dup <$> s))
+        f found (c, is_unique) = (found .||. this, unbundle $ mux this (splitCell <$> c) (dup <$> c))
           where
-            this = (not <$> found) .&&. (not <$> solved)
+            this = (not <$> found) .&&. (not <$> is_unique)
             dup x = (x, x)
 
     step = load .<|>. enable (can_try .&&. result .== Just Stuck) (bundle next)
