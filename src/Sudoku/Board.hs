@@ -1,5 +1,6 @@
 {-# LANGUAGE StandaloneDeriving, DerivingStrategies, GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Sudoku.Board where
 
 import Clash.Prelude

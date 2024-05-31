@@ -1,8 +1,8 @@
 module Top(
-           input  CLK100MHZ,
-           input  CPU_RESETN,
-           input  UART_TXD_IN,
-           output UART_RXD_OUT
+           input  wire CLK100MHZ,
+           input  wire CPU_RESETN,
+           input  wire UART_TXD_IN,
+           output wire UART_RXD_OUT
            );
 
    topEntity u_topEntity

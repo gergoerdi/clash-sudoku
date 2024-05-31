@@ -1,4 +1,5 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Sudoku.Matrix where
 
 import Clash.Prelude
