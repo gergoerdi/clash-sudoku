@@ -92,7 +92,7 @@ solve grid = go $ simulate @System (circuit @3 @3) $ Just grid : L.repeat Nothin
   where
     go (Working:xs) = go xs
     go (Unsolvable:_) = Nothing
-    go (Solution grid:_) = Just grid
+    go (Solved grid:_) = Just grid
 
 doSolve :: Sudoku 3 3 -> IO ()
 doSolve grid = case solve grid of

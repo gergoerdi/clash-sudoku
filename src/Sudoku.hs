@@ -24,7 +24,7 @@ type StackSize n m = ((n * m) * (m * n))
 data Result n m
     = Idle
     | Working
-    | Solution (Sudoku n m)
+    | Solved (Sudoku n m)
     | Unsolvable
     deriving (Generic, NFDataX)
 
@@ -52,7 +52,7 @@ circuit new_grid = result
     process busy new_grid underflow solved grid
         | not busy    = if new_grid then Working else Idle
         | underflow = Unsolvable
-        | solved    = Solution grid
+        | solved    = Solved grid
         | otherwise = Working
 
 topEntity
@@ -71,6 +71,6 @@ topEntity = withEnableGen grid
 
         fromResult Working = Nothing
         fromResult Unsolvable = Just emptySudoku
-        fromResult (Solution grid) = Just grid
+        fromResult (Solved grid) = Just grid
 
 makeTopEntity 'topEntity

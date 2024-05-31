@@ -37,11 +37,11 @@ propagator
 propagator load = (fmap (\(c, solved, _, _) -> (c, solved)) units, result)
   where
     units :: Grid n m (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool, Signal dom Bool)
-    units = generateGrid unit
+    units = generateGrid unitAt
 
-    solved = foldGrid (liftA2 (.&.)) . fmap (\ (_, solved, _, _) -> solved) $ units
+    solved  = foldGrid (liftA2 (.&.)) . fmap (\ (_, solved, _, _) ->  solved)  $ units
     changed = foldGrid (liftA2 (.|.)) . fmap (\ (_, _, changed, _) -> changed) $ units
-    failed =  foldGrid (liftA2 (.|.)) . fmap (\ (_, _, _, failed) -> failed) $ units
+    failed  = foldGrid (liftA2 (.|.)) . fmap (\ (_, _, _, failed) ->  failed)  $ units
 
     result = do
         fresh <- register False $ isJust <$> load
@@ -55,8 +55,8 @@ propagator load = (fmap (\(c, solved, _, _) -> (c, solved)) units, result)
             | not changed -> Just Stuck
             | otherwise -> Nothing
 
-    unit :: Coord n m -> (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool, Signal dom Bool)
-    unit idx = (r, isUnique <$> r, register False changed, (== conflicted) <$> r)
+    unitAt :: Coord n m -> (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool, Signal dom Bool)
+    unitAt idx = (r, isUnique <$> r, register False changed, (== conflicted) <$> r)
       where
         r :: Signal dom (Cell n m)
         r = register conflicted r'
@@ -64,14 +64,14 @@ propagator load = (fmap (\(c, solved, _, _) -> (c, solved)) units, result)
         (r', changed) = unbundle do
             load <- load
             this <- r
-            masks <- traverse neighbour (neighbours idx)
+            masks <- traverse neighbourMask (neighbours idx)
             pure $ case load of
                 Just new_grid -> (gridAt new_grid idx, True)
                 Nothing -> (this', this' /= this)
                   where
                     this' = applyMasks this masks
 
-        neighbour idx' = mux is_unique mask (pure wildMask)
+        neighbourMask idx' = mux is_unique mask (pure wildMask)
           where
             (value, is_unique, _, _) = gridAt units idx'
             mask = Mask . complement . cellBits <$> value
