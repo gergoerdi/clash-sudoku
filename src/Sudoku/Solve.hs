@@ -110,7 +110,7 @@ controller load = (enable solved grid, stack_cmd)
             this = (not <$> found) .&&. (not <$> is_unique)
             dup x = (x, x)
 
-    step = load .<|>. enable (can_try .&&. result .== Stuck) next
+    step = load .<|>. enable (can_try .&&. register False (result .== Stuck)) next
     stack_cmd = do
         result <- result
         can_try <- can_try
