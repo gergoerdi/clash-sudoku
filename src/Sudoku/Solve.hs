@@ -23,8 +23,8 @@ unzipGrid = (Grid *** Grid) . unzipMatrix . fmap unzipMatrix . getGrid
 
 data PropagatorResult
     = Failure
-    | Success
     | Stuck
+    | Progress
     deriving (Generic, NFDataX, Eq, Show)
 
 neighbourMasks
@@ -47,10 +47,10 @@ propagator
     :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, n * m * m * n ~ k + 1)
     => (HiddenClockResetEnable dom)
     => Signal dom (Maybe (Sudoku n m))
-    -> ( Grid n m (Signal dom (Cell n m), Signal dom Bool)
-       , Signal dom (Maybe PropagatorResult)
+    -> ( Signal dom PropagatorResult
+       , Grid n m (Signal dom (Cell n m), Signal dom Bool)
        )
-propagator load = (fmap (\(c, solved, _, _) -> (c, solved)) units, result)
+propagator load = (result, fmap (\(c, solved, _, _) -> (c, solved)) units)
   where
     loads :: Grid n m (Signal dom (Maybe (Cell n m)))
     loads = unbundle . fmap sequenceA $ load
@@ -60,21 +60,15 @@ propagator load = (fmap (\(c, solved, _, _) -> (c, solved)) units, result)
 
     grid = fmap (\(c, solved, _, _) -> (c, solved)) units
 
-    solved  = foldGrid (liftA2 (.&.)) . fmap (\ (_, solved, _, _) ->  solved)  $ units
+    fresh = register False $ isJust <$> load
     changed = foldGrid (liftA2 (.|.)) . fmap (\ (_, _, changed, _) -> changed) $ units
     failed  = foldGrid (liftA2 (.|.)) . fmap (\ (_, _, _, failed) ->  failed)  $ units
 
-    result = do
-        fresh <- register False $ isJust <$> load
-        solved <- solved
-        changed <- changed
-        failed <- failed
-        pure $ if
-            | fresh     -> Nothing
-            | failed    -> Just Failure
-            | solved    -> Just Success
-            | not changed -> Just Stuck
-            | otherwise -> Nothing
+    result =
+        mux fresh (pure Progress) $
+        mux failed (pure Failure) $
+        mux (not <$> changed) (pure Stuck) $
+        pure Progress
 
     unit
         :: forall k. (KnownNat k)
@@ -105,8 +99,9 @@ controller
        )
 controller load = (enable solved grid, stack_cmd)
   where
-    (grid_with_unique, result) = propagator step
+    (result, grid_with_unique) = propagator step
     grid = bundle . fmap fst $ grid_with_unique
+    solved  = foldGrid (liftA2 (.&.)) . fmap snd $ grid_with_unique
 
     (can_try, unzipGrid -> (next, after)) = second unflattenGrid . mapAccumL f (pure False) . flattenGrid $ grid_with_unique
       where
@@ -115,9 +110,8 @@ controller load = (enable solved grid, stack_cmd)
             this = (not <$> found) .&&. (not <$> solved)
             dup x = (x, x)
 
-    step = load .<|>. enable (can_try .&&. result .== Just Stuck) (bundle next)
-    solved = result .== Just Success
+    step = load .<|>. enable (can_try .&&. result .== Stuck) (bundle next)
     stack_cmd =
-        mux (result .== Just Stuck .&&. can_try) (Just . Push <$> bundle after) $
-        mux (result .== Just Failure) (pure $ Just Pop) $
+        mux (result .== Stuck .&&. can_try) (Just . Push <$> bundle after) $
+        mux (result .== Failure) (pure $ Just Pop) $
         pure Nothing
