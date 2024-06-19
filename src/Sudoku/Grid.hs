@@ -161,28 +161,9 @@ setGrid (i, j, k, l) x =
     updateVec i (updateVec j $ FromRows . updateVec k (replace l x) . matrixRows) .
     matrixRows . getGrid
 
-neighbours :: (KnownNat n, KnownNat m, 1 <= (n * m)) => Coord n m -> Vec (3 * (n * m - 1)) (Coord n m)
-neighbours (i, j, k, l) = row ++ col ++ box
-  where
-    row = unconcatI (others row0) !!! k !!! l
-    col = unconcatI (others col0) !!! i !!! j
-    box = unconcatI (others box0) !!! j !!! l
-
-    gen2 f = concatMap (\x -> map (\y -> f x y) indicesI) indicesI
-
-    row0 = gen2 \k' l' -> (i,  j,  k', l')
-    col0 = gen2 \i' j' -> (i', j', k, l )
-    box0 = gen2 \j' l' -> (i,  j', k, l')
-
 others :: (1 <= n) => Vec n a -> Vec n (Vec (n - 1) a)
 others (Cons x Nil) = Nil :> Nil
 others (Cons x xs@(Cons _ _)) = xs :> map (x :>) (others xs)
-
-generateGrid :: (KnownNat n, KnownNat m) => (Coord n m -> a) -> Grid n m a
-generateGrid f = Grid $
-    generateMatrix \i j ->
-    generateMatrix \k l ->
-    f (i, j, k, l)
 
 gridToRows
     :: (KnownNat n, KnownNat m)
@@ -197,11 +178,11 @@ gridFromRows
 gridFromRows = Grid . FromRows . unconcatI . fmap (FromRows . unconcatI)
 
 rowwise
-    :: (KnownNat n, KnownNat m, 1 <= (n * m), Applicative f)
-    => (Vec (m * n) a -> f (Vec (m * n) b))
+    :: (KnownNat n, KnownNat m, 1 <= n * m)
+    => (Vec (m * n) a -> Vec (m * n) b)
     -> Grid n m a
-    -> f (Grid n m b)
-rowwise f = fmap gridFromRows . traverse f . gridToRows
+    -> Grid n m b
+rowwise f = gridFromRows . fmap f . gridToRows
 
 transposeMatrix
     :: (KnownNat n, KnownNat m)
@@ -216,11 +197,11 @@ transposeGrid
 transposeGrid = gridFromRows . transpose . gridToRows
 
 columnwise
-    :: (KnownNat n, KnownNat m, 1 <= (n * m), Applicative f)
-    => (Vec (n * m) a -> f (Vec (n * m) b))
+    :: (KnownNat n, KnownNat m, 1 <= (n * m))
+    => (Vec (n * m) a -> Vec (n * m) b)
     -> Grid n m a
-    -> f (Grid n m b)
-columnwise f = fmap transposeGrid . rowwise f . transposeGrid
+    -> Grid n m b
+columnwise f = transposeGrid . rowwise f . transposeGrid
 
 toBoxes
     :: (KnownNat n, KnownNat m)
@@ -236,8 +217,7 @@ fromBoxes = Grid . FromRows . fmap (fmap FromRows . transpose . fmap unconcatI) 
 
 boxwise
     :: (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
-    => (Applicative f)
-    => (Vec (n * m) a -> f (Vec (n * m) b))
+    => (Vec (n * m) a -> Vec (n * m) b)
     -> Grid n m a
-    -> f (Grid n m b)
-boxwise f = fmap fromBoxes . traverse f . toBoxes
+    -> Grid n m b
+boxwise f = fromBoxes . fmap f . toBoxes
