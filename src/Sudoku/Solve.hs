@@ -58,7 +58,7 @@ propagator load = (result, fmap (\(c, solved, _, _) -> (c, solved)) units)
     units :: Grid n m (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool, Signal dom Bool)
     units = unit <$> loads <*> neighbourMasks grid
 
-    grid = fmap (\(c, solved, _, _) -> (c, solved)) units
+    grid = fmap (\(c, is_unique, _, _) -> (c, is_unique)) units
 
     fresh = register False $ isJust <$> load
     changed = foldGrid (liftA2 (.|.)) . fmap (\ (_, _, changed, _) -> changed) $ units
@@ -105,9 +105,9 @@ controller load = (enable solved grid, stack_cmd)
 
     (can_try, unzipGrid -> (bundle -> next, bundle -> after)) = second unflattenGrid . mapAccumL f (pure False) . flattenGrid $ grid_with_unique
       where
-        f found (s, solved) = (found .||. this, unbundle $ mux this (splitCell <$> s) (dup <$> s))
+        f found (c, is_unique) = (found .||. this, unbundle $ mux this (splitCell <$> c) (dup <$> c))
           where
-            this = (not <$> found) .&&. (not <$> solved)
+            this = (not <$> found) .&&. (not <$> is_unique)
             dup x = (x, x)
 
     step = load .<|>. enable (can_try .&&. result .== Stuck) next
