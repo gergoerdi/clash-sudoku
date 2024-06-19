@@ -120,17 +120,6 @@ unflattenGrid :: (KnownNat n, KnownNat m) => Vec (n * m * m * n) a -> Grid n m a
 unflattenGrid = Grid . fmap fromRowMajorOrder . fromRowMajorOrder . unconcatI
 
 type Sudoku n m = Grid n m (Cell n m)
--- newtype Sudoku n m = Sudoku{ getSudoku :: Grid n m (Cell n m) }
---     deriving stock (Generic)
---     deriving anyclass (NFDataX)
---     -- deriving newtype (BitPack)
-
--- instance (KnownNat n, KnownNat m, KnownNat k, (n * m) <= 9, (n * m) ~ k + 1) => Show (Sudoku n m) where
---     show =
---         unlines . toList . fmap (toList . concat . matrixRows) . concat .
---         matrixRows . getGrid .
---         fmap (chr . fromIntegral . showCell) .
---         getSudoku
 
 showSudoku
     :: (KnownNat n, KnownNat m, (n * m) <= 9)
