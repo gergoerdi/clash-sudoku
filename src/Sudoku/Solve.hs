@@ -61,8 +61,8 @@ propagator load = (result, fmap (\(c, solved, _, _) -> (c, solved)) units)
     grid = fmap (\(c, is_unique, _, _) -> (c, is_unique)) units
 
     fresh = register False $ isJust <$> load
-    changed = foldGrid (liftA2 (.|.)) . fmap (\ (_, _, changed, _) -> changed) $ units
-    failed  = foldGrid (liftA2 (.|.)) . fmap (\ (_, _, _, failed) ->  failed)  $ units
+    changed = foldGrid (.||.) . fmap (\ (_, _, changed, _) -> changed) $ units
+    failed  = foldGrid (.||.) . fmap (\ (_, _, _, failed) ->  failed)  $ units
 
     result =
         mux fresh (pure Progress) $
@@ -101,7 +101,7 @@ controller load = (enable solved grid, stack_cmd)
   where
     (result, grid_with_unique) = propagator step
     grid = bundle . fmap fst $ grid_with_unique
-    solved  = foldGrid (liftA2 (.&.)) . fmap snd $ grid_with_unique
+    solved  = foldGrid (.&&.) . fmap snd $ grid_with_unique
 
     (can_try, unzipGrid -> (bundle -> next, bundle -> after)) = second unflattenGrid . mapAccumL f (pure False) . flattenGrid $ grid_with_unique
       where
