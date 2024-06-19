@@ -97,17 +97,18 @@ controller
     -> ( Signal dom (Maybe (Sudoku n m))
        , Signal dom (Maybe (StackCmd (Sudoku n m)))
        )
-controller load = (enable solved grid, stack_cmd)
+controller load = (enable solved (bundle grid), stack_cmd)
   where
-    (result, grid_with_unique) = propagator step
-    grid = bundle . fmap fst $ grid_with_unique
-    solved  = foldGrid (.&&.) . fmap snd $ grid_with_unique
+    (result, unzipGrid -> (grid, uniques)) = propagator step
+    solved  = foldGrid (.&&.) uniques
 
-    (can_try, unzipGrid -> (bundle -> next, bundle -> after)) = second unflattenGrid . mapAccumL f (pure False) . flattenGrid $ grid_with_unique
+    (can_try, unzipGrid -> (bundle -> next, bundle -> after)) = second unflattenGrid . mapAccumL f (pure False) . flattenGrid $ grid
       where
-        f found (c, is_unique) = (found .||. this, unbundle $ mux this (splitCell <$> c) (dup <$> c))
+        f :: Signal dom Bool -> Signal dom (Cell n m) -> (Signal dom Bool, (Signal dom (Cell n m), Signal dom (Cell n m)))
+        f found c = (found .||. this, unbundle $ mux this guess (dup <$> c))
           where
-            this = (not <$> found) .&&. (not <$> is_unique)
+            guess@(unbundle -> (_next, after)) = splitCell <$> c
+            this = (not <$> found) .&&. (after ./= conflicted)
             dup x = (x, x)
 
     step = load .<|>. enable (can_try .&&. register False (result .== Stuck)) next
