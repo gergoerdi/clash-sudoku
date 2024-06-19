@@ -28,7 +28,7 @@ serialIn nextChar = enable ready buf'
     (buf', ptr') = unbundle $ do
         nextCell <- nextCell
         buf <- buf
-        ptr@(i, k, j, l) <- ptr
+        ptr@(i, j, k, l) <- ptr
         pure $ case nextCell of
             Nothing -> (buf, Just ptr)
             Just x -> (setGrid (i, j, k, l) x buf, countSuccChecked ptr)
@@ -70,7 +70,7 @@ serialWriter txReady load
                       Left punctuation -> do
                           put (ptr', buf)
                           return $ Just punctuation
-                      Right (i, k, j, l) -> do
+                      Right (i, j, k, l) -> do
                           put (ptr', buf)
                           return $ Just $ showCell $ gridAt buf (i, j, k, l)
   where
