@@ -103,15 +103,19 @@ controller load = (enable solved grid, stack_cmd)
     grid = bundle . fmap fst $ grid_with_unique
     solved  = foldGrid (liftA2 (.&.)) . fmap snd $ grid_with_unique
 
-    (can_try, unzipGrid -> (next, after)) = second unflattenGrid . mapAccumL f (pure False) . flattenGrid $ grid_with_unique
+    (can_try, unzipGrid -> (bundle -> next, bundle -> after)) = second unflattenGrid . mapAccumL f (pure False) . flattenGrid $ grid_with_unique
       where
         f found (s, solved) = (found .||. this, unbundle $ mux this (splitCell <$> s) (dup <$> s))
           where
             this = (not <$> found) .&&. (not <$> solved)
             dup x = (x, x)
 
-    step = load .<|>. enable (can_try .&&. result .== Stuck) (bundle next)
-    stack_cmd =
-        mux (result .== Stuck .&&. can_try) (Just . Push <$> bundle after) $
-        mux (result .== Failure) (pure $ Just Pop) $
-        pure Nothing
+    step = load .<|>. enable (can_try .&&. result .== Stuck) next
+    stack_cmd = do
+        result <- result
+        can_try <- can_try
+        after <- after
+        pure $ case result of
+            Stuck -> Just $ if can_try then Push after else Pop
+            Failure -> Just Pop
+            Progress -> Nothing
