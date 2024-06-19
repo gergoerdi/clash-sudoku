@@ -21,6 +21,22 @@ unzipMatrix = (FromRows *** FromRows) . unzip . fmap unzip . matrixRows
 unzipGrid :: Grid n m (a, b) -> (Grid n m a, Grid n m b)
 unzipGrid = (Grid *** Grid) . unzipMatrix . fmap unzipMatrix . getGrid
 
+neighbourMasks
+    :: forall n m dom. (KnownNat n, KnownNat m, 1 <= m, 1 <= n, 1 <= n * m)
+    => (HiddenClockResetEnable dom)
+    => Grid n m (Signal dom (Cell n m), Signal dom Bool)
+    -> Grid n m (Vec (3 * (n * m - 1)) (Signal dom (Mask n m)))
+neighbourMasks cells =
+    rowwise others masks .++. columnwise others masks .++. boxwise others masks
+  where
+    masks = uncurry cellMask <$> cells
+
+    cellMask :: Signal dom (Cell n m) -> Signal dom Bool -> Signal dom (Mask n m)
+    cellMask c is_unique = mux is_unique (Mask . complement . cellBits <$> c) (pure wildMask)
+
+    (.++.) = liftA2 (++)
+    infixr 5 .++.
+
 data PropagatorResult
     = Failure
     | Success
@@ -36,8 +52,13 @@ propagator
        )
 propagator load = (fmap (\(c, solved, _, _) -> (c, solved)) units, result)
   where
+    loads :: Grid n m (Signal dom (Maybe (Cell n m)))
+    loads = unbundle . fmap sequenceA $ load
+
     units :: Grid n m (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool, Signal dom Bool)
-    units = generateGrid unitAt
+    units = unit <$> loads <*> neighbourMasks grid
+
+    grid = fmap (\(c, solved, _, _) -> (c, solved)) units
 
     solved  = foldGrid (liftA2 (.&.)) . fmap (\ (_, solved, _, _) ->  solved)  $ units
     changed = foldGrid (liftA2 (.|.)) . fmap (\ (_, _, changed, _) -> changed) $ units
@@ -55,8 +76,12 @@ propagator load = (fmap (\(c, solved, _, _) -> (c, solved)) units, result)
             | not changed -> Just Stuck
             | otherwise -> Nothing
 
-    unitAt :: Coord n m -> (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool, Signal dom Bool)
-    unitAt idx = (r, isUnique <$> r, register False changed, (== conflicted) <$> r)
+    unit
+        :: forall k. (KnownNat k)
+        => Signal dom (Maybe (Cell n m))
+        -> Vec k (Signal dom (Mask n m))
+        -> (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool, Signal dom Bool)
+    unit load neighbour_masks = (r, isUnique <$> r, register False changed, (== conflicted) <$> r)
       where
         r :: Signal dom (Cell n m)
         r = register conflicted r'
@@ -64,17 +89,12 @@ propagator load = (fmap (\(c, solved, _, _) -> (c, solved)) units, result)
         (r', changed) = unbundle do
             load <- load
             this <- r
-            masks <- traverse neighbourMask (neighbours idx)
+            masks <- bundle neighbour_masks
             pure $ case load of
-                Just new_grid -> (gridAt new_grid idx, True)
+                Just new_cell -> (new_cell, True)
                 Nothing -> (this', this' /= this)
                   where
                     this' = applyMasks this masks
-
-        neighbourMask idx' = mux is_unique mask (pure wildMask)
-          where
-            (value, is_unique, _, _) = gridAt units idx'
-            mask = Mask . complement . cellBits <$> value
 
 controller
     :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, n * m * m * n ~ k + 1)
