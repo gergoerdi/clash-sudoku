@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFunctor #-}
 module Sudoku.Stack where
 
 import Clash.Prelude
@@ -7,7 +8,7 @@ import RetroClash.Utils (enable, packWrite)
 data StackCmd a
     = Pop
     | Push a
-    deriving (Show, Generic, NFDataX)
+    deriving (Show, Functor, Generic, NFDataX)
 
 stack
     :: forall n a. (KnownNat n, NFDataX a, 1 <= n)
