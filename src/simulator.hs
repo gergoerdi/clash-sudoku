@@ -116,10 +116,10 @@ doSolve grid = case solve grid of
 
 main :: IO ()
 main = do
-    printGrid grid1
+    -- printGrid grid1
     doSolve grid1
-    printGrid grid2
+    -- printGrid grid2
     doSolve grid2
-    printGrid unsolvable
+    -- printGrid unsolvable
     doSolve unsolvable
     return ()
