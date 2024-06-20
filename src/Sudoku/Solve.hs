@@ -48,17 +48,10 @@ neighbourMasks cells uniques =
 propagate
     :: forall n m dom k. (KnownNat n, KnownNat m, KnownNat k)
     => (HiddenClockResetEnable dom)
-    => Signal dom (Maybe (Cell n m))
-    -> Signal dom (Cell n m)
+    => Signal dom (Cell n m)
     -> Vec k (Signal dom (Mask n m))
     -> Signal dom (Cell n m)
-propagate load cell neighbour_masks = do
-    load <- load
-    cell <- cell
-    masks <- bundle neighbour_masks
-    pure $ case load of
-        Just new_cell -> new_cell
-        Nothing -> applyMasks cell masks
+propagate cell neighbour_masks = applyMasks <$> cell <*> bundle neighbour_masks
 
 propagator
     :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, n * m * m * n ~ k + 1)
@@ -96,7 +89,7 @@ propagator load = (result, grid)
     unit load neighbour_masks = (r, changed)
       where
         r = register conflicted r'
-        r' = propagate load r neighbour_masks
+        r' = load .<|. propagate r neighbour_masks
         changed = register False $ r ./=. r'
 
 controller
