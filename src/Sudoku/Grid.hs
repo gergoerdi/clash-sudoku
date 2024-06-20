@@ -210,3 +210,21 @@ boxwise
     -> Grid n m a
     -> Grid n m b
 boxwise f = fromBoxes . fmap f . toBoxes
+
+mapAccumGrid
+    :: forall n m a s b. (KnownNat n, KnownNat m)
+    => (s -> a -> (s, b))
+    -> s
+    -> Grid n m a
+    -> (s, Grid n m b)
+mapAccumGrid f s0 = fmap unflattenGrid . mapAccumL f s0 . flattenGrid
+
+mapAccumGridB
+    :: forall n m a s b dom. (KnownNat n, KnownNat m, Bundle b)
+    => (Signal dom s -> Signal dom a -> Signal dom (s, b))
+    -> Signal dom s
+    -> Grid n m (Signal dom a)
+    -> (Signal dom s, Grid n m (Unbundled dom b))
+mapAccumGridB f = mapAccumGrid f'
+  where
+    f' s x = fmap unbundle . unbundle $ f s x
