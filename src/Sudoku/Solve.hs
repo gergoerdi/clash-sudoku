@@ -37,6 +37,21 @@ neighbourMasks cells =
     (.++.) = liftA2 (++)
     infixr 5 .++.
 
+propagate
+    :: forall n m dom k l. (KnownNat n, KnownNat m, KnownNat k)
+    => (HiddenClockResetEnable dom)
+    => Signal dom (Maybe (Cell n m))
+    -> Signal dom (Cell n m)
+    -> Vec k (Signal dom (Mask n m))
+    -> Signal dom (Cell n m)
+propagate load cell neighbour_masks = do
+    load <- load
+    cell <- cell
+    masks <- bundle neighbour_masks
+    pure $ case load of
+        Just new_cell -> new_cell
+        Nothing -> applyMasks cell masks
+
 data PropagatorResult
     = Failure
     | Stuck
@@ -61,13 +76,13 @@ propagator load = (result, fmap (\(c, solved, _, _) -> (c, solved)) units)
     grid = fmap (\(c, is_unique, _, _) -> (c, is_unique)) units
 
     fresh = register False $ isJust <$> load
-    changed = foldGrid (.||.) . fmap (\ (_, _, changed, _) -> changed) $ units
-    failed  = foldGrid (.||.) . fmap (\ (_, _, _, failed) ->  failed)  $ units
+    any_changed = foldGrid (.||.) . fmap (\ (_, _, changed, _) -> changed) $ units
+    any_failed  = foldGrid (.||.) . fmap (\ (_, _, _, failed) ->  failed)  $ units
 
     result =
         mux fresh (pure Progress) $
-        mux failed (pure Failure) $
-        mux (not <$> changed) (pure Stuck) $
+        mux any_failed (pure Failure) $
+        mux (not <$> any_changed) (pure Stuck) $
         pure Progress
 
     unit
@@ -75,20 +90,15 @@ propagator load = (result, fmap (\(c, solved, _, _) -> (c, solved)) units)
         => Signal dom (Maybe (Cell n m))
         -> Vec k (Signal dom (Mask n m))
         -> (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool, Signal dom Bool)
-    unit load neighbour_masks = (r, isUnique <$> r, register False changed, (== conflicted) <$> r)
+    unit load neighbour_masks = (r, isUnique <$> r, changed, failed)
       where
         r :: Signal dom (Cell n m)
         r = register conflicted r'
 
-        (r', changed) = unbundle do
-            load <- load
-            this <- r
-            masks <- bundle neighbour_masks
-            pure $ case load of
-                Just new_cell -> (new_cell, True)
-                Nothing -> (this', this' /= this)
-                  where
-                    this' = applyMasks this masks
+        r' = propagate load r neighbour_masks
+
+        changed = register False $ r ./=. r'
+        failed = r .== conflicted
 
 controller
     :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, n * m * m * n ~ k + 1)
