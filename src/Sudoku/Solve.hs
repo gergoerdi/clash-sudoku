@@ -1,6 +1,6 @@
 {-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf #-}
 {-# LANGUAGE ApplicativeDo #-}
-module Sudoku.Solve where
+module Sudoku.Solve (controller) where
 
 import Clash.Prelude
 import RetroClash.Utils
@@ -22,7 +22,8 @@ unzipGrid :: Grid n m (a, b) -> (Grid n m a, Grid n m b)
 unzipGrid = (Grid *** Grid) . unzipMatrix . fmap unzipMatrix . getGrid
 
 data PropagatorResult
-    = Failure
+    = Solved
+    | Failure
     | Stuck
     | Progress
     deriving (Generic, NFDataX, Eq, Show)
@@ -65,9 +66,8 @@ propagator
     => Signal dom (Maybe (Sudoku n m))
     -> ( Signal dom PropagatorResult
        , Grid n m (Signal dom (Cell n m))
-       , Signal dom Bool
        )
-propagator load = (result, grid, all_unique)
+propagator load = (result, grid)
   where
     loads :: Grid n m (Signal dom (Maybe (Cell n m)))
     loads = unbundle . fmap sequenceA $ load
@@ -83,6 +83,7 @@ propagator load = (result, grid, all_unique)
 
     result =
         mux fresh (pure Progress) $
+        mux all_unique (pure Solved) $
         mux any_failed (pure Failure) $
         mux (not <$> any_changed) (pure Stuck) $
         pure Progress
@@ -105,9 +106,9 @@ controller
     -> ( Signal dom (Maybe (Sudoku n m))
        , Signal dom (Maybe (StackCmd (Sudoku n m)))
        )
-controller load = (enable solved (bundle grid), stack_cmd)
+controller load = (enable (result .== Solved) (bundle grid), stack_cmd)
   where
-    (result, grid, solved) = propagator step
+    (result, grid) = propagator step
 
     (can_try, unzipGrid -> (bundle -> next, bundle -> after)) = second unflattenGrid . mapAccumL f (pure False) . flattenGrid $ grid
       where
@@ -124,6 +125,7 @@ controller load = (enable solved (bundle grid), stack_cmd)
         can_try <- can_try
         after <- after
         pure $ case result of
+            Solved -> Nothing
             Stuck -> Just $ if can_try then Push after else Pop
             Failure -> Just Pop
             Progress -> Nothing
