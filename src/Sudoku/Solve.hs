@@ -110,14 +110,13 @@ controller load = (enable (result .== Solved) (bundle grid), stack_cmd)
   where
     (result, grid) = propagator step
 
-    (can_try, unzipGrid -> (bundle -> next, bundle -> after)) = second unflattenGrid . mapAccumL f (pure False) . flattenGrid $ grid
+    (can_try, unzipGrid -> (bundle -> next, bundle -> after)) = mapAccumGridB (liftA2 f) (pure False) grid
       where
-        f :: Signal dom Bool -> Signal dom (Cell n m) -> (Signal dom Bool, (Signal dom (Cell n m), Signal dom (Cell n m)))
-        f found c = (found .||. this, unbundle $ mux this guess (dup <$> c))
+        f :: Bool -> Cell n m -> (Bool, (Cell n m, Cell n m))
+        f found c = (found || this, if this then guess else (c, c))
           where
-            guess@(unbundle -> (_next, after)) = splitCell <$> c
-            this = (not <$> found) .&&. (after ./= conflicted)
-            dup x = (x, x)
+            guess@(_next, after) = splitCell c
+            this = not found && after /= conflicted
 
     step = load .<|>. enable (can_try .&&. register False (result .== Stuck)) next
     stack_cmd = do
