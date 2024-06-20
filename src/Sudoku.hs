@@ -42,15 +42,22 @@ circuit new_grid = result
   where
     (solved_grid, stack_cmd) = controller load
     load = new_grid .<|>. stack_rd
-    (stack_rd, underflow) = stack (SNat @(StackSize n m)) emptySudoku stack_cmd'
+    (stack_rd, sp) = stack (SNat @(StackSize n m)) emptySudoku stack_cmd'
+
+    top_sp = regEn Nothing (isJust <$> new_grid) (Just <$> sp)
 
     result = do
         busy <- busy
         new_grid <- isJust <$> new_grid
-        underflow <- underflow
+        sp <- sp
+        top_sp <- top_sp
         solved_grid <- solved_grid
-        pure $
-          if
+        stack_cmd <- stack_cmd
+        pure
+          let underflow = case stack_cmd of
+                  Just Pop -> top_sp == Just sp
+                  _ -> False
+          in if
             | Just grid <- solved_grid  -> Solved grid
             | not busy && not new_grid -> Idle
             | underflow                -> Unsolvable
