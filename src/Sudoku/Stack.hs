@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE DeriveFunctor #-}
 module Sudoku.Stack where
 
@@ -17,16 +18,16 @@ stack
     -> a
     -> Signal dom (Maybe (StackCmd a))
     -> ( Signal dom (Maybe a)
-       , Signal dom Bool
+       , Signal dom (Index n)
        )
-stack size x0 cmd = (enable (delay False en) rd, delay False underflow)
+stack size x0 cmd = (enable (delay False en) rd, sp)
   where
-    sp = register (0 :: Index n) sp'
-    (sp', en, wr, underflow) = unbundle $ interpret <$> sp <*> cmd
+    sp = register 0 sp'
+    (sp', en, wr) = unbundle $ interpret <$> sp <*> cmd
 
     interpret sp cmd = case cmd of
-        Nothing -> (sp, False, Nothing, False)
-        Just Pop -> (satPred SatBound sp, True, Nothing, sp == 0)
-        Just (Push x) -> (sp + 1, False, Just x, False)
+        Nothing -> (sp, False, Nothing)
+        Just Pop -> (satPred SatWrap sp, True, Nothing)
+        Just (Push x) -> (satSucc SatWrap sp, False, Just x)
 
     rd = blockRamU NoClearOnReset size (\_ -> x0) sp (packWrite <$> sp' <*> wr)

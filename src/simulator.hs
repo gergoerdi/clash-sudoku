@@ -103,7 +103,12 @@ Just hard = readGrid . unlines $
     ]
 
 solve :: Sudoku 3 3 -> Maybe (Sudoku 3 3)
-solve grid = go $ simulate @System (circuit @3 @3) $ Just grid : L.repeat Nothing
+solve grid = go $ simulate @System (circuit @3 @3) $ mconcat
+    [ [Just grid]
+    , L.replicate 30 Nothing
+    , [Just grid]
+    , L.repeat Nothing
+    ]
   where
     go (Working:xs) = go xs
     go (Unsolvable:_) = Nothing
