@@ -15,25 +15,48 @@ type Readable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, (n * m) <= 9)
 
 type SequentialPtr n m = Coord n m
 
+serialChain
+    :: forall k a dom. (KnownNat k, NFDataX a, HiddenClockResetEnable dom)
+    => a
+    -> Signal dom (Maybe a)
+    -> ( Signal dom (Maybe a)
+      , Vec k (Signal dom a)
+      )
+serialChain init shiftIn = (shiftOut, links)
+  where
+    (shiftOut, links) = mapAccumR mkLink shiftIn (repeat init)
+
+    mkLink shiftIn init = (shiftOut, r')
+      where
+        r = register init r'
+        r' = fromMaybe <$> r <*> shiftIn
+        shiftOut = enable(isJust <$> shiftIn) r
+
+serialGrid
+    :: forall n m dom. (Readable n m, HiddenClockResetEnable dom)
+    => Signal dom (Maybe (Cell n m))
+    -> ( Signal dom (Maybe (Cell n m))
+      , Grid n m (Signal dom (Cell n m))
+      )
+serialGrid shiftIn = (shiftOut, grid)
+  where
+    (shiftOut, cells) = serialChain conflicted shiftIn
+    grid = unflattenGrid cells
+
 serialIn
     :: forall n m dom. (Readable n m, HiddenClockResetEnable dom)
     => Signal dom (Maybe (Unsigned 8))
     -> Signal dom (Maybe (Sudoku n m))
-serialIn nextChar = enable ready buf'
+serialIn nextChar = enable ready (bundle buf)
   where
+    shiftIn = (parseCell =<<) <$> nextChar
+    (shiftOut, buf) = serialGrid shiftIn
+
     ptr = register (minBound :: SequentialPtr n m) ptr''
-    buf = register (pure conflicted) buf'
-
-    nextCell = (parseCell =<<) <$> nextChar
-    (buf', ptr') = unbundle $ do
-        nextCell <- nextCell
-        buf <- buf
-        ptr@(i, j, k, l) <- ptr
-        pure $ case nextCell of
-            Nothing -> (buf, Just ptr)
-            Just x -> (setGrid (i, j, k, l) x buf, countSuccChecked ptr)
-
+    ptr' = mux (isJust <$> shiftOut) (countSuccChecked <$> ptr) (Just <$> ptr)
     (ready, ptr'') = unbundle $ maybe (True, minBound) (False,) <$> ptr'
+
+
 
 type Sec n space a = (Index n, Either a (Index space))
 type Ptr n m = Sec n 2 (Sec m 2 (Sec m 1 (Sec n 1 (Index 1))))
