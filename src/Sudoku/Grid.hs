@@ -135,12 +135,6 @@ emptySudoku = pure conflicted
 
 type Coord n m = (Index n, Index m, Index m, Index n)
 
-(!!!) :: (KnownNat n) => Vec n a -> Index n -> a
-(!!!) = (!!)
-
-gridAt :: (KnownNat n, KnownNat m) => Grid n m a -> Coord n m -> a
-gridAt grid (i, j, k, l) = matrixRows (matrixRows (getGrid grid) !!! i !!! j) !!! k !!! l
-
 others :: (1 <= n) => Vec n a -> Vec n (Vec (n - 1) a)
 others (Cons x Nil) = Nil :> Nil
 others (Cons x xs@(Cons _ _)) = xs :> map (x :>) (others xs)
