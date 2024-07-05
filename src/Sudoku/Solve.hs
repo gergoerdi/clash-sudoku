@@ -56,20 +56,17 @@ propagate cell neighbour_masks = applyMasks <$> cell <*> bundle neighbour_masks
 propagator
     :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, n * m * m * n ~ k + 1)
     => (HiddenClockResetEnable dom)
-    => Signal dom (Maybe (Sudoku n m))
+    => Grid n m (Signal dom (Maybe (Cell n m)))
     -> ( Signal dom PropagatorResult
        , Grid n m (Signal dom (Cell n m))
        )
-propagator load = (result, grid)
+propagator loads = (result, grid)
   where
-    loads :: Grid n m (Signal dom (Maybe (Cell n m)))
-    loads = unbundle . fmap sequenceA $ load
-
     units@(unzipGrid -> (grid, changeds)) = unit <$> loads <*> neighbourMasks grid uniques
     uniques = fmap (isUnique <$>) grid
     faileds = fmap (.== conflicted) grid
 
-    fresh = register False $ isJust <$> load
+    fresh = register False $ foldGrid (.||.) $ fmap (isJust <$>) loads
     all_unique = foldGrid (.&&.) uniques
     any_changed = foldGrid (.||.) changeds
     any_failed  = foldGrid (.||.) faileds
@@ -99,9 +96,9 @@ controller
     -> ( Signal dom (Maybe (Sudoku n m))
        , Signal dom (Maybe (StackCmd (Sudoku n m)))
        )
-controller load = (enable (result .== Solved) (bundle grid), stack_cmd)
+controller new_board = (enable (result .== Solved) (bundle grid), stack_cmd)
   where
-    (result, grid) = propagator step
+    (result, grid) = propagator loads
 
     (can_try, unzipGrid -> (bundle -> next, bundle -> after)) = mapAccumGridB (liftA2 f) (pure False) grid
       where
@@ -111,7 +108,9 @@ controller load = (enable (result .== Solved) (bundle grid), stack_cmd)
             guess@(_next, after) = splitCell c
             this = not found && after /= conflicted
 
-    step = load .<|>. enable (can_try .&&. register False (result .== Stuck)) next
+    load = new_board .<|>. enable (can_try .&&. register False (result .== Stuck)) next
+    loads = unbundle . fmap sequenceA $ load
+
     stack_cmd = do
         result <- result
         can_try <- can_try
