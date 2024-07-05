@@ -27,7 +27,6 @@ unzipGrid = (Grid *** Grid) . unzipMatrix . fmap unzipMatrix . getGrid
 data PropagatorResult
     = Solved
     | Failure
-    | Stuck
     | Guess
     | Progress
     deriving (Generic, NFDataX, Eq, Show)
@@ -91,7 +90,7 @@ propagator shift_in pop = (result, grid, can_guess, next_guesses)
         mux all_unique (pure Solved) $
         mux any_failed (pure Failure) $
         mux can_guess (pure Guess) $
-        mux should_guess (pure Stuck) $
+        mux should_guess (pure Failure) $
         pure Progress
 
     unit
@@ -122,10 +121,9 @@ controller
     -> ( Signal dom (Maybe (Sudoku n m))
        , Signal dom (Maybe (StackCmd (Sudoku n m)))
        )
-controller new_board = (enable (result .== Solved) (bundle grid), stack_cmd)
+controller load = (enable (result .== Solved) (bundle grid), stack_cmd)
   where
     (result, grid, can_guess, next_guesses) = propagator (pure Nothing) load
-    load = new_board -- .<|>. enable (can_try .&&. register False (result .== Stuck)) next
 
     stack_cmd = do
         result <- result
@@ -134,6 +132,5 @@ controller new_board = (enable (result .== Solved) (bundle grid), stack_cmd)
         pure $ case result of
             Solved -> Nothing
             Guess -> Just $ Push next_guesses
-            Stuck -> Just Pop
             Failure -> Just Pop
             Progress -> Nothing
