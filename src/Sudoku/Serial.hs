@@ -1,10 +1,11 @@
 {-# LANGUAGE TupleSections, ViewPatterns, ApplicativeDo, BlockArguments #-}
 module Sudoku.Serial where
 
-import Clash.Prelude hiding (lift)
+import Clash.Prelude hiding (lift, mapAccumR)
 import Clash.Class.Counter
 import RetroClash.Utils (enable, mealyStateB)
 
+import Sudoku.Hacks
 import Sudoku.Grid
 
 import Data.Maybe
