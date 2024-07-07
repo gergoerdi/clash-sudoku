@@ -86,6 +86,9 @@ parseCell x
     | ascii '1' <= x && x <= ascii '9'
     = Just $ unique $ fromIntegral $ x - ascii '1'
 
+    | x `elem` [ascii 'x', ascii 'X']
+    = Just conflicted
+
     | otherwise
     = Nothing
 

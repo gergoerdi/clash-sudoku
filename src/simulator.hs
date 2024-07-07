@@ -1,11 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf #-}
+{-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf, TupleSections #-}
 module Main where
 
 import Clash.Prelude hiding (lift)
 
 import Sudoku.Grid
-import Sudoku.Serial (Readable, Writeable, serialIn, serialOut)
+import Sudoku.Serial (Readable, Writeable, serialIn, serialOut, countSuccChecked)
 import Sudoku.Solve
 import Sudoku.Stack
 
@@ -15,6 +15,9 @@ import Control.Arrow
 import Data.Char (chr)
 import Data.Maybe (catMaybes, maybeToList)
 import Control.Monad.Loops
+
+import Debug.Trace
+import Text.Printf
 
 import qualified Data.List as L
 
@@ -102,22 +105,41 @@ Just hard = readGrid . unlines $
     , ". . . |. . . |. . . "
     ]
 
-solve :: Sudoku 3 3 -> Maybe (Sudoku 3 3)
-solve grid = go $ simulate @System (circuit @3 @3) $ mconcat
+solve :: Sudoku 3 3 -> (Maybe (Sudoku 3 3), Int)
+solve grid = go 0 $ simulateB @System (second bundle . circuit @3 @3) $ mconcat
     [ [Just grid]
     , L.replicate 30 Nothing
     , [Just grid]
     , L.repeat Nothing
     ]
   where
-    go (Working:xs) = go xs
-    go (Unsolvable:_) = Nothing
-    go (Solved grid:_) = Just grid
+    go i ((Working', _):xs) = go (i + 1) xs
+    go i ((Unsolvable', _):_) = (Nothing, i)
+    go i ((Solved', grid):_) = (Just grid, i)
+
+-- solve' :: Sudoku 3 3 -> Maybe (Sudoku 3 3)
+solve' grid = Just $ go (Just 0) (pure conflicted) . fmap fst $ simulateB @System (uncurry (circuit'' (SNat @3) (SNat @3))) $ fmap (, True) $ mconcat $
+    [ Just <$> in_bytes
+    , L.repeat Nothing
+    ]
+  where
+    in_bytes = fmap ascii $ showGrid @3 @3 grid
+
+    go :: Maybe (Index (3 * 3 * 3 * 3)) -> Vec (3 * 3 * 3 * 3) (Cell 3 3) -> [Maybe (Unsigned 8)] -> Sudoku 3 3
+    go Nothing buf _ = unflattenGrid buf
+    -- go (Just i) buf _ | trace (show i) False = undefined
+    go (Just i) buf (out_byte:out_bytes)
+      | Just cell <- {- traceShowId . -} parseCell @3 @3 {- . traceShowId -} =<< out_byte
+      , let (buf', _) = shiftInAtN buf (singleton cell)
+      = go (countSuccChecked i) buf' out_bytes
+
+      | otherwise
+      = go (Just i) buf out_bytes
 
 doSolve :: Sudoku 3 3 -> IO ()
 doSolve grid = case solve grid of
-    Nothing -> putStrLn "Unsolvable"
-    Just grid -> putStrLn "Solution:" >> printGrid grid
+    (Nothing, i) -> printf "Unsolvable in %d\n" i
+    (Just grid, i) -> printf "Solved in %d\n%s" i (showGrid grid)
 
 main :: IO ()
 main = do

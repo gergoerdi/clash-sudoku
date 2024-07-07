@@ -57,8 +57,6 @@ serialIn nextChar = enable ready (bundle buf)
     ptr' = mux (isJust <$> shiftOut) (countSuccChecked <$> ptr) (Just <$> ptr)
     (ready, ptr'') = unbundle $ maybe (True, minBound) (False,) <$> ptr'
 
-
-
 type Sec n space a = (Index n, Either a (Index space))
 type Ptr n m = Sec n 2 (Sec m 2 (Sec m 1 (Sec n 1 (Index 1))))
 
