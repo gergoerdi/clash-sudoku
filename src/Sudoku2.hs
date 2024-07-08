@@ -53,7 +53,7 @@ circuit shift_in out_ready = ((shift_out, in_ready), dbg)
     dbg = (bundle grid, enable_propagate, result)
 
     shift_in' :: Signal dom (Maybe (Cell n m))
-    (shift_in', in_ready, enable_propagate) = mealyStateB step (ShiftIn @n @m 0) (shift_in, out_ready, result)
+    (shift_in', in_ready, enable_propagate) = mealyStateB step (ShiftIn @n @m 0) (shift_in, out_ready, register Progress result)
 
     step (shift_in, out_ready, result) = do
         (traceShowId <$> get) >>= \case
@@ -62,9 +62,15 @@ circuit shift_in out_ready = ((shift_out, in_ready), dbg)
                 pure (shift_in, True, False)
             Busy -> do
                 case result of
-                    Solved -> put $ ShiftOut 0
-                    _ -> pure ()
-                pure (Nothing, False, True)
+                    Guess -> do
+                        pure (Nothing, False, True)
+                    Failure -> do
+                        pure (Nothing, False, True)
+                    Progress -> do
+                        pure (Nothing, False, True)
+                    Solved -> do
+                        put $ ShiftOut 0
+                        pure (Nothing, False, True)
             ShiftOut i -> do
                 when out_ready $ put $ maybe (ShiftIn 0) ShiftOut $ countSuccChecked i
                 pure (Just conflicted, False, False)
