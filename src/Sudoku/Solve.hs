@@ -60,6 +60,7 @@ propagator
     :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, n * m * m * n ~ k + 1)
     => (HiddenClockResetEnable dom)
     => Signal dom Bool
+    -> Signal dom Bool
     -> Signal dom (Maybe (Cell n m))
     -> Signal dom (Maybe (Sudoku n m))
     -> ( Signal dom (Maybe (Cell n m))
@@ -68,7 +69,7 @@ propagator
        , Signal dom Bool
        , Grid n m (Signal dom (Cell n m))
        )
-propagator enable_propagate shift_in pop = (shift_out, result, grid, can_guess, next_guesses)
+propagator enable_propagate commit_guess shift_in pop = (shift_out, result, grid, can_guess, next_guesses)
   where
     pops :: Grid n m (Signal dom (Maybe (Cell n m)))
     pops = unbundle . fmap sequenceA $ pop
@@ -106,7 +107,7 @@ propagator enable_propagate shift_in pop = (shift_out, result, grid, can_guess, 
         shift_out = enable (isJust <$> shift_in) r
 
         r = register conflicted r'
-        r' = load .<|>. enable guess_this first_guess .<|>. enable enable_propagate (propagate r neighbour_masks) .<|. r
+        r' = load .<|>. enable (commit_guess .&&. guess_this) first_guess .<|>. enable enable_propagate (propagate r neighbour_masks) .<|. r
         changed = register False $ r ./=. r'
         unique = isUnique <$> r
 
@@ -172,7 +173,7 @@ controller
        )
 controller load = (grid, result .== Solved, stack_cmd', next_guesses)
   where
-    (_, result, grid, can_guess, next_guesses) = propagator (pure True) (pure Nothing) load
+    (_, result, grid, can_guess, next_guesses) = propagator (pure True) (pure True) (pure Nothing) load
 
     stack_cmd' = do
         result <- result

@@ -74,6 +74,21 @@ Just grid2 = readGrid . unlines $
     , "0 5 1  0 0 7  0 0 0"
     ]
 
+mustGuess :: Sudoku 3 3
+Just mustGuess = readGrid . unlines $
+    [ "8 0 6  4 3 5  0 7 9"
+    , "0 3 9  7 0 6  5 4 8"
+    , "4 7 5  0 9 8  0 3 6"
+
+    , "0 6 3  8 4 0  7 9 5"
+    , "5 4 0  0 7 9  8 6 3"
+    , "7 9 8  5 6 3  4 0 0"
+
+    , "6 5 4  3 0 0  9 8 7"
+    , "3 0 0  9 8 7  6 5 4"
+    , "9 8 7  6 5 4  3 0 0"
+    ]
+
 unsolvable :: Sudoku 3 3
 Just unsolvable = readGrid . unlines $
     [ "0 0 0  6 0 0  5 0 0"
