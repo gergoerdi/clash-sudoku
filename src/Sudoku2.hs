@@ -1,4 +1,4 @@
-{-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf, ApplicativeDo #-}
+{-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf, ApplicativeDo, NumericUnderscores #-}
 module Sudoku2 where
 
 import Clash.Prelude hiding (lift)
@@ -16,7 +16,7 @@ import qualified Clash.Sized.Vector as V
 import Sudoku.Matrix
 import Sudoku.Grid
 import Sudoku.Serial
-import Sudoku.Solve hiding (Propagate)
+import Sudoku.Solve hiding (Propagate, controller)
 import Sudoku.Stack
 
 import RetroClash.Utils
@@ -62,7 +62,7 @@ controller shift_in out_ready = ((shift_out', in_ready), dbg)
 
     -- step :: (Maybe (Cell n m), Bool, PropagatorResult, Index (StackSize n m)) -> State (St n m) (Maybe (Cell n m), Bool, Bool, Sudoku n m -> Maybe (StackCmd (Sudoku n m)))
     step (shift_in, out_ready, result, sp) = do
-        get >>= \case
+        get >>= (\x -> traceShowM x >> pure x) >>= \case
             ShiftIn i -> do
                 when (isJust shift_in) $ put $ maybe (Busy sp) ShiftIn $ countSuccChecked i
                 pure (shift_in, False, True, False, False, const Nothing)
@@ -81,9 +81,11 @@ controller shift_in out_ready = ((shift_out', in_ready), dbg)
                     Solved -> do
                         put $ ShiftOut 0
                         pure (Nothing, False, False, True, False, const Nothing)
-            ShiftOut i -> do
-                when out_ready $ put $ maybe (ShiftIn 0) ShiftOut $ countSuccChecked i
+            ShiftOut i {-| out_ready -} -> do
+                put $ maybe (ShiftIn 0) ShiftOut $ countSuccChecked i
                 pure (Just conflicted, True, False, False, False, const Nothing)
+            ShiftOut i | otherwise -> do
+                pure (Nothing, True, False, False, False, const Nothing)
 
     (shift_out, result, _grid, can_guess, next_guesses) = propagator (register False enable_propagate) (commit_guess) shift_in' popped
     popped = stack_rd
@@ -119,3 +121,83 @@ postproc ((dbg, ys):xs)
 
     | otherwise
     = postproc xs
+
+byteCircuit
+    :: (HiddenClockResetEnable dom)
+    => Signal dom (Maybe (Unsigned 8))
+    -> Signal dom Bool
+    -> ( Signal dom (Maybe (Unsigned 8))
+       , Signal dom Bool
+       )
+byteCircuit in_byte tx_ready = (out_byte, out_ready)
+  where
+    in_cell = (parseCell =<<) <$> in_byte
+    ((out_cell, in_ready), _dbg) = controller @3 @3 in_cell (register False out_ready)
+    (out_byte, out_ready) = serialWriter' tx_ready out_cell
+
+topEntity
+    :: "CLK_100MHZ" ::: Clock System
+    -> "RESET"      ::: Reset System
+    -> "RX"         ::: Signal System Bit
+    -> "TX"         ::: Signal System Bit
+topEntity = withEnableGen sudoku
+  where
+    sudoku rx = tx
+      where
+        -- inByte = fmap unpack <$> serialRx (SNat @9600) rx
+        -- (tx, txReady) = serialTx (SNat @9600) (fmap pack <$> outByte)
+
+        -- inCell = (parseCell =<<) <$> inByte
+        -- ((outCell, inReady), _dbg) = circuit @3 @3 inCell outReady
+
+        -- (outByte, outReady) = serialWriter' txReady outCell
+        in_byte = fmap unpack <$> serialRx (SNat @9600) rx
+        (tx, tx_ready) = serialTx (SNat @9600) (fmap pack <$> out_byte)
+
+        (out_byte, out_ready) = byteCircuit in_byte tx_ready
+
+makeTopEntity 'topEntity
+
+-- testByteCircuit :: Sudoku 3 3 -> _
+testByteCircuit (grid :: Sudoku 3 3) = load (toList . flattenGrid $ grid) $ start (Nothing, True)
+  where
+    Automaton start = signalAutomaton (bundle . uncurry (byteCircuit @System) . unbundle)
+
+    load xs sim@((out_byte, out_ready), Automaton step)
+      | (x:xs') <- xs
+      = load xs' $ step (Just $ showCell x, False)
+
+      | otherwise
+      = wait sim
+
+    wait sim@((out_byte, out_ready), Automaton step)
+      | Just byte <- out_byte
+      = receive [] sim
+
+      | otherwise
+      = wait $ step (Nothing, True)
+
+    -- receive ys ((out_byte, out_ready), Automaton step)
+    --   | Just v <- V.fromList (L.reverse ys)
+    --   = unflattenGrid v
+
+    --   | otherwise
+    --   = receive (out_byte:ys) (step (Nothing, True))
+
+    receive ys ((out_byte, out_ready), Automaton step)
+        | Just y <- out_byte
+        = y : receive (y:ys) (step (Nothing, True))
+
+        | otherwise
+        = receive ys (step (Nothing, True))
+
+--     -- load xs ys (((shift_out, in_ready), dbg), Automaton step)
+--     --   | (x:xs') <- xs
+--     --   , in_ready
+--     --   = (dbg, ys) : load xs' ys (step (Just x, True))
+
+--     --   | Just y <- shift_out
+--     --   = (dbg, y:ys) : load xs (y:ys) (step (Nothing, True))
+
+--     --   | otherwise
+--     --   = (dbg, ys) : load xs ys (step (Nothing, True))

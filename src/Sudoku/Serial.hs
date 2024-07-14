@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections, ViewPatterns, ApplicativeDo, BlockArguments #-}
+{-# LANGUAGE TupleSections, ViewPatterns, ApplicativeDo, BlockArguments, LambdaCase #-}
 module Sudoku.Serial where
 
 import Clash.Prelude hiding (lift, mapAccumR)
@@ -69,6 +69,31 @@ startPtr =
     0
 
 type Writeable n m = (Readable n m, 1 <= n, 1 <= m)
+
+serialWriter'
+    :: forall n m dom. (Writeable n m, HiddenClockResetEnable dom)
+    => Signal dom Bool
+    -> Signal dom (Maybe (Cell n m))
+    -> ( Signal dom (Maybe (Unsigned 8))
+      , Signal dom Bool
+      )
+serialWriter' txReady outCell = mealyStateB (uncurry step) Nothing (txReady, outCell)
+  where
+    step :: Bool -> Maybe (Cell n m) -> State (Maybe (Ptr n m)) (Maybe (Unsigned 8), Bool)
+    step tx_ready out_cell = get >>= \case
+        Nothing | Just out_cell <- out_cell -> do
+            put $ Just startPtr
+            pure (Nothing, False)
+        Just ptr | Just out_cell <- out_cell -> do
+            let ptr' = countSuccChecked ptr
+            when tx_ready $ put ptr'
+            case punctuate ptr of
+                Left punctuation -> do
+                    pure (Just punctuation, False)
+                Right _ -> do
+                    pure (Just $ showCell out_cell, tx_ready)
+        _ -> do
+            pure (Nothing, False)
 
 serialWriter
     :: (Writeable n m)
