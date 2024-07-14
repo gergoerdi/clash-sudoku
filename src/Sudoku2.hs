@@ -35,7 +35,7 @@ data St n m
     | ShiftOut (Cnt n m)
     deriving (Generic, NFDataX, Show, Eq)
 
-circuit
+controller
     :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= m * m * m * n, n * m * m * n ~ k + 1, 1 <= StackSize n m)
     => (HiddenClockResetEnable dom)
     => Signal dom (Maybe (Cell n m))
@@ -52,7 +52,7 @@ circuit
         , Signal dom (Maybe (Cell n m))
         )
       )
-circuit shift_in out_ready = ((shift_out', in_ready), dbg)
+controller shift_in out_ready = ((shift_out', in_ready), dbg)
   where
     dbg = (bundle _grid, enable_propagate, commit_guess, result, fmap (() <$) <$> stack_cmd', (() <$) <$> stack_rd, shift_out')
 
@@ -98,7 +98,7 @@ circuit shift_in out_ready = ((shift_out', in_ready), dbg)
 -- test :: Sudoku 3 3 -> [Sudoku 3 3]
 test grid = load (toList $ flattenGrid grid) [] $ start (Nothing, True)
   where
-    Automaton start = signalAutomaton (bundle . (bundle *** bundle) . uncurry (circuit @3 @3 @System) . unbundle)
+    Automaton start = signalAutomaton (bundle . (bundle *** bundle) . uncurry (controller @3 @3 @System) . unbundle)
 
     load xs ys (((shift_out, in_ready), dbg), Automaton step)
       | (x:xs') <- xs

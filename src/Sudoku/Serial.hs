@@ -62,11 +62,11 @@ type Ptr n m = Sec n 2 (Sec m 2 (Sec m 1 (Sec n 1 (Index 1))))
 
 startPtr :: (KnownNat n, KnownNat m) => Ptr n m
 startPtr =
-    (minBound,) . Left $
-    (minBound,) . Left $
-    (minBound,) . Left $
-    (minBound,) . Left $
-    minBound
+    (0,) . Left $
+    (0,) . Left $
+    (0,) . Left $
+    (0,) . Left $
+    0
 
 type Writeable n m = (Readable n m, 1 <= n, 1 <= m)
 
