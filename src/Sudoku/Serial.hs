@@ -99,9 +99,9 @@ serialWriter' txReady outCell = mealyStateB (uncurry step) Nothing (txReady, out
                         pure (Just punctuation, False)
                     Right _ | Just out_cell <- out_cell -> do
                         put ptr'
-                        pure (Just $ showCell out_cell, tx_ready)
+                        pure (Just $ showCell out_cell, False)
                     _ -> do
-                        pure (Nothing, True)
+                        pure (Nothing, tx_ready)
           | otherwise -> do
             pure (Nothing, False)
 
