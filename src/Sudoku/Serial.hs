@@ -12,6 +12,8 @@ import Data.Maybe
 import Control.Monad (guard)
 import Control.Monad.State
 
+import Debug.Trace
+
 type Readable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, (n * m) <= 9)
 
 type SequentialPtr n m = Coord n m
@@ -80,19 +82,27 @@ serialWriter'
 serialWriter' txReady outCell = mealyStateB (uncurry step) Nothing (txReady, outCell)
   where
     step :: Bool -> Maybe (Cell n m) -> State (Maybe (Ptr n m)) (Maybe (Unsigned 8), Bool)
-    step tx_ready out_cell = get >>= \case
-        Nothing | Just out_cell <- out_cell -> do
-            put $ Just startPtr
-            pure (Nothing, False)
-        Just ptr | Just out_cell <- out_cell -> do
-            let ptr' = countSuccChecked ptr
-            when tx_ready $ put ptr'
-            case punctuate ptr of
-                Left punctuation -> do
-                    pure (Just punctuation, False)
-                Right _ -> do
-                    pure (Just $ showCell out_cell, tx_ready)
-        _ -> do
+    step tx_ready out_cell = get >>= (\x -> {-traceShowM (x, tx_ready, out_cell) >> -} pure x) >>= \case
+        Nothing
+          | Just out_cell <- out_cell -> do
+                put $ Just startPtr
+                pure (Nothing, False)
+          | otherwise -> do
+                pure (Nothing, tx_ready)
+
+        Just ptr
+          | tx_ready -> do
+                let ptr' = countSuccChecked ptr
+                case punctuate ptr of
+                    Left punctuation -> do
+                        put ptr'
+                        pure (Just punctuation, False)
+                    Right _ | Just out_cell <- out_cell -> do
+                        put ptr'
+                        pure (Just $ showCell out_cell, tx_ready)
+                    _ -> do
+                        pure (Nothing, True)
+          | otherwise -> do
             pure (Nothing, False)
 
 serialWriter

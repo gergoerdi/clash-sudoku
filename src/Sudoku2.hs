@@ -62,7 +62,7 @@ controller shift_in out_ready = ((shift_out', in_ready), dbg)
 
     -- step :: (Maybe (Cell n m), Bool, PropagatorResult, Index (StackSize n m)) -> State (St n m) (Maybe (Cell n m), Bool, Bool, Sudoku n m -> Maybe (StackCmd (Sudoku n m)))
     step (shift_in, out_ready, result, sp) = do
-        get >>= (\x -> traceShowM x >> pure x) >>= \case
+        get >>= (\x -> {- traceShowM x >> -} pure x) >>= \case
             ShiftIn i -> do
                 when (isJust shift_in) $ put $ maybe (Busy sp) ShiftIn $ countSuccChecked i
                 pure (shift_in, False, True, False, False, const Nothing)
@@ -81,8 +81,8 @@ controller shift_in out_ready = ((shift_out', in_ready), dbg)
                     Solved -> do
                         put $ ShiftOut 0
                         pure (Nothing, False, False, True, False, const Nothing)
-            ShiftOut i {-| out_ready -} -> do
-                put $ maybe (ShiftIn 0) ShiftOut $ countSuccChecked i
+            ShiftOut i | out_ready -> do
+                when out_ready $ put $ maybe (ShiftIn 0) ShiftOut $ countSuccChecked i
                 pure (Just conflicted, True, False, False, False, const Nothing)
             ShiftOut i | otherwise -> do
                 pure (Nothing, True, False, False, False, const Nothing)
@@ -172,7 +172,7 @@ testByteCircuit (grid :: Sudoku 3 3) = load (toList . flattenGrid $ grid) $ star
 
     wait sim@((out_byte, out_ready), Automaton step)
       | Just byte <- out_byte
-      = receive [] sim
+      = receive 0 sim
 
       | otherwise
       = wait $ step (Nothing, True)
@@ -184,12 +184,15 @@ testByteCircuit (grid :: Sudoku 3 3) = load (toList . flattenGrid $ grid) $ star
     --   | otherwise
     --   = receive (out_byte:ys) (step (Nothing, True))
 
-    receive ys ((out_byte, out_ready), Automaton step)
+    receive n ((out_byte, out_ready), Automaton step)
+        | n > 100 -- 207
+        = []
+
         | Just y <- out_byte
-        = y : receive (y:ys) (step (Nothing, True))
+        = y : receive (n + 1) (step (Nothing, True))
 
         | otherwise
-        = receive ys (step (Nothing, True))
+        = receive n (step (Nothing, True))
 
 --     -- load xs ys (((shift_out, in_ready), dbg), Automaton step)
 --     --   | (x:xs') <- xs
