@@ -9,6 +9,7 @@ import Clash.Prelude
 import Clash.Class.Counter
 import Clash.Class.Counter.Internal
 import Protocols
+import Protocols.Internal (mapCircuit)
 import qualified Protocols.Df as Df
 import qualified Data.List as L
 import Data.Monoid (Ap(..))
@@ -57,48 +58,6 @@ daisyChain n op shift_in = (head xs, bundle xs)
 test = simulateN @System 30 (bundle . uncurry (daisyChain (SNat @10)) . unbundle) $ L.zip ops $ (fmap Just [(0 :: Int)..9]) <> L.repeat Nothing
   where
     ops = L.replicate 14 (Just $ Add 1) <> L.repeat Nothing
-
--- data PuncState
---     = Forward
---     | Punctuate
---     deriving (Generic, NFDataX)
-
--- punctuate' :: (HiddenClockResetEnable dom) => b -> Circuit (Df dom a) (Df dom (Either b a))
--- punctuate' sep = Circuit $ mealyB step Forward
---   where
---     step Forward (Df.Data input, ~(Ack out_ack)) = (if out_ack then Punctuate else Forward, (Ack out_ack, Df.Data (Right input)))
---     step Forward (Df.NoData, out_ack) = (Forward, (Ack False, Df.NoData))
---     step Punctuate (_, ~(Ack out_ack)) = (if out_ack then Forward else Punctuate, (Ack False, Df.Data (Left sep)))
-
--- punctuate :: (HiddenClockResetEnable dom) => b -> Circuit (Df dom a) (Df dom (Either b a))
--- punctuate sep = Df.expander Forward \ case
---     Punctuate -> \_ -> (Forward, Left sep, True)
---     Forward -> \x -> (Punctuate, Right x, False)
-
--- genPunctuateInput :: H.Gen [Int]
--- genPunctuateInput = Gen.list (Range.linear 0 100) (genInt 10 20)
---   where
---     genInt a b = Gen.integral (Range.linear a b)
-
--- punctuateModel :: b -> [a] -> [Either b a]
--- punctuateModel sep = go
---   where
---     go = \case
---         [] -> []
---         (x:xs) -> Right x : Left sep : go xs
-
--- data Punctuate (n :: Nat) (sep :: Char) a
---     = Forwarding (Index n)
---     | Punctuating
---     | Done a
-
--- type PrettyGrid =
---     Punctuate 1 ' ' (
---     Punctuate 1 ' ' (
---     Punctuate 0 ' ' (
---     Punctuate 1 ' ' (
---     Punctuate 1 '\r' (
---     Punctuate 0 '\n' (
 
 class SymbolLength_' (s :: Maybe (Char, Symbol)) where
     type SymbolLength' s :: Nat
@@ -156,42 +115,22 @@ instance (Punctuating Char k, SymbolLength_ sep) => Punctuating Char (Punctuate 
         MkPunctuate (_, Right i) -> Just $ symbolAt (Proxy @(UnconsSymbol sep)) i
         MkPunctuate (_, Left k) -> punctuation k
 
--- punctuate :: forall dom rep sep a b. _ => Punctuate rep sep b -> Circuit (Df dom a) (Df dom (Either Char (a, b)))
--- punctuate spec = Df.expander spec \s ->
---     case punctuation s of
---         Left sep -> \_ -> (s', Left sep, overflow)
---           where
---             (overflow, s') = countSuccOverflow s
---         Right y -> \x -> (countSucc s, Right (x, y), False)
+punctuate :: forall dom spec c a. _ => spec -> Circuit (Df dom a) (Df dom (Either c a))
+punctuate spec = Df.expander spec \s ->
+    case punctuation s of
+        Just sep -> \_ -> (s', Left sep, overflow)
+          where
+            (overflow, s') = countSuccOverflow s
+        Nothing -> \x -> (countSucc s, Right x, False)
 
-foo :: [Char] -> [Char]
-foo = go startPrettyGrid
+punctuateModel :: _ => spec -> [Char] -> [Char]
+punctuateModel spec cs = case punctuation spec of
+    Just sep -> sep : punctuateModel spec' cs
+    Nothing -> case cs of
+        c:cs' -> c : punctuateModel spec' cs'
+        [] -> []
   where
-    go :: PrettyGrid -> [Char] -> [Char]
-    go spec cs = case punctuation spec of
-        Just sep -> sep : go spec' cs
-        Nothing -> case cs of
-            c:cs' -> c : go spec' cs'
-            [] -> []
-      where
-        spec' = countSucc spec
-
--- fooCirc :: _ => Circuit (Df dom a) (Df dom (Either Char a))
--- fooCirc = punctuate (
-
-type T = Punctuate 2 "2" (Punctuate 2 "1" (Index 1))
-
-foo2 :: [Char] -> [(T, Char)]
-foo2 = go (MkPunctuate . (0,) . Left $ MkPunctuate . (0,) . Left $ 0)
-  where
-    go :: T -> [Char] -> [(T, Char)]
-    go spec@spec0 cs = case punctuation spec of
-        Just sep -> (spec0, sep) : go spec' cs
-        Nothing -> case cs of
-                c:cs' -> (spec0, c) : go spec' cs'
-                [] -> []
-      where
-        spec' = countSucc spec
+    spec' = countSucc spec
 
 prettyGridModel :: [Char] -> [Char]
 prettyGridModel (a0:a1:a2:a3:b0:b1:b2:b3:c0:c1:c2:c3:d0:d1:d2:d3:_) =
@@ -204,12 +143,15 @@ prettyGridModel (a0:a1:a2:a3:b0:b1:b2:b3:c0:c1:c2:c3:d0:d1:d2:d3:_) =
     ]
 
 blah :: [Char]
-blah = ['a'..'z']
+blah = ['a'..'z'] <> ['0'..'9']
 
--- prop_punctuate :: (NFData b, Show b, Eq b, ShowX b, NFDataX b) => b -> H.Property
--- prop_punctuate sep =
---   H.idWithModelSingleDomain
---     H.defExpectOptions
---     genPunctuateInput
---     (\_ _ _ -> punctuateModel sep)
---     (exposeClockResetEnable $ punctuate @System sep)
+genPunctuateInput :: H.Gen [Char]
+genPunctuateInput = Gen.list (Range.linear 0 100) Gen.alpha
+
+prop_punctuate :: _ => spec -> H.Property
+prop_punctuate spec =
+    H.idWithModelSingleDomain
+      H.defExpectOptions
+      genPunctuateInput
+      (\_ _ _ -> punctuateModel spec)
+      (exposeClockResetEnable $ punctuate @System spec |> Df.map (either id id))
