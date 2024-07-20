@@ -15,6 +15,7 @@ import qualified Data.List as L
 import Data.Monoid (Ap(..))
 import Data.Functor.Compose
 import Control.Monad ((>=>))
+import Data.Maybe
 
 import qualified Protocols.Hedgehog as H
 import qualified Hedgehog as H
@@ -116,15 +117,14 @@ instance (Punctuating Char k, SymbolLength_ sep) => Punctuating Char (Punctuate 
         MkPunctuate (_, Left k) -> punctuation k
 
 punctuate :: forall dom spec c a. _ => spec -> Circuit (Df dom a) (Df dom (Either c a))
-punctuate spec = Df.expander spec \s ->
-    case punctuation s of
-        Just sep -> \_ -> (s', Left sep, False)
-          where
-            (overflow, s') = countSuccOverflow s
-        Nothing -> \x -> (countSucc s, Right x, True)
+punctuate spec = Df.expander (spec, punctuation spec) \(spec, punc) ->
+    let spec' = countSucc spec
+        punc' = punctuation spec'
+    in case punc of
+        Just sep -> \_ -> ((spec', punc'), Left sep, isNothing punc')
+        Nothing -> \x -> ((spec', punc'), Right x, False)
 
 punctuateModel :: _ => spec -> [Char] -> [Char]
-punctuateModel spec [] = []
 punctuateModel spec cs = case punctuation spec of
     Just sep -> sep : punctuateModel spec' cs
     Nothing -> case cs of
@@ -132,19 +132,6 @@ punctuateModel spec cs = case punctuation spec of
         [] -> []
   where
     spec' = countSucc spec
-
-prettyGridModel :: [Char] -> [Char]
-prettyGridModel (a0:a1:a2:a3:b0:b1:b2:b3:c0:c1:c2:c3:d0:d1:d2:d3:_) =
-    [ a0, ' ', a1, ' ', ' ', a2, ' ', a3, ' ' , ' ', '\r', '\n'
-    , b0, ' ', b1, ' ', ' ', b2, ' ', b3, ' ' , ' ', '\r', '\n'
-    , '\r', '\n'
-    , c0, ' ', c1, ' ', ' ', c2, ' ', c3, ' ', ' ', '\r', '\n'
-    , d0, ' ', d1, ' ', ' ', d2, ' ', d3, ' ', ' ', '\r', '\n'
-    , '\r', '\n'
-    ]
-
-blah :: [Char]
-blah = ['a'..'z'] <> ['0'..'9']
 
 genPunctuateInput :: H.Gen [Char]
 genPunctuateInput = Gen.list (Range.linear 0 100) Gen.alpha
