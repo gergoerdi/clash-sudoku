@@ -118,12 +118,13 @@ instance (Punctuating Char k, SymbolLength_ sep) => Punctuating Char (Punctuate 
 punctuate :: forall dom spec c a. _ => spec -> Circuit (Df dom a) (Df dom (Either c a))
 punctuate spec = Df.expander spec \s ->
     case punctuation s of
-        Just sep -> \_ -> (s', Left sep, overflow)
+        Just sep -> \_ -> (s', Left sep, False)
           where
             (overflow, s') = countSuccOverflow s
-        Nothing -> \x -> (countSucc s, Right x, False)
+        Nothing -> \x -> (countSucc s, Right x, True)
 
 punctuateModel :: _ => spec -> [Char] -> [Char]
+punctuateModel spec [] = []
 punctuateModel spec cs = case punctuation spec of
     Just sep -> sep : punctuateModel spec' cs
     Nothing -> case cs of
