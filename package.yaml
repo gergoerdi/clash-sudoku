@@ -23,6 +23,10 @@ dependencies:
   - lens
   - mtl
   - arrows
+  - clash-protocols
+
+  - hedgehog
+  - deepseq
 
 # Anything that Clash uses by default should go here
 default-extensions:

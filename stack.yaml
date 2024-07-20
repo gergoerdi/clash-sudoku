@@ -2,9 +2,13 @@ resolver: clash-1.8.1.yaml
 
 packages:
     - '.'
+    - clash-protocols
 
 extra-deps:
   - retroclash-lib-0.1.2.2
   - retroclash-sim-0.1.1
   - clashilator-0.1.4
   - clash-shake-0.3.2
+  - git: https://github.com/cchalmers/circuit-notation.git
+    commit: 19b386c4aa3ff690758ae089c7754303f3500cc9
+  - clash-prelude-hedgehog-1.8.1

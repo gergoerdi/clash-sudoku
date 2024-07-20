@@ -1,0 +1,3 @@
+[submodule "clash-protocols"]
+	path = clash-protocols
+	url = https://github.com/clash-lang/clash-protocols
