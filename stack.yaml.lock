@@ -85,6 +85,19 @@ packages:
       size: 735
   original:
     hackage: clash-prelude-hedgehog-1.8.1
+- completed:
+    commit: 3f5dc67c0e526e43a4dd88eb3902e39ed512c166
+    git: https://github.com/clash-lang/clash-compiler.git
+    name: clash-cores
+    pantry-tree:
+      sha256: 15fa63a9f13d2f9a68c231758c5b971cf95db21ffd020356e848dd95da491999
+      size: 3596
+    subdir: clash-cores
+    version: 1.8.1
+  original:
+    commit: 3f5dc67c0e526e43a4dd88eb3902e39ed512c166
+    git: https://github.com/clash-lang/clash-compiler.git
+    subdir: clash-cores
 snapshots:
 - completed:
     sha256: 7d4b649cf368f9076d8aa049aa44efe58950971d105892734e9957b2a26a2186

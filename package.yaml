@@ -24,6 +24,7 @@ dependencies:
   - mtl
   - arrows
   - clash-protocols
+  - clash-cores
 
   - hedgehog
   - deepseq
