@@ -4,12 +4,8 @@ module Sudoku4 where
 import Clash.Prelude hiding (lift)
 import Clash.Annotations.TH
 
-import Data.Traversable (for)
-import Control.Arrow (second, (***))
 import Data.Maybe
-import Control.Monad.State
 import qualified Data.List as L
-import qualified Clash.Sized.Vector as V
 import Data.Char (ord, chr)
 
 import Protocols
@@ -28,12 +24,12 @@ punctuate = Df.expander False \case
     True -> \_ -> (False, ascii ',', True)
 
 -- From git@github.com:bittide/bittide-hardware.git
-uartDf ::
-  (HiddenClockResetEnable dom, ValidBaud dom baud) =>
-  SNat baud ->
-  Circuit
-    (Df dom (BitVector 8), CSignal dom Bit)
-    (CSignal dom (Maybe (BitVector 8)), CSignal dom Bit)
+uartDf
+    :: (HiddenClockResetEnable dom, ValidBaud dom baud)
+    => SNat baud
+    -> Circuit
+        (Df dom (BitVector 8), CSignal dom Bit)
+        (CSignal dom (Maybe (BitVector 8)), CSignal dom Bit)
 uartDf baud = Circuit \((request, rx_bit), _out_ack) ->
     let (received, tx_bit, in_ack) = uart baud rx_bit (Df.dataToMaybe <$> request)
     in ((Ack <$> in_ack, pure ()), (received, tx_bit))
@@ -49,13 +45,12 @@ model_encodeSerial stretch x = mconcat
     slow = L.replicate stretch
     pause = slow high
     startBit = slow low
-    dataBits = L.map (slow . lsb) $ L.take 8 $ L.iterate (`shiftR` 1) x
+    dataBits = L.map (slow . lsb) $ L.take 8 . L.iterate (`shiftR` 1) $ x
     stopBit = slow high
 
 model_encodeSerials :: Int -> [Unsigned 8] -> [Bit]
-model_encodeSerials stretch xs =
+model_encodeSerials stretch xs = (<> L.repeat high) $
     L.concatMap (\x -> model_encodeSerial stretch x <> L.replicate (10 * 5 * stretch) high) xs
-    <> L.repeat high
 
 model_decodeSerial :: Int -> [Bit] -> [Unsigned 8]
 model_decodeSerial stretch = wait
@@ -87,27 +82,26 @@ buffer = Circuit \(x, ack) ->
             pure $ if ack then next else current <|> next
     in (pure (), Df.maybeToData <$> r)
 
-board :: (HiddenClockResetEnable System) => Bool -> Bool -> Signal System Bit -> Signal System Bit
-board buffer_input apply_punctuation rx = tx
+serialize
+    :: (HiddenClockResetEnable dom, ValidBaud dom baud, BitPack a, BitSize a ~ 8, BitPack b, BitSize b ~ 8)
+    => SNat baud
+    -> Circuit (Df dom a) (Df dom b)
+    -> Signal dom Bit
+    -> Signal dom Bit
+serialize baud circuit rx = tx
   where
-    ((out_ack, _), (in_bv, tx)) = toSignals (uartDf (SNat @5_000_000)) ((fmap pack <$> out_byte, rx), (pure (), pure ()))
+    ((out_ack, _), (in_bv, tx)) = toSignals (uartDf baud) ((fmap pack <$> out_dat, rx), (pure (), pure ()))
 
-    in_byte = fmap unpack <$> in_bv
+    (_, in_dat) = toSignals (buffer |> Df.map unpack) (in_bv, out_ack)
+    (in_ack, out_dat) = toSignals circuit (in_dat, out_ack)
 
-    in_byte'
-        | buffer_input
-        = let (_, in_byte') = toSignals buffer (in_byte, out_ack) in in_byte'
+board :: (HiddenClockResetEnable System) => Bool -> Signal System Bit -> Signal System Bit
+board apply_punctuation = serialize (SNat @5_000_000) if
+    | apply_punctuation
+    -> punctuate
 
-        | otherwise
-        = Df.maybeToData <$> in_byte
-
-    out_byte :: Signal System (Df.Data (Unsigned 8))
-    out_byte
-        | apply_punctuation
-        = let (in_ack, out_byte) = toSignals punctuate (in_byte', out_ack) in out_byte
-
-        | otherwise
-        = in_byte'
+    | otherwise
+    -> Df.map id
 
 topEntity
     :: "CLK_100MHZ" ::: Clock System
@@ -115,7 +109,7 @@ topEntity
     -> "ENABLE"     ::: Enable System
     -> "RX"         ::: Signal System Bit
     -> "TX"         ::: Signal System Bit
-topEntity clk rst en = withClockResetEnable clk rst en (board True True)
+topEntity clk rst en = withClockResetEnable clk rst en (board True)
 
 makeTopEntity 'topEntity
 
@@ -124,9 +118,9 @@ simParallel =
     simulateCSE @System (exposeClockResetEnable punctuate) $
     L.take 81 $ L.cycle . fmap ascii $ "Hello"
 
-simSerial =
+simSerial apply_punctuation =
     fmap (chr . fromIntegral) .
     model_decodeSerial 20 .
-    simulate @System (hideClockResetEnable topEntity) .
+    simulate @System (board apply_punctuation) .
     model_encodeSerials 20 $
     L.take 81 $ L.cycle . fmap ascii $ "Hello"
