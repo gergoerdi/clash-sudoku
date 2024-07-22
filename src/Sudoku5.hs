@@ -1,5 +1,6 @@
 {-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf, ApplicativeDo, NumericUnderscores #-}
-module Sudoku4 where
+{-# OPTIONS -fplugin=Protocols.Plugin #-}
+module Sudoku5 where
 
 import Clash.Prelude hiding (lift)
 import Clash.Annotations.TH
@@ -13,15 +14,10 @@ import Protocols.Internal (mapCircuit, simulateCSE, CSignal(..))
 import qualified Protocols.Df as Df
 import Clash.Cores.UART(uart, ValidBaud)
 
+import Punctuate
+
 ascii :: Char -> Unsigned 8
 ascii = fromIntegral . ord
-
-punctuate
-    :: (HiddenClockResetEnable dom)
-    => Circuit (Df dom (Unsigned 8)) (Df dom (Unsigned 8))
-punctuate = Df.expander (0 :: Index 7) \case
-    0 -> \x -> (maxBound, x, True)
-    n -> \_ -> (n - 1, ascii ',', False)
 
 -- From git@github.com:bittide/bittide-hardware.git
 uartDf
@@ -50,7 +46,7 @@ model_encodeSerial stretch x = mconcat
 
 model_encodeSerials :: Int -> [Unsigned 8] -> [Bit]
 model_encodeSerials stretch xs = (<> L.repeat high) $
-    L.concatMap (\x -> model_encodeSerial stretch x <> L.replicate (10 * 10 * stretch) high) xs
+    L.concatMap (\x -> model_encodeSerial stretch x <> L.replicate (10 * 5 * stretch) high) xs
 
 model_decodeSerial :: Int -> [Bit] -> [Unsigned 8]
 model_decodeSerial stretch = wait
@@ -86,22 +82,24 @@ serialize
     :: (HiddenClockResetEnable dom, ValidBaud dom baud, BitPack a, BitSize a ~ 8, BitPack b, BitSize b ~ 8)
     => SNat baud
     -> Circuit (Df dom a) (Df dom b)
-    -> Signal dom Bit
-    -> Signal dom Bit
-serialize baud circuit rx = tx
-  where
-    ((out_ack, _), (in_bv, tx)) = toSignals (uartDf baud) ((fmap pack <$> out_dat, rx), (pure (), pure ()))
+    -> Circuit (CSignal dom Bit) (CSignal dom Bit)
+serialize baud par_circuit = circuit \rx -> do
+    (in_byte, tx) <- uartDf baud -< (out_byte, rx)
+    out_byte <- Df.map pack <| par_circuit <| Df.map unpack <| buffer -< in_byte
+    idC -< tx
 
-    (_, in_dat) = toSignals (buffer |> Df.map unpack) (in_bv, in_ack)
-    (in_ack, out_dat) = toSignals circuit (in_dat, out_ack)
-
-board :: (HiddenClockResetEnable System) => Bool -> Signal System Bit -> Signal System Bit
-board apply_punctuation = serialize (SNat @5_000_000) if
+boardPar :: (HiddenClockResetEnable dom) => Bool -> Circuit (Df dom (Unsigned 8)) (Df dom (Unsigned 8))
+boardPar apply_punctuation
     | apply_punctuation
-    -> punctuate
+    = punctuate (punctuateGrid (SNat @3) (SNat @3)) |> Df.map (either ascii id)
 
     | otherwise
-    -> Df.map id
+    = Df.map id
+
+board :: (HiddenClockResetEnable System) => Bool -> Signal System Bit -> Signal System Bit
+board apply_punctuation rx = tx
+  where
+    (_, tx) = toSignals (serialize (SNat @5_000_000) $ boardPar apply_punctuation) (rx, pure ())
 
 topEntity
     :: "CLK_100MHZ" ::: Clock System
@@ -109,13 +107,13 @@ topEntity
     -> "ENABLE"     ::: Enable System
     -> "RX"         ::: Signal System Bit
     -> "TX"         ::: Signal System Bit
-topEntity clk rst en = withClockResetEnable clk rst en (board True)
+topEntity clk rst en = withClockResetEnable clk rst en $ board True
 
 makeTopEntity 'topEntity
 
-simParallel =
+simParallel apply_punctuation =
     fmap (chr . fromIntegral) .
-    simulateCSE @System (exposeClockResetEnable punctuate) $
+    simulateCSE @System (exposeClockResetEnable $ boardPar apply_punctuation) $
     L.take 81 $ L.cycle . fmap ascii $ "Hello"
 
 simSerial apply_punctuation =
