@@ -1,4 +1,5 @@
 {-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf, ApplicativeDo, NumericUnderscores, TupleSections #-}
+{-# LANGUAGE UndecidableInstances, ViewPatterns #-}
 {-# OPTIONS -fplugin=Protocols.Plugin #-}
 module Sudoku6 where
 
@@ -41,23 +42,29 @@ data St n m
     | Busy (Index (StackSize n m))
     | WaitPush (Index (StackSize n m))
     | ShiftOut (Cnt n m)
-    deriving (Generic, NFDataX, Show, Eq)
+    deriving (Generic, NFDataX, Show, Eq, ShowX)
+
+type Dbg n m = (Sudoku n m, St n m)
 
 controller
     :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= m * m * m * n, n * m * m * n ~ k + 1, 1 <= StackSize n m)
     => (HiddenClockResetEnable dom)
-    => Circuit (Df dom (Cell n m)) (Df dom (Cell n m))
+    => Circuit (Df dom (Cell n m)) (Df dom (Cell n m), CSignal dom (Dbg n m))
 controller = Circuit go
   where
-    go (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out')
+    go (shift_in, (out_ack, _)) = (in_ack, (Df.maybeToData <$> shift_out, _dbg))
       where
+        _dbg = bundle (bundle grid, st)
+
       --   shift_in' :: Signal dom (Maybe (Cell n m))
-        (shift_in', out_enabled, in_ack, enable_propagate, commit_guess, stack_cmd) = mealyStateB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, {- register Progress -} result, sp)
-        shift_out' = guardA out_enabled shift_out
+        (unbundle -> (shift_in', out_enabled, in_ack, enable_propagate, commit_guess, stack_cmd), st) = mealyStateB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, {- register Progress -} result, sp)
+        shift_out = enable out_enabled head_cell
 
         -- step :: (Maybe (Cell n m), Bool, PropagatorResult, Index (StackSize n m)) -> State (St n m) (Maybe (Cell n m), Bool, Bool, Sudoku n m -> Maybe (StackCmd (Sudoku n m)))
         step (shift_in, out_ack, result, sp) = do
-            get >>= (\x -> {- traceShowM x >> -} pure x) >>= \case
+          st <- get
+          x <-
+            get >>= {- (\x -> traceShowM (x, result) >> pure x) >>= -} \case
                 ShiftIn i -> do
                     when (isJust shift_in) $ put $ maybe (Busy sp) ShiftIn $ countSuccChecked i
                     pure (shift_in, False, Ack True, False, False, const Nothing)
@@ -76,13 +83,17 @@ controller = Circuit go
                         Solved -> do
                             put $ ShiftOut 0
                             pure (Nothing, False, Ack False, True, False, const Nothing)
-                ShiftOut i | Ack True <- out_ack -> do
-                    put $ maybe (ShiftIn 0) ShiftOut $ countSuccChecked i
-                    pure (Just conflicted, True, Ack False, False, False, const Nothing)
-                ShiftOut i | otherwise -> do
-                    pure (Nothing, True, Ack False, False, False, const Nothing)
+                ShiftOut i {- | Ack True <- out_ack -} -> do
+                    shift_in <- case out_ack of
+                        Ack True -> do
+                            put $ maybe (ShiftIn 0) ShiftOut $ countSuccChecked i
+                            pure $ Just conflicted
+                        _ -> do
+                            pure Nothing
+                    pure (shift_in, True, Ack False, False, False, const Nothing)
+          pure (x, (st))
 
-        (shift_out, result, _grid, can_guess, next_guesses) = propagator (register False enable_propagate) (commit_guess) shift_in' popped
+        (head_cell, result, grid, can_guess, next_guesses) = propagator (register False enable_propagate) (commit_guess) shift_in' popped
         popped = stack_rd
 
         -- stack_cmd' :: Signal dom (Maybe (StackCmd (Sudoku n m)))
@@ -160,24 +171,29 @@ serialize baud par_circuit = circuit \rx -> do
     out_byte <- Df.map pack <| par_circuit <| Df.map unpack <| buffer -< in_byte
     idC -< tx
 
-board :: (HiddenClockResetEnable dom) => Circuit (Df dom (Unsigned 8)) (Df dom (Unsigned 8))
-board =
-    Df.mapMaybe parseCell |>
-    controller @3 @3 |>
-    Df.map showCell |>
-    punctuate (punctuateGrid (SNat @3) (SNat @3)) |>
-    Df.map (either ascii id)
+board :: (HiddenClockResetEnable dom) => Circuit (Df dom (Unsigned 8)) (Df dom (Unsigned 8), CSignal dom (Dbg 3 3))
+board = circuit \in_byte -> do
+    (out_cell, grid) <- controller @3 @3 <| Df.mapMaybe parseCell -< in_byte
+    out_byte <- Df.map (either ascii id) <| punctuate (punctuateGrid (SNat @3) (SNat @3)) <| Df.map showCell -< out_cell
+    idC -< (out_byte, grid)
 
-topEntity
-    :: "CLK_100MHZ" ::: Clock System
-    -> "RESET"      ::: Reset System
-    -> "ENABLE"     ::: Enable System
-    -> "RX"         ::: Signal System Bit
-    -> "TX"         ::: Signal System Bit
-topEntity clk rst en = withClockResetEnable clk rst en $
-    snd . toSignals (serialize (SNat @5_000_000) board) . (, pure ())
+-- board =
+--     Df.mapMaybe parseCell |>
+--     controller @3 @3 |>
+--     Df.map showCell |>
+--     punctuate (punctuateGrid (SNat @3) (SNat @3)) |>
+--     Df.map (either ascii id)
 
-makeTopEntity 'topEntity
+-- topEntity
+--     :: "CLK_100MHZ" ::: Clock System
+--     -> "RESET"      ::: Reset System
+--     -> "ENABLE"     ::: Enable System
+--     -> "RX"         ::: Signal System Bit
+--     -> "TX"         ::: Signal System Bit
+-- topEntity clk rst en = withClockResetEnable clk rst en $
+--     snd . toSignals (serialize (SNat @5_000_000) board) . (, pure ())
+
+-- makeTopEntity 'topEntity
 
 -- simSerial =
 --     fmap (chr . fromIntegral) .
@@ -186,6 +202,13 @@ makeTopEntity 'topEntity
 --     model_encodeSerials 20 $
 --     L.take 81 $ L.cycle . fmap ascii $ "Hello"
 
+instance (Writeable n m) => Show (Sudoku n m) where
+    show = showGrid
+
+instance (Writeable n m) => ShowX (Sudoku n m) where
+    showX = showGrid
+    showsPrecX _ grid k = showX grid <> k
+
 sim_board = simulateCSE @System $ exposeClockResetEnable board
 
 readGrid :: forall n m. (Readable n m) => String -> Maybe (Sudoku n m)
@@ -193,7 +216,7 @@ readGrid = go []
   where
     go xs cs
         | Just cells <- V.fromList xs
-        = Just $ gridFromRows $ unconcat (SNat @(m * n)) . reverse $ cells
+        = Just $ unflattenGrid . reverse $ cells
 
         | (c:cs) <- cs
         = go (maybe xs (:xs) $ parseCell . ascii $ c) cs
@@ -202,7 +225,7 @@ readGrid = go []
         = Nothing
 
 showGrid :: forall n m. (Writeable n m) => Sudoku n m -> String
-showGrid = punctuateModel (punctuateGrid (SNat @n) (SNat @m)) . fmap (chr . fromIntegral . showCell) . toList . concat . gridToRows
+showGrid = punctuateModel (punctuateGrid (SNat @n) (SNat @m)) . fmap (chr . fromIntegral . showCell) . toList . flattenGrid
 
 grid1 :: Sudoku 3 3
 Just grid1 = readGrid . unlines $
