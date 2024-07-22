@@ -22,7 +22,7 @@ main = shakeArgs shakeOptions{ shakeFiles = outDir } do
 
     (clash, kit) <- clashRules (outDir </> "clash") Verilog
         [ "src" ]
-        "Sudoku3"
+        "Sudoku6"
         [ "-Wno-partial-type-signatures"
         , "-fclash-intwidth=32" -- To play nicely with Spartan 3 and 6
         , "-fclash-spec-limit=100"

@@ -148,6 +148,10 @@ topEntity
     -> "RX"         ::: Signal System Bit
     -> "TX"         ::: Signal System Bit
 topEntity clk rst en = withClockResetEnable clk rst en $
-    snd . toSignals (serialize (SNat @6_250_000) board) . (, pure ())
+    -- snd . toSignals (serialize (SNat @6_250_000) board) . (, pure ())
+    snd . toSignals (serialize serialRate board) . (, pure ())
+  where
+    -- serialRate = SNat @6_250_000
+    serialRate = SNat @9600
 
 makeTopEntity 'topEntity
