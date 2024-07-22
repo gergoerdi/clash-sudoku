@@ -56,31 +56,31 @@ controller = Circuit go
       where
         _dbg = bundle (bundle grid, st)
 
-        (unbundle -> (shift_in', out_enabled, in_ack, enable_propagate, commit_guess, stack_cmd), st) = mealyStateB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, {- register Progress -} result, sp)
+        (unbundle -> (shift_in', out_enabled, in_ack, enable_propagate, commit_guess, stack_cmd), st) = mealyStateB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, result, sp, bundle next_guesses)
         shift_out = enable out_enabled head_cell
 
-        step (shift_in, out_ack, result, sp) = do
+        step (shift_in, out_ack, result, sp, next_guesses) = do
           st <- get
           x <-
             get >>= {- (\x -> traceShowM (x, result) >> pure x) >>= -} \case
                 ShiftIn i -> do
                     when (isJust shift_in) $ put $ maybe (Busy sp) ShiftIn $ countSuccChecked i
-                    pure (shift_in, False, Ack True, False, False, const Nothing)
+                    pure (shift_in, False, Ack True, False, False, Nothing)
                 WaitPush top_sp -> do
                     put $ Busy top_sp
-                    pure (Nothing, False, Ack False, True, True, Just . Push)
+                    pure (Nothing, False, Ack False, True, True, Just $ Push next_guesses)
                 Busy top_sp -> do
                     case result of
                         Guess -> do
                             put $ WaitPush top_sp
-                            pure (Nothing, False, Ack False, True, False, Just . Push)
+                            pure (Nothing, False, Ack False, True, False, Just $ Push next_guesses)
                         Failure -> do
-                            pure (Nothing, False, Ack False, True, False, const $ Just Pop)
+                            pure (Nothing, False, Ack False, True, False, Just Pop)
                         Progress -> do
-                            pure (Nothing, False, Ack False, True, False, const Nothing)
+                            pure (Nothing, False, Ack False, True, False, Nothing)
                         Solved -> do
                             put $ ShiftOut 0
-                            pure (Nothing, False, Ack False, True, False, const Nothing)
+                            pure (Nothing, False, Ack False, True, False, Nothing)
                 ShiftOut i {- | Ack True <- out_ack -} -> do
                     shift_in <- case out_ack of
                         Ack True -> do
@@ -88,17 +88,13 @@ controller = Circuit go
                             pure $ Just conflicted
                         _ -> do
                             pure Nothing
-                    pure (shift_in, True, Ack False, False, False, const Nothing)
+                    pure (shift_in, True, Ack False, False, False, Nothing)
           pure (x, (st))
 
         (head_cell, result, grid, can_guess, next_guesses) = propagator (register False enable_propagate) (commit_guess) shift_in' popped
         popped = stack_rd
 
-        -- stack_cmd' :: Signal dom (Maybe (StackCmd (Sudoku n m)))
-        stack_cmd' = stack_cmd <*> bundle next_guesses
-
-        -- sp :: Signal dom (Index (StackSize n m))
-        (stack_rd, sp) = stack (SNat @(StackSize n m)) (emptySudoku @n @m) stack_cmd'
+        (stack_rd, sp) = stack (SNat @(StackSize n m)) (emptySudoku @n @m) stack_cmd
 
 -- From git@github.com:bittide/bittide-hardware.git
 uartDf
@@ -139,7 +135,8 @@ serialize baud par_circuit = circuit \rx -> do
 board :: (HiddenClockResetEnable dom) => Circuit (Df dom (Unsigned 8)) (Df dom (Unsigned 8))
 board = circuit \in_byte -> do
     (out_cell, _dbg) <- controller @3 @3 <| Df.mapMaybe parseCell -< in_byte
-    Df.map (either ascii id) <| punctuate (punctuateGrid (SNat @3) (SNat @3)) <| Df.map showCell -< out_cell
+    -- Df.map (either ascii id) <| punctuate (punctuateGrid (SNat @3) (SNat @3)) <| Df.map showCell -< out_cell
+    Df.map showCell -< out_cell
 
 topEntity
     :: "CLK_100MHZ" ::: Clock System
