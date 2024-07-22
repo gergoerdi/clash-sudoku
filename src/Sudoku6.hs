@@ -42,7 +42,7 @@ data St n m
     | Busy (Index (StackSize n m))
     | WaitPush (Index (StackSize n m))
     | ShiftOut (Cnt n m)
-    deriving (Generic, NFDataX, Show, Eq, ShowX)
+    deriving (Generic, NFDataX, Show, Eq)
 
 type Dbg n m = (Sudoku n m, St n m)
 
@@ -56,11 +56,9 @@ controller = Circuit go
       where
         _dbg = bundle (bundle grid, st)
 
-      --   shift_in' :: Signal dom (Maybe (Cell n m))
         (unbundle -> (shift_in', out_enabled, in_ack, enable_propagate, commit_guess, stack_cmd), st) = mealyStateB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, {- register Progress -} result, sp)
         shift_out = enable out_enabled head_cell
 
-        -- step :: (Maybe (Cell n m), Bool, PropagatorResult, Index (StackSize n m)) -> State (St n m) (Maybe (Cell n m), Bool, Bool, Sudoku n m -> Maybe (StackCmd (Sudoku n m)))
         step (shift_in, out_ack, result, sp) = do
           st <- get
           x <-
@@ -113,45 +111,6 @@ uartDf baud = Circuit \((request, rx_bit), _out_ack) ->
     let (received, tx_bit, in_ack) = uart baud rx_bit (Df.dataToMaybe <$> request)
     in ((Ack <$> in_ack, pure ()), (received, tx_bit))
 
-model_encodeSerial :: Int -> Unsigned 8 -> [Bit]
-model_encodeSerial stretch x = mconcat
-    [ pause
-    , startBit
-    , mconcat dataBits
-    , stopBit
-    ]
-  where
-    slow = L.replicate stretch
-    pause = slow high
-    startBit = slow low
-    dataBits = L.map (slow . lsb) $ L.take 8 . L.iterate (`shiftR` 1) $ x
-    stopBit = slow high
-
-model_encodeSerials :: Int -> [Unsigned 8] -> [Bit]
-model_encodeSerials stretch xs = (<> L.repeat high) $
-    L.concatMap (\x -> model_encodeSerial stretch x <> L.replicate (10 * 5 * stretch) high) xs
-
-model_decodeSerial :: Int -> [Bit] -> [Unsigned 8]
-model_decodeSerial stretch = wait
-  where
-    wait [] = []
-    wait bs@(b:bs')
-      | b == low = start bs
-      | otherwise = wait bs'
-
-    start bs
-      | (bs, bs') <- L.splitAt stretch bs
-      = dataBits 8 0 bs'
-
-    dataBits 0 x bs = x : end bs
-    dataBits n x bs
-      | (bs, bs') <- L.splitAt stretch bs
-      , let x' = x `shiftR` 1
-            x'' = if L.all (== high) bs then x' `setBit` 7 else x'
-      = dataBits (n - 1) x'' bs'
-
-    end bs = wait bs
-
 buffer :: (HiddenClockResetEnable dom, NFDataX a) => Circuit (CSignal dom (Maybe a)) (Df dom a)
 buffer = Circuit \(x, ack) ->
     let r = register Nothing do
@@ -171,73 +130,24 @@ serialize baud par_circuit = circuit \rx -> do
     out_byte <- Df.map pack <| par_circuit <| Df.map unpack <| buffer -< in_byte
     idC -< tx
 
-board :: (HiddenClockResetEnable dom) => Circuit (Df dom (Unsigned 8)) (Df dom (Unsigned 8), CSignal dom (Dbg 3 3))
+-- board :: (HiddenClockResetEnable dom) => Circuit (Df dom (Unsigned 8)) (Df dom (Unsigned 8), CSignal dom (Dbg 3 3))
+-- board = circuit \in_byte -> do
+--     (out_cell, dbg) <- controller @3 @3 <| Df.mapMaybe parseCell -< in_byte
+--     out_byte <- Df.map (either ascii id) <| punctuate (punctuateGrid (SNat @3) (SNat @3)) <| Df.map showCell -< out_cell
+--     idC -< (out_byte, dbg)
+
+board :: (HiddenClockResetEnable dom) => Circuit (Df dom (Unsigned 8)) (Df dom (Unsigned 8))
 board = circuit \in_byte -> do
-    (out_cell, grid) <- controller @3 @3 <| Df.mapMaybe parseCell -< in_byte
-    out_byte <- Df.map (either ascii id) <| punctuate (punctuateGrid (SNat @3) (SNat @3)) <| Df.map showCell -< out_cell
-    idC -< (out_byte, grid)
+    (out_cell, _dbg) <- controller @3 @3 <| Df.mapMaybe parseCell -< in_byte
+    Df.map (either ascii id) <| punctuate (punctuateGrid (SNat @3) (SNat @3)) <| Df.map showCell -< out_cell
 
--- board =
---     Df.mapMaybe parseCell |>
---     controller @3 @3 |>
---     Df.map showCell |>
---     punctuate (punctuateGrid (SNat @3) (SNat @3)) |>
---     Df.map (either ascii id)
+topEntity
+    :: "CLK_100MHZ" ::: Clock System
+    -> "RESET"      ::: Reset System
+    -> "ENABLE"     ::: Enable System
+    -> "RX"         ::: Signal System Bit
+    -> "TX"         ::: Signal System Bit
+topEntity clk rst en = withClockResetEnable clk rst en $
+    snd . toSignals (serialize (SNat @6_250_000) board) . (, pure ())
 
--- topEntity
---     :: "CLK_100MHZ" ::: Clock System
---     -> "RESET"      ::: Reset System
---     -> "ENABLE"     ::: Enable System
---     -> "RX"         ::: Signal System Bit
---     -> "TX"         ::: Signal System Bit
--- topEntity clk rst en = withClockResetEnable clk rst en $
---     snd . toSignals (serialize (SNat @5_000_000) board) . (, pure ())
-
--- makeTopEntity 'topEntity
-
--- simSerial =
---     fmap (chr . fromIntegral) .
---     model_decodeSerial 20 .
---     simulate @System (hideClockResetEnable topEntity) .
---     model_encodeSerials 20 $
---     L.take 81 $ L.cycle . fmap ascii $ "Hello"
-
-instance (Writeable n m) => Show (Sudoku n m) where
-    show = showGrid
-
-instance (Writeable n m) => ShowX (Sudoku n m) where
-    showX = showGrid
-    showsPrecX _ grid k = showX grid <> k
-
-sim_board = simulateCSE @System $ exposeClockResetEnable board
-
-readGrid :: forall n m. (Readable n m) => String -> Maybe (Sudoku n m)
-readGrid = go []
-  where
-    go xs cs
-        | Just cells <- V.fromList xs
-        = Just $ unflattenGrid . reverse $ cells
-
-        | (c:cs) <- cs
-        = go (maybe xs (:xs) $ parseCell . ascii $ c) cs
-
-        | [] <- cs
-        = Nothing
-
-showGrid :: forall n m. (Writeable n m) => Sudoku n m -> String
-showGrid = punctuateModel (punctuateGrid (SNat @n) (SNat @m)) . fmap (chr . fromIntegral . showCell) . toList . flattenGrid
-
-grid1 :: Sudoku 3 3
-Just grid1 = readGrid . unlines $
-    [ "0 2 0  9 0 8  0 0 0"
-    , "8 7 0  0 0 1  0 5 4"
-    , "5 0 6  4 0 0  0 1 0"
-    , ""
-    , "0 0 2  0 0 0  0 9 5"
-    , "0 0 0  0 0 0  0 0 0"
-    , "9 4 0  0 0 0  8 0 0"
-    , ""
-    , "0 8 0  0 0 4  5 0 3"
-    , "1 3 0  2 0 0  0 8 6"
-    , "0 0 0  3 0 7  0 2 0"
-    ]
+makeTopEntity 'topEntity

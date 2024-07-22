@@ -58,7 +58,7 @@ controller shift_in out_ready = ((shift_out', in_ready), dbg)
 
     shift_in' :: Signal dom (Maybe (Cell n m))
     (shift_in', out_enabled, in_ready, enable_propagate, commit_guess, stack_cmd) = mealyStateB step (ShiftIn @n @m 0) (shift_in, out_ready, {- register Progress -} result, sp)
-    shift_out' = guardA out_enabled shift_out
+    shift_out' = enable out_enabled shift_out
 
     -- step :: (Maybe (Cell n m), Bool, PropagatorResult, Index (StackSize n m)) -> State (St n m) (Maybe (Cell n m), Bool, Bool, Sudoku n m -> Maybe (StackCmd (Sudoku n m)))
     step (shift_in, out_ready, result, sp) = do

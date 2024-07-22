@@ -68,7 +68,7 @@ source-dirs:
 
 executables:
   sudoku:
-    main: simulator.hs
+    main: simulator3.hs
     dependencies:
       - retroclash-sim
       - text
