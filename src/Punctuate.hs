@@ -88,7 +88,7 @@ punctuate spec = Df.expander (spec, punctuation spec) \(spec, punc) ->
         Just sep -> \_ -> ((spec', punc'), Left sep, isNothing punc')
         Nothing -> \x -> ((spec', punc'), Right x, False)
 
-punctuateModel :: _ => spec -> [Char] -> [Char]
+punctuateModel :: _ => spec -> [a] -> [a]
 punctuateModel spec cs = case punctuation spec of
     Just sep -> sep : punctuateModel spec' cs
     Nothing -> case cs of
