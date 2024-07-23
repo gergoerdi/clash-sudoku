@@ -77,7 +77,7 @@ instance (Punctuating c (Index n)) where
 
 instance (Punctuating Char k, SymbolLength_ sep) => Punctuating Char (Punctuate rep sep k) where
     punctuation = \case
-        MkPunctuate (_, Right i) -> Just $ symbolAt (Proxy @(UnconsSymbol sep)) i
+        MkPunctuate (_, Right i) -> Just $ noDeDup symbolAt (Proxy @(UnconsSymbol sep)) i
         MkPunctuate (_, Left k) -> punctuation k
 
 punctuate :: forall dom spec c a. _ => spec -> Circuit (Df dom a) (Df dom (Either c a))
