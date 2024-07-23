@@ -1,45 +1,99 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf #-}
+{-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf, ApplicativeDo, NumericUnderscores, TupleSections #-}
+{-# LANGUAGE UndecidableInstances, ViewPatterns #-}
+{-# OPTIONS -fplugin=Protocols.Plugin #-}
 module Main where
 
 import Clash.Prelude hiding (lift)
+import Clash.Class.Counter
+
+import Data.Maybe
+import Data.Char (ord, chr)
+import Data.Traversable (for)
+import Control.Arrow (second, (***))
+import Control.Monad.State
+import Control.Arrow.Transformer.Automaton
+import qualified Data.List as L
+import qualified Clash.Sized.Vector as V
+
+import Protocols
+import Protocols.Internal (simulateCSE)
 
 import Sudoku.Grid
-import Sudoku.Serial (Readable, Writeable, serialIn, serialOut)
-import Sudoku.Solve
-import Sudoku.Stack
+import Punctuate
+import Sudoku
 
-import Control.Monad.Writer
-import Control.Monad.State
-import Control.Arrow
-import Data.Char (chr)
-import Data.Maybe (catMaybes, maybeToList)
-import Control.Monad.Loops
+type Showable n m = (Readable n m, 1 <= n, 1 <= m)
+type Readable n m = (KnownNat n, KnownNat m, (n * m) <= 9)
 
-import qualified Data.List as L
-
-import Sudoku -- (controller, circuit')
-
-readGrid :: (Readable n m) => String -> Maybe (Sudoku n m)
-readGrid s = consume input $ simulate @System serialIn input
+model_encodeSerial :: Int -> Unsigned 8 -> [Bit]
+model_encodeSerial stretch x = mconcat
+    [ pause
+    , startBit
+    , mconcat dataBits
+    , stopBit
+    ]
   where
-    input = fmap (Just . ascii) s
+    slow = L.replicate stretch
+    pause = slow high
+    startBit = slow low
+    dataBits = L.map (slow . lsb) $ L.take 8 . L.iterate (`shiftR` 1) $ x
+    stopBit = slow high
 
-    consume :: [Maybe a] -> [Maybe b] -> Maybe b
-    consume [] _ = Nothing
-    consume (_:xs) (y:ys) = y <|> consume xs ys
+model_encodeSerials :: Int -> [Unsigned 8] -> [Bit]
+model_encodeSerials stretch xs = (<> L.repeat high) $
+    L.concatMap (\x -> model_encodeSerial stretch x <> L.replicate (10 * 1 * stretch) high) xs
 
-
-showGrid :: (Writeable n m) => Sudoku n m -> String
-showGrid grid = toString . consume $ simulateB @System (serialOut (pure True)) input
+model_decodeSerial :: Int -> [Bit] -> [Unsigned 8]
+model_decodeSerial stretch = wait
   where
-    input = Just grid : L.repeat Nothing
+    wait [] = []
+    wait bs@(b:bs')
+      | b == low = start bs
+      | otherwise = wait bs'
 
-    consume ((c, ready):xs) = c : if ready then [] else consume xs
-    toString = fmap (chr . fromIntegral) . catMaybes
+    start bs
+      | (bs, bs') <- L.splitAt stretch bs
+      = dataBits 8 0 bs'
 
-printGrid :: (Writeable n m) => Sudoku n m -> IO ()
-printGrid = putStr . showGrid
+    dataBits 0 x bs = x : end bs
+    dataBits n x bs
+      | (bs, bs') <- L.splitAt stretch bs
+      , let x' = x `shiftR` 1
+            x'' = if L.all (== high) bs then x' `setBit` 7 else x'
+      = dataBits (n - 1) x'' bs'
+
+    end bs = wait bs
+
+-- instance (Showable n m) => Show (Sudoku n m) where
+--     show = showGrid
+
+sim_board :: Sudoku 3 3 -> String
+sim_board =
+    fmap (chr . fromIntegral) .
+    simulateCSE @System (exposeClockResetEnable board) .
+    fmap ascii . showGrid
+
+sim_topEntity :: Sudoku 3 3 -> String
+sim_topEntity =
+    fmap (chr . fromIntegral) . model_decodeSerial 16 .
+    simulate @System (hideClockResetEnable topEntity) .
+    model_encodeSerials 16 . fmap ascii . showGrid @3 @3
+
+readGrid :: forall n m. (Readable n m) => String -> Maybe (Sudoku n m)
+readGrid = go []
+  where
+    go xs cs
+        | Just cells <- V.fromList xs
+        = Just $ unflattenGrid . reverse $ cells
+
+        | (c:cs) <- cs
+        = go (maybe xs (:xs) $ parseCell . ascii $ c) cs
+
+        | [] <- cs
+        = Nothing
+
+showGrid :: forall n m. (Showable n m) => Sudoku n m -> String
+showGrid = punctuateModel (punctuateGrid (SNat @n) (SNat @m)) . fmap (chr . fromIntegral . showCell) . toList . flattenGrid
 
 grid1 :: Sudoku 3 3
 Just grid1 = readGrid . unlines $
@@ -102,29 +156,7 @@ Just hard = readGrid . unlines $
     , ". . . |. . . |. . . "
     ]
 
-solve :: Sudoku 3 3 -> Maybe (Sudoku 3 3)
-solve grid = go $ simulate @System (circuit @3 @3) $ mconcat
-    [ [Just grid]
-    , L.replicate 30 Nothing
-    , [Just grid]
-    , L.repeat Nothing
-    ]
-  where
-    go (Working:xs) = go xs
-    go (Unsolvable:_) = Nothing
-    go (Solved grid:_) = Just grid
-
-doSolve :: Sudoku 3 3 -> IO ()
-doSolve grid = case solve grid of
-    Nothing -> putStrLn "Unsolvable"
-    Just grid -> putStrLn "Solution:" >> printGrid grid
-
 main :: IO ()
 main = do
-    -- printGrid grid1
-    doSolve grid1
-    -- printGrid grid2
-    doSolve grid2
-    -- printGrid unsolvable
-    doSolve unsolvable
-    return ()
+    -- putStr $ sim_topEntity grid1
+    putStr $ sim_board grid2

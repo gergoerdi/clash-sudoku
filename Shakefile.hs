@@ -27,6 +27,7 @@ main = shakeArgs shakeOptions{ shakeFiles = outDir } do
         , "-fclash-intwidth=32" -- To play nicely with Spartan 3 and 6
         , "-fclash-spec-limit=100"
         -- , "-fclash-compile-ultra"
+        , "-fplugin=Protocols.Plugin"
         ] $
         return ()
     phony "clashi" $ clash ["--interactive", "src/Sudoku.hs"]
