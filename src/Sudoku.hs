@@ -12,7 +12,6 @@ import Control.Monad.State
 
 import Protocols
 import qualified Protocols.Df as Df
-import Clash.Cores.UART(uart, ValidBaud)
 
 import RetroClash.Utils
 
@@ -38,8 +37,6 @@ data St n m
     | ShiftOut (Cnt n m)
     deriving (Generic, NFDataX, Show, Eq)
 
-type Dbg n m = (Sudoku n m, St n m)
-
 controller'
     :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= m * m * m * n, n * m * m * n ~ k + 1, 1 <= StackSize n m)
     => (HiddenClockResetEnable dom)
@@ -47,12 +44,9 @@ controller'
     -> Signal dom Ack
     -> ( Signal dom Ack
        , Signal dom (Df.Data (Cell n m))
-       , Signal dom (Dbg n m)
        )
-controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out, _dbg)
+controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
   where
-    _dbg = bundle (bundle grid, st)
-
     (unbundle -> (shift_in', out_enabled, in_ack, enable_propagate, commit_guess, stack_cmd), st) = mealyStateB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, result, sp, bundle next_guesses)
     shift_out = enable out_enabled head_cell
 
@@ -96,53 +90,24 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out, _dbg)
 controller
     :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= m * m * m * n, n * m * m * n ~ k + 1, 1 <= StackSize n m)
     => (HiddenClockResetEnable dom)
-    => Circuit (Df dom (Cell n m)) (Df dom (Cell n m), CSignal dom (Dbg n m))
-controller = Circuit \(shift_in, (out_ack, _)) ->
-    let (in_ack, shift_out, dbg) = controller' shift_in out_ack
-    in (in_ack, (shift_out, dbg))
-
--- From git@github.com:bittide/bittide-hardware.git
-uartDf
-    :: (HiddenClockResetEnable dom, ValidBaud dom baud)
-    => SNat baud
-    -> Circuit
-        (Df dom (BitVector 8), CSignal dom Bit)
-        (CSignal dom (Maybe (BitVector 8)), CSignal dom Bit)
-uartDf baud = Circuit \((request, rx_bit), _out_ack) ->
-    let (received, tx_bit, in_ack) = uart baud rx_bit (Df.dataToMaybe <$> request)
-    in ((Ack <$> in_ack, pure ()), (received, tx_bit))
-
-buffer :: (HiddenClockResetEnable dom, NFDataX a) => Circuit (CSignal dom (Maybe a)) (Df dom a)
-buffer = Circuit \(x, ack) ->
-    let r = register Nothing do
-            current <- r
-            next <- x
-            ~(Ack ack) <- ack
-            pure $ if ack then next else current <|> next
-    in (pure (), Df.maybeToData <$> r)
-
-serialize
-    :: (HiddenClockResetEnable dom, ValidBaud dom baud, BitPack a, BitSize a ~ 8, BitPack b, BitSize b ~ 8)
-    => SNat baud
-    -> Circuit (Df dom a) (Df dom b)
-    -> Circuit (CSignal dom Bit) (CSignal dom Bit)
-serialize baud par_circuit = circuit \rx -> do
-    (in_byte, tx) <- uartDf baud -< (out_byte, rx)
-    out_byte <- Df.map pack <| par_circuit <| Df.map unpack <| buffer -< in_byte
-    idC -< tx
+    => Circuit (Df dom (Cell n m)) (Df dom (Cell n m))
+controller = Circuit \(shift_in, out_ack) -> controller' shift_in out_ack
 
 board :: (HiddenClockResetEnable dom) => Circuit (Df dom (Unsigned 8)) (Df dom (Unsigned 8))
-board = circuit \in_byte -> do
-    (out_cell, _dbg) <- controller @3 @3 <| Df.mapMaybe parseCell -< in_byte
-    Df.map (either ascii id) <| punctuate (punctuateGrid (SNat @3) (SNat @3)) <| Df.map showCell -< out_cell
+board =
+    Df.mapMaybe (parseCell @3 @3)
+    |> controller @3 @3
+    |> Df.map showCell
+    |> punctuate (punctuateGrid (SNat @3) (SNat @3)) |> Df.map (either ascii id)
 
 topEntity
     :: "CLK_100MHZ" ::: Clock System
     -> "RESET"      ::: Reset System
     -> "ENABLE"     ::: Enable System
-    -> "RX"         ::: Signal System Bit
-    -> "TX"         ::: Signal System Bit
-topEntity clk rst en = withClockResetEnable clk rst en $
-    snd . toSignals (serialize (SNat @9600) board) . (, pure ())
+    -> "IN"         ::: Signal System (Maybe (Unsigned 8))
+    -> "OUT"        ::: Signal System (Maybe (Unsigned 8))
+topEntity clk rst en = withClockResetEnable clk rst en \in_byte ->
+    let (_, out_byte) = toSignals board (Df.maybeToData <$> in_byte, pure $ Ack True)
+    in Df.dataToMaybe <$> out_byte
 
 makeTopEntity 'topEntity
