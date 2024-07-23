@@ -1,11 +1,13 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DerivingStrategies, GeneralizedNewtypeDeriving #-}
 module Sudoku.Matrix where
 
 import Clash.Prelude
 
 newtype Matrix n m a = FromRows{ matrixRows :: Vec n (Vec m a) }
-    deriving (Generic, NFDataX, BitPack)
+    deriving stock (Generic)
+    deriving newtype (NFDataX, BitPack)
 
 instance Functor (Matrix n m) where
     fmap f = FromRows . fmap (fmap f) . matrixRows

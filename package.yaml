@@ -22,6 +22,12 @@ dependencies:
 
   - lens
   - mtl
+  - arrows
+  - clash-protocols
+  - clash-cores
+
+  - hedgehog
+  - deepseq
 
 # Anything that Clash uses by default should go here
 default-extensions:
@@ -63,8 +69,3 @@ source-dirs:
 executables:
   sudoku:
     main: simulator.hs
-    dependencies:
-      - retroclash-sim
-      - text
-      - array
-      - monad-loops

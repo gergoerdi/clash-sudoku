@@ -67,6 +67,37 @@ packages:
       size: 852
   original:
     hackage: clash-shake-0.3.2
+- completed:
+    commit: 19b386c4aa3ff690758ae089c7754303f3500cc9
+    git: https://github.com/cchalmers/circuit-notation.git
+    name: circuit-notation
+    pantry-tree:
+      sha256: 556091e72e522628ed1c055bd0cee4c768f256ddc6f68d8ab9915c1acca98cf1
+      size: 1044
+    version: 0.1.0.0
+  original:
+    commit: 19b386c4aa3ff690758ae089c7754303f3500cc9
+    git: https://github.com/cchalmers/circuit-notation.git
+- completed:
+    hackage: clash-prelude-hedgehog-1.8.1@sha256:9ec3aa3f8195481f5ce4942b34a49c97dd132dd1c8f1fa58aeecbd82c2602e86,1410
+    pantry-tree:
+      sha256: 886fd3f21d7acdcd86a5e8ff582c903edf8195a22cd38fc04ddcbf7a27f7dd20
+      size: 735
+  original:
+    hackage: clash-prelude-hedgehog-1.8.1
+- completed:
+    commit: 3f5dc67c0e526e43a4dd88eb3902e39ed512c166
+    git: https://github.com/clash-lang/clash-compiler.git
+    name: clash-cores
+    pantry-tree:
+      sha256: 15fa63a9f13d2f9a68c231758c5b971cf95db21ffd020356e848dd95da491999
+      size: 3596
+    subdir: clash-cores
+    version: 1.8.1
+  original:
+    commit: 3f5dc67c0e526e43a4dd88eb3902e39ed512c166
+    git: https://github.com/clash-lang/clash-compiler.git
+    subdir: clash-cores
 snapshots:
 - completed:
     sha256: 7d4b649cf368f9076d8aa049aa44efe58950971d105892734e9957b2a26a2186

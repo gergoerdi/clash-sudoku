@@ -1,6 +1,6 @@
 {-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf #-}
 {-# LANGUAGE ApplicativeDo #-}
-module Sudoku.Solve (controller) where
+module Sudoku.Solve (propagator, PropagatorResult(..)) where
 
 import Clash.Prelude hiding (mapAccumR)
 import RetroClash.Utils
@@ -59,22 +59,25 @@ propagate cell neighbour_masks = applyMasks <$> cell <*> bundle neighbour_masks
 propagator
     :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, n * m * m * n ~ k + 1)
     => (HiddenClockResetEnable dom)
-    => Signal dom (Maybe (Cell n m))
+    => Signal dom Bool
+    -> Signal dom Bool
+    -> Signal dom (Maybe (Cell n m))
     -> Signal dom (Maybe (Sudoku n m))
-    -> ( Signal dom PropagatorResult
+    -> ( Signal dom (Cell n m)
+       , Signal dom PropagatorResult
        , Grid n m (Signal dom (Cell n m))
        , Signal dom Bool
        , Grid n m (Signal dom (Cell n m))
        )
-propagator shift_in pop = (result, grid, can_guess, next_guesses)
+propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid grid), result, grid, can_guess, next_guesses)
   where
     pops :: Grid n m (Signal dom (Maybe (Cell n m)))
     pops = unbundle . fmap sequenceA $ pop
 
-    ((shift_out, keep_guessing), unzip3 -> (unflattenGrid -> grid, changeds, unflattenGrid -> next_guesses)) =
+    ((shift_out, keep_guessing), unzip4 -> (unflattenGrid -> grid, unflattenGrid -> uniques, changeds, unflattenGrid -> next_guesses)) =
         mapAccumR unit (shift_in, should_guess) (flattenGrid $ ((,) <$> pops <*> neighbourMasks grid uniques))
 
-    uniques = fmap (isUnique <$>) grid
+    -- uniques = fmap (isUnique <$>) grid
     faileds = fmap (.== conflicted) grid
 
     should_guess = not <$> any_changed
@@ -97,40 +100,46 @@ propagator shift_in pop = (result, grid, can_guess, next_guesses)
         :: forall k. (KnownNat k)
         => (Signal dom (Maybe (Cell n m)), Signal dom Bool)
         -> (Signal dom (Maybe (Cell n m)), Vec k (Signal dom (Mask n m)))
-        -> ((Signal dom (Maybe (Cell n m)), Signal dom Bool), (Signal dom (Cell n m), Signal dom Bool, Signal dom (Cell n m)))
-    unit (shift_in, try_guess) (pop, neighbour_masks) = ((shift_out, keep_guessing), (r, changed, cont))
+        -> ((Signal dom (Maybe (Cell n m)), Signal dom Bool), (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool, Signal dom (Cell n m)))
+    unit (shift_in, try_guess) (pop, neighbour_masks) = ((shift_out, keep_guessing), (r, unique, changed, cont))
       where
         load = shift_in .<|>. pop
         shift_out = enable (isJust <$> shift_in) r
 
         r = register conflicted r'
-        r' = load .<|>. enable guess_this first_guess .<|. propagate r neighbour_masks
+        r' = load .<|>. enable (commit_guess .&&. guess_this) first_guess .<|>. enable enable_propagate (propagate r neighbour_masks) .<|. r
         changed = register False $ r ./=. r'
+        unique = isUnique <$> r
 
         (first_guess, next_guess) = unbundle $ mux try_guess (splitCell <$> r) (bundle (r, r))
 
-        can_guess = next_guess ./= conflicted
-        guess_this = try_guess .&&. can_guess
+        can_guess = not <$> unique
+        guess_this = enable_propagate .&&. try_guess .&&. can_guess
         cont = mux guess_this next_guess r
         keep_guessing = try_guess .&&. (not <$> guess_this)
 
-controller
-    :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, n * m * m * n ~ k + 1)
-    => (HiddenClockResetEnable dom)
-    => Signal dom (Maybe (Sudoku n m))
-    -> ( Signal dom (Maybe (Sudoku n m))
-       , Signal dom (Maybe (StackCmd (Sudoku n m)))
-       )
-controller load = (enable (result .== Solved) (bundle grid), stack_cmd)
-  where
-    (result, grid, can_guess, next_guesses) = propagator (pure Nothing) load
+-- data StackCmd'
+--   = Push'
+--   | Pop'
 
-    stack_cmd = do
-        result <- result
-        can_guess <- can_guess
-        next_guesses <- bundle next_guesses
-        pure $ case result of
-            Solved -> Nothing
-            Guess -> Just $ Push next_guesses
-            Failure -> Just Pop
-            Progress -> Nothing
+-- controller
+--     :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, n * m * m * n ~ k + 1)
+--     => (HiddenClockResetEnable dom)
+--     => Signal dom (Maybe (Sudoku n m))
+--     -> ( Grid n m (Signal dom (Cell n m))
+--        , Signal dom Bool
+--        , Signal dom (Maybe StackCmd')
+--        , Grid n m (Signal dom (Cell n m))
+--        )
+-- controller load = (grid, result .== Solved, stack_cmd', next_guesses)
+--   where
+--     (_, result, grid, can_guess, next_guesses) = propagator (pure True) (pure True) (pure Nothing) load
+
+--     stack_cmd' = do
+--         result <- result
+--         can_guess <- can_guess
+--         pure $ case result of
+--             Solved -> Nothing
+--             Guess -> Just Push'
+--             Failure -> Just Pop'
+--             Progress -> Nothing
