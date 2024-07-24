@@ -76,7 +76,7 @@ sim_board =
 sim_topEntity :: Sudoku 3 3 -> String
 sim_topEntity =
     fmap (chr . fromIntegral) . model_decodeSerial 16 .
-    simulate @System (hideClockResetEnable topEntity) .
+    simulate @System (hideClockResetEnable $ \clk rst _en -> topEntity clk rst) .
     model_encodeSerials 16 . fmap ascii . showGrid @3 @3
 
 readGrid :: forall n m. (Readable n m) => String -> Maybe (Sudoku n m)
