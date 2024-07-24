@@ -14,12 +14,13 @@ import Control.Monad.State
 import Control.Arrow.Transformer.Automaton
 import qualified Data.List as L
 import qualified Clash.Sized.Vector as V
+import Data.Proxy
 
 import Protocols
 import Protocols.Internal (simulateCSE)
 
 import Sudoku.Grid
-import Punctuate
+import Format
 import Sudoku
 
 type Showable n m = (Readable n m, 1 <= n, 1 <= m)
@@ -93,7 +94,7 @@ readGrid = go []
         = Nothing
 
 showGrid :: forall n m. (Showable n m) => Sudoku n m -> String
-showGrid = punctuateModel (punctuateGrid (SNat @n) (SNat @m)) . fmap (chr . fromIntegral . showCell) . toList . flattenGrid
+showGrid = formatModel (Proxy @(FormatGrid n m)) . fmap (chr . fromIntegral . showCell) . toList . flattenGrid
 
 grid1 :: Sudoku 3 3
 Just grid1 = readGrid . unlines $
