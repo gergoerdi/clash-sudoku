@@ -139,10 +139,9 @@ board = circuit \in_byte -> do
 topEntity
     :: "CLK_100MHZ" ::: Clock System
     -> "RESET"      ::: Reset System
-    -> "ENABLE"     ::: Enable System
     -> "RX"         ::: Signal System Bit
     -> "TX"         ::: Signal System Bit
-topEntity clk rst en = withClockResetEnable clk rst en $
+topEntity clk rst = withClockResetEnable clk rst enableGen $
     snd . toSignals (serialize (SNat @9600) board) . (, pure ())
 
 makeTopEntity 'topEntity
