@@ -9,6 +9,7 @@ import Clash.Class.Counter.Internal
 
 import Data.Maybe
 import Control.Monad.State
+import Data.Proxy
 
 import Protocols
 import qualified Protocols.Df as Df
@@ -19,7 +20,7 @@ import RetroClash.Utils
 import Sudoku.Grid
 import Sudoku.Solve
 import Sudoku.Stack
-import Punctuate
+import Format
 
 -- import Debug.Trace
 
@@ -131,10 +132,13 @@ serialize baud par_circuit = circuit \rx -> do
     out_byte <- Df.map pack <| par_circuit <| Df.map unpack <| buffer -< in_byte
     idC -< tx
 
+type FormatGrid n m =
+    ((((Consume :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n
+
 board :: (HiddenClockResetEnable dom) => Circuit (Df dom (Unsigned 8)) (Df dom (Unsigned 8))
 board = circuit \in_byte -> do
     (out_cell, _dbg) <- controller @3 @3 <| Df.mapMaybe parseCell -< in_byte
-    Df.map (either ascii id) <| punctuate (punctuateGrid (SNat @3) (SNat @3)) <| Df.map showCell -< out_cell
+    Df.map (either ascii id) <| format (Proxy @(FormatGrid 3 3)) <| Df.map showCell -< out_cell
 
 topEntity
     :: "CLK_100MHZ" ::: Clock System
