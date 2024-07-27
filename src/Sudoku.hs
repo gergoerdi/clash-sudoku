@@ -36,7 +36,7 @@ data St n m
     = ShiftIn (Cnt n m)
     | Busy (Index (StackSize n m))
     | WaitPush (Index (StackSize n m))
-    | ShiftOut (Cnt n m)
+    | ShiftOut Bool (Cnt n m)
     deriving (Generic, NFDataX, Show, Eq)
 
 type Dbg n m = (Sudoku n m, St n m)
@@ -54,42 +54,43 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out, _dbg)
   where
     _dbg = bundle (bundle grid, st)
 
-    (unbundle -> (shift_in', out_enabled, in_ack, enable_propagate, commit_guess, stack_cmd), st) = mealyStateB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, result, sp, bundle next_guesses)
-    shift_out = enable out_enabled head_cell
+    (unbundle -> (shift_in', shift_out, in_ack, enable_propagate, commit_guess, stack_cmd), st) = mealyStateB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, result, sp, bundle next_guesses)
+    -- shift_out = enable out_enabled head_cell
 
-    step (shift_in, out_ack, result, sp, next_guesses) = do
+    step (shift_in, out_ack, head_cell, result, sp, next_guesses) = do
       st <- get
       x <-
         get >>= {- (\x -> traceShowM (x, result) >> pure x) >>= -} \case
             ShiftIn i -> do
                 when (isJust shift_in) $ put $ maybe (Busy sp) ShiftIn $ countSuccChecked i
-                pure (shift_in, False, Ack True, False, False, Nothing)
+                pure (shift_in, Nothing, Ack True, False, False, Nothing)
             WaitPush top_sp -> do
                 put $ Busy top_sp
-                pure (Nothing, False, Ack False, True, True, Just $ Push next_guesses)
+                pure (Nothing, Nothing, Ack False, True, True, Just $ Push next_guesses)
             Busy top_sp -> do
                 case result of
                     Guess -> do
                         put $ WaitPush top_sp
-                        pure (Nothing, False, Ack False, True, False, Just $ Push next_guesses)
+                        pure (Nothing, Nothing, Ack False, True, False, Just $ Push next_guesses)
                     Failure -> do
                         let underflow = sp == top_sp
                         when underflow do
-                            put $ ShiftOut 0
-                        pure (Nothing, False, Ack False, True, False, Pop <$ guard (not underflow))
+                            put $ ShiftOut False 0
+                        pure (Nothing, Nothing, Ack False, True, False, Pop <$ guard (not underflow))
                     Progress -> do
-                        pure (Nothing, False, Ack False, True, False, Nothing)
+                        pure (Nothing, Nothing, Ack False, True, False, Nothing)
                     Solved -> do
-                        put $ ShiftOut 0
-                        pure (Nothing, False, Ack False, True, False, Nothing)
-            ShiftOut i -> do
+                        put $ ShiftOut True 0
+                        pure (Nothing, Nothing, Ack False, True, False, Nothing)
+            ShiftOut solved i -> do
                 shift_in <- case out_ack of
                     Ack True -> do
-                        put $ maybe (ShiftIn 0) ShiftOut $ countSuccChecked i
+                        put $ maybe (ShiftIn 0) (ShiftOut solved) $ countSuccChecked i
                         pure $ Just conflicted
                     _ -> do
                         pure Nothing
-                pure (shift_in, True, Ack False, False, False, Nothing)
+                let shift_out = Just $ if solved then head_cell else conflicted
+                pure (shift_in, shift_out, Ack False, False, False, Nothing)
       pure (x, (st))
 
     (head_cell, result, grid, can_guess, next_guesses) = propagator (register False enable_propagate) (commit_guess) shift_in' popped
