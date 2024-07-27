@@ -73,13 +73,16 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out, _dbg)
                         put $ WaitPush top_sp
                         pure (Nothing, False, Ack False, True, False, Just $ Push next_guesses)
                     Failure -> do
-                        pure (Nothing, False, Ack False, True, False, Just Pop)
+                        let underflow = sp == top_sp
+                        when underflow do
+                            put $ ShiftOut 0
+                        pure (Nothing, False, Ack False, True, False, Pop <$ guard (not underflow))
                     Progress -> do
                         pure (Nothing, False, Ack False, True, False, Nothing)
                     Solved -> do
                         put $ ShiftOut 0
                         pure (Nothing, False, Ack False, True, False, Nothing)
-            ShiftOut i {- | Ack True <- out_ack -} -> do
+            ShiftOut i -> do
                 shift_in <- case out_ack of
                     Ack True -> do
                         put $ maybe (ShiftIn 0) ShiftOut $ countSuccChecked i
