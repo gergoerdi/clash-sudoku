@@ -70,15 +70,23 @@ splitCell (Cell s) = (Cell s', Cell (s .&. complement s'))
 ascii :: Char -> Unsigned 8
 ascii = fromIntegral . ord
 
-showCell :: (KnownNat n, KnownNat m, (n * m) <= 9) => Cell n m -> Unsigned 8
+type Showable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, n * m <= (9 + 26))
+
+showCell :: (Showable n m) => Cell n m -> Unsigned 8
 showCell x = case getUnique x of
     _ | x == wild -> ascii '_'
-    _ | x == conflicted -> ascii 'x'
+    _ | x == conflicted -> ascii '!'
     Unset -> ascii '?'
-    Unique x -> ascii '0' + 1 + fromIntegral x
-    Conflict -> ascii '?'
+    Unique x
+      | x' < 9 -> ascii '1' + x'
+      | otherwise -> ascii 'a' + 1 + x' - 10
+      where
+        x' = fromIntegral x
+    Conflict -> ascii '!'
 
-parseCell :: (KnownNat n, KnownNat m, (n * m) <= 9) => Unsigned 8 -> Maybe (Cell n m)
+type Readable n m = (KnownNat n, KnownNat m, n * m <= (9 + 26))
+
+parseCell :: (Readable n m) => Unsigned 8 -> Maybe (Cell n m)
 parseCell x
     | x `elem` [ascii '0', ascii '_', ascii '.']
     = Just wild
@@ -86,7 +94,10 @@ parseCell x
     | ascii '1' <= x && x <= ascii '9'
     = Just $ unique $ fromIntegral $ x - ascii '1'
 
-    | x `elem` [ascii 'x', ascii 'X']
+    | ascii 'a' <= x && x <= ascii 'z'
+    = Just $ unique $ fromIntegral $ (x - ascii 'a') + 9
+
+    | x `elem` [ascii '!']
     = Just conflicted
 
     | otherwise
@@ -125,7 +136,7 @@ unflattenGrid = Grid . fmap fromRowMajorOrder . fromRowMajorOrder . unconcatI
 type Sudoku n m = Grid n m (Cell n m)
 
 showSudoku
-    :: (KnownNat n, KnownNat m, (n * m) <= 9)
+    :: (Showable n m)
     => Sudoku n m
     -> String
 showSudoku =

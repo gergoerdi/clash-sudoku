@@ -23,9 +23,6 @@ import Sudoku.Grid
 import Format
 import Sudoku
 
-type Showable n m = (Readable n m, 1 <= n, 1 <= m)
-type Readable n m = (KnownNat n, KnownNat m, (n * m) <= 9)
-
 model_encodeSerial :: Int -> Unsigned 8 -> [Bit]
 model_encodeSerial stretch x = mconcat
     [ pause
