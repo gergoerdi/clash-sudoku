@@ -74,7 +74,7 @@ propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid grid)
     pops :: Grid n m (Signal dom (Maybe (Cell n m)))
     pops = unbundle . fmap sequenceA $ pop
 
-    ((shift_out, keep_guessing), unzip4 -> (unflattenGrid -> grid, unflattenGrid -> uniques, changeds, unflattenGrid -> next_guesses)) =
+    ((_shift_out, keep_guessing), unzip4 -> (unflattenGrid -> grid, unflattenGrid -> uniques, changeds, unflattenGrid -> next_guesses)) =
         mapAccumR unit (shift_in, should_guess) (flattenGrid $ ((,) <$> pops <*> neighbourMasks grid uniques))
 
     -- uniques = fmap (isUnique <$>) grid
