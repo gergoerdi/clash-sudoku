@@ -57,7 +57,7 @@ propagate
 propagate cell neighbour_masks = applyMasks <$> cell <*> bundle neighbour_masks
 
 propagator
-    :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, n * m * m * n ~ k + 1)
+    :: forall n m dom. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= n * m * m * n)
     => (HiddenClockResetEnable dom)
     => Signal dom Bool
     -> Signal dom Bool
@@ -85,7 +85,7 @@ propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid grid)
 
     fresh = register False $ isJust <$> shift_in .||. isJust <$> pop
     all_unique = foldGrid (.&&.) uniques
-    any_changed = fold (.||.) changeds
+    any_changed = fold @(n * m * m * n - 1) (.||.) changeds
     any_failed  = foldGrid (.||.) faileds
 
     result =
@@ -117,29 +117,3 @@ propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid grid)
         guess_this = enable_propagate .&&. try_guess .&&. can_guess
         cont = mux guess_this next_guess r
         keep_guessing = try_guess .&&. (not <$> guess_this)
-
--- data StackCmd'
---   = Push'
---   | Pop'
-
--- controller
---     :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, n * m * m * n ~ k + 1)
---     => (HiddenClockResetEnable dom)
---     => Signal dom (Maybe (Sudoku n m))
---     -> ( Grid n m (Signal dom (Cell n m))
---        , Signal dom Bool
---        , Signal dom (Maybe StackCmd')
---        , Grid n m (Signal dom (Cell n m))
---        )
--- controller load = (grid, result .== Solved, stack_cmd', next_guesses)
---   where
---     (_, result, grid, can_guess, next_guesses) = propagator (pure True) (pure True) (pure Nothing) load
-
---     stack_cmd' = do
---         result <- result
---         can_guess <- can_guess
---         pure $ case result of
---             Solved -> Nothing
---             Guess -> Just Push'
---             Failure -> Just Pop'
---             Progress -> Nothing
