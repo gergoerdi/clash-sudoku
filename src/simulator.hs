@@ -169,14 +169,16 @@ Just hexodoku = readGrid . unlines $
     ]
 
 solve :: forall n m. (Solvable n m, Showable n m) => Sudoku n m -> Maybe (Sudoku n m)
-solve = Just . consume . simulateCSE @System (exposeClockResetEnable $ controller @n @m) . (<> L.repeat wild) . toList . flattenGrid
+solve = consume . simulateCSE @System (exposeClockResetEnable $ controller @n @m) . (<> L.repeat wild) . toList . flattenGrid
   where
-    consume :: [Cell n m] -> Sudoku n m
     consume = go []
       where
         go acc (x:xs)
+          | x == conflicted
+          = Nothing
+
           | Just cells <- V.fromList (L.reverse acc)
-          = unflattenGrid cells
+          = Just $ unflattenGrid cells
 
           | otherwise
           = go (x:acc) xs
@@ -186,4 +188,5 @@ main = do
     -- putStr $ sim_topEntity grid1
     maybe (putStrLn "Unsolvable") print $ solve grid1
     maybe (putStrLn "Unsolvable") print $ solve grid2
+    maybe (putStrLn "Unsolvable") print $ solve unsolvable
     maybe (putStrLn "Unsolvable") print $ solve hexodoku
