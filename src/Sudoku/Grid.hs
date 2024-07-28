@@ -79,7 +79,7 @@ showCell x = case getUnique x of
     Unset -> ascii '?'
     Unique x
       | x' < 9 -> ascii '1' + x'
-      | otherwise -> ascii 'a' + 1 + x' - 10
+      | otherwise -> ascii 'A' + 1 + x' - 10
       where
         x' = fromIntegral x
     Conflict -> ascii '!'
@@ -96,6 +96,9 @@ parseCell x
 
     | ascii 'a' <= x && x <= ascii 'z'
     = Just $ unique $ fromIntegral $ (x - ascii 'a') + 9
+
+    | ascii 'A' <= x && x <= ascii 'Z'
+    = Just $ unique $ fromIntegral $ (x - ascii 'A') + 9
 
     | x `elem` [ascii '!']
     = Just conflicted
