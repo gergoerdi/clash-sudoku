@@ -4,20 +4,12 @@
 module Main where
 
 import Clash.Prelude hiding (lift)
-import Clash.Class.Counter
+import Protocols.Internal (simulateCSE)
 
-import Data.Maybe
 import Data.Char (ord, chr)
-import Data.Traversable (for)
-import Control.Arrow (second, (***))
-import Control.Monad.State
-import Control.Arrow.Transformer.Automaton
 import qualified Data.List as L
 import qualified Clash.Sized.Vector as V
 import Data.Proxy
-
-import Protocols
-import Protocols.Internal (simulateCSE)
 
 import Sudoku.Grid
 import Format
@@ -62,13 +54,13 @@ model_decodeSerial stretch = wait
 
     end bs = wait bs
 
--- instance (Showable n m) => Show (Sudoku n m) where
---     show = showGrid
+instance (Showable n m) => Show (Sudoku n m) where
+    show = showGrid
 
-sim_board :: Sudoku 3 3 -> String
+sim_board :: forall n m. (Solvable n m, Showable n m) => Sudoku n m -> String
 sim_board =
     fmap (chr . fromIntegral) .
-    simulateCSE @System (exposeClockResetEnable board) .
+    simulateCSE @System (exposeClockResetEnable (board (SNat @n) (SNat @m))) .
     fmap ascii . showGrid
 
 sim_topEntity :: Sudoku 3 3 -> String
@@ -154,7 +146,44 @@ Just hard = readGrid . unlines $
     , ". . . |. . . |. . . "
     ]
 
+instance (Showable n m) => ShowX (Cell n m)
+
+hexodoku :: Sudoku 4 4
+Just hexodoku = readGrid . unlines $
+    [ "_ 6 _ _ e _ _ _ _ _ _ 1 _ _ 3 _"
+    , "9 _ _ _ _ b 4 _ _ f e _ _ _ _ 7"
+    , "a f _ _ _ g _ _ _ _ 5 _ _ _ 6 e"
+    , "e g 2 _ 8 c 5 _ _ 7 a b _ f 1 4"
+    , "6 a c 2 _ _ _ _ _ _ _ _ 3 5 d 1"
+    , "8 1 3 7 g a _ _ _ _ d 6 2 b 4 9"
+    , "b 5 f 4 d 1 _ _ _ _ 7 a e 6 g c"
+    , "d 9 e g 3 4 6 _ _ c 1 2 7 8 a f"
+    , "c b 1 e a 6 8 _ _ g f 7 9 3 2 5"
+    , "2 3 d f b 9 _ _ _ _ 8 5 6 4 e g"
+    , "g 7 5 9 f 2 _ _ _ _ c 4 1 a b 8"
+    , "4 8 a 6 _ _ _ _ _ _ _ _ f 7 c d"
+    , "f e g _ c 3 9 _ _ 5 4 d _ 1 8 6"
+    , "1 c _ _ _ 8 _ _ _ _ 2 _ _ _ 7 3"
+    , "5 _ _ _ _ f e _ _ a b _ _ _ _ 2"
+    , "_ 2 _ _ 7 _ _ _ _ _ _ c _ _ f _"
+    ]
+
+solve :: forall n m. (Solvable n m, Showable n m) => Sudoku n m -> Maybe (Sudoku n m)
+solve = Just . consume . simulateCSE @System (exposeClockResetEnable $ controller @n @m) . (<> L.repeat wild) . toList . flattenGrid
+  where
+    consume :: [Cell n m] -> Sudoku n m
+    consume = go []
+      where
+        go acc (x:xs)
+          | Just cells <- V.fromList (L.reverse acc)
+          = unflattenGrid cells
+
+          | otherwise
+          = go (x:acc) xs
+
 main :: IO ()
 main = do
     -- putStr $ sim_topEntity grid1
-    putStr $ sim_board grid2
+    maybe (putStrLn "Unsolvable") print $ solve grid1
+    maybe (putStrLn "Unsolvable") print $ solve grid2
+    maybe (putStrLn "Unsolvable") print $ solve hexodoku

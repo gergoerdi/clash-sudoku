@@ -41,8 +41,10 @@ data St n m
 
 type Dbg n m = (Sudoku n m, St n m)
 
+type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= n * m * m * n, 1 <= StackSize n m)
+
 controller'
-    :: forall n m dom. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= m * m * m * n, 1 <= StackSize n m)
+    :: forall n m dom k. (Solvable n m)
     => (HiddenClockResetEnable dom)
     => Signal dom (Df.Data (Cell n m))
     -> Signal dom Ack
@@ -98,13 +100,21 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out, _dbg)
 
     (stack_rd, sp) = stack (SNat @(StackSize n m)) (emptySudoku @n @m) stack_cmd
 
-controller
-    :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= m * m * m * n, 1 <= StackSize n m)
+controllerDbg
+    :: forall n m dom. (Solvable n m)
     => (HiddenClockResetEnable dom)
     => Circuit (Df dom (Cell n m)) (Df dom (Cell n m), CSignal dom (Dbg n m))
-controller = Circuit \(shift_in, (out_ack, _)) ->
-    let (in_ack, shift_out, dbg) = controller' shift_in out_ack
+controllerDbg = Circuit \(shift_in, (out_ack, _)) ->
+    let (in_ack, shift_out, dbg) = controller' @n @m shift_in out_ack
     in (in_ack, (shift_out, dbg))
+
+controller
+    :: forall n m dom. (Solvable n m)
+    => (HiddenClockResetEnable dom)
+    => Circuit (Df dom (Cell n m)) (Df dom (Cell n m))
+controller = circuit \shift_in -> do
+    (shift_out, _dbg) <- controllerDbg -< shift_in
+    idC -< shift_out
 
 -- From git@github.com:bittide/bittide-hardware.git
 uartDf
@@ -138,11 +148,16 @@ serialize baud par_circuit = circuit \rx -> do
 
 type FormatGrid n m =
     ((((Consume :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n
+    -- ({- "| " :++ -} ((Consume :++ " ") :* n :++ "| ") :* m ) :++ "\r\n" :* m
 
-board :: (HiddenClockResetEnable dom) => Circuit (Df dom (Unsigned 8)) (Df dom (Unsigned 8))
-board = circuit \in_byte -> do
-    (out_cell, _dbg) <- controller @3 @3 <| Df.mapMaybe parseCell -< in_byte
-    Df.map (either ascii id) <| format (Proxy @(FormatGrid 3 3)) <| Df.map showCell -< out_cell
+board
+    :: forall n m dom. (HiddenClockResetEnable dom, Readable n m, Showable n m, Solvable n m)
+    => SNat n
+    -> SNat m
+    -> Circuit (Df dom (Unsigned 8)) (Df dom (Unsigned 8))
+board n m =
+    Df.mapMaybe parseCell |> controller @n @m |> Df.map showCell |>
+    format (Proxy @(FormatGrid n m)) |> Df.map (either ascii id)
 
 topEntity
     :: "CLK_100MHZ" ::: Clock System
@@ -150,6 +165,6 @@ topEntity
     -> "RX"         ::: Signal System Bit
     -> "TX"         ::: Signal System Bit
 topEntity clk rst = withClockResetEnable clk rst enableGen $
-    snd . toSignals (serialize (SNat @9600) board) . (, pure ())
+    snd . toSignals (serialize (SNat @9600) (board (SNat @3) (SNat @3))) . (, pure ())
 
 makeTopEntity 'topEntity
