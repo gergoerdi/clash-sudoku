@@ -42,7 +42,7 @@ data St n m
 type Dbg n m = (Sudoku n m, St n m)
 
 controller'
-    :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= m * m * m * n, n * m * m * n ~ k + 1, 1 <= StackSize n m)
+    :: forall n m dom. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= m * m * m * n, 1 <= StackSize n m)
     => (HiddenClockResetEnable dom)
     => Signal dom (Df.Data (Cell n m))
     -> Signal dom Ack
@@ -99,7 +99,7 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out, _dbg)
     (stack_rd, sp) = stack (SNat @(StackSize n m)) (emptySudoku @n @m) stack_cmd
 
 controller
-    :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= m * m * m * n, n * m * m * n ~ k + 1, 1 <= StackSize n m)
+    :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= m * m * m * n, 1 <= StackSize n m)
     => (HiddenClockResetEnable dom)
     => Circuit (Df dom (Cell n m)) (Df dom (Cell n m), CSignal dom (Dbg n m))
 controller = Circuit \(shift_in, (out_ack, _)) ->

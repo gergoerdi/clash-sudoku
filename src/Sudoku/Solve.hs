@@ -57,7 +57,7 @@ data PropagatorResult
     deriving (Generic, NFDataX, Eq, Show)
 
 propagator
-    :: forall n m dom k. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, n * m * m * n ~ k + 1)
+    :: forall n m dom. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= n * m * m * n)
     => (HiddenClockResetEnable dom)
     => Signal dom Bool
     -> Signal dom Bool
@@ -85,7 +85,7 @@ propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid grid)
 
     fresh = register False $ isJust <$> shift_in .||. isJust <$> pop
     all_unique = foldGrid (.&&.) uniques
-    any_changed = fold (.||.) changeds
+    any_changed = fold @(n * m * m * n - 1) (.||.) changeds
     any_failed  = foldGrid (.||.) faileds
 
     result =
