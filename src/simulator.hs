@@ -54,9 +54,6 @@ model_decodeSerial stretch = wait
 
     end bs = wait bs
 
-instance (Showable n m) => Show (Sudoku n m) where
-    show = showGrid
-
 sim_board :: forall n m. (Solvable n m, Showable n m) => Sudoku n m -> String
 sim_board =
     fmap (chr . fromIntegral) .
@@ -81,9 +78,6 @@ readGrid = go []
 
         | [] <- cs
         = Nothing
-
-showGrid :: forall n m. (Showable n m) => Sudoku n m -> String
-showGrid = formatModel (Proxy @(FormatGrid n m)) . fmap (chr . fromIntegral . showCell) . toList . flattenGrid
 
 grid1 :: Sudoku 3 3
 Just grid1 = readGrid . unlines $
