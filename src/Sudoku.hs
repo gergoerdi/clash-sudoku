@@ -53,10 +53,10 @@ controller'
        )
 controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
   where
-    (unbundle -> (shift_in', shift_out, in_ack, enable_propagate, commit_guess, stack_cmd), st) = mealyStateB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, result, sp, bundle next_guesses)
+    (unbundle -> (shift_in', shift_out, in_ack, enable_propagate, commit_guess, stack_cmd), st) = mealyStateB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, result, sp)
     -- shift_out = enable out_enabled head_cell
 
-    step (shift_in, out_ack, head_cell, result, sp, next_guesses) = do
+    step (shift_in, out_ack, head_cell, result, sp) = do
       st <- get
       x <-
         get >>= {- (\x -> traceShowM (x, result) >> pure x) >>= -} \case
@@ -65,12 +65,12 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
                 pure (shift_in, Nothing, Ack True, False, False, Nothing)
             WaitPush top_sp -> do
                 put $ Busy top_sp
-                pure (Nothing, Nothing, Ack False, True, True, Just $ Push next_guesses)
+                pure (Nothing, Nothing, Ack False, True, True, Just $ Push ())
             Busy top_sp -> do
                 case result of
                     Guess -> do
                         put $ WaitPush top_sp
-                        pure (Nothing, Nothing, Ack False, True, False, Just $ Push next_guesses)
+                        pure (Nothing, Nothing, Ack False, True, False, Just $ Push ())
                     Failure -> do
                         let underflow = sp == top_sp
                         when underflow do
@@ -95,7 +95,8 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
     (head_cell, result, grid, can_guess, next_guesses) = propagator (register False enable_propagate) (commit_guess) shift_in' popped
     popped = stack_rd
 
-    (stack_rd, sp) = stack (SNat @(StackSize n m)) (emptySudoku @n @m) stack_cmd
+    (stack_rd, sp) = stack (SNat @(StackSize n m)) (emptySudoku @n @m) stack_cmd'
+    stack_cmd' = fmap <$> ((<$) <$> bundle next_guesses) <*> stack_cmd
 
 controller
     :: forall n m dom. (Solvable n m)
