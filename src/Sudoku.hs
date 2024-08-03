@@ -99,8 +99,7 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
     (head_cell, result, grid, can_guess, next_guesses) = propagator (register False enable_propagate) (commit_guess) shift_in' popped
     popped = stack_rd
 
-    (stack_rd, sp) = stack (SNat @(StackSize n m)) (emptySudoku @n @m) stack_cmd'
-    stack_cmd' = fmap <$> ((<$) <$> bundle next_guesses) <*> stack_cmd
+    (stack_rd, sp) = stack (SNat @(StackSize n m)) (emptySudoku @n @m) stack_cmd (bundle next_guesses)
 
 controller
     :: forall n m dom. (Solvable n m)
