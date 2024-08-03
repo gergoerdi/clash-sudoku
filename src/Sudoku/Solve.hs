@@ -85,14 +85,16 @@ declareBareB [d|
     , is_unique :: Bool
     , changed :: Bool
     , cont :: Cell n m
-    , neighbours :: Vec 3 (Mask n m)
+    , row_neighbour, col_neighbour, box_neighbour :: Mask n m
     , keep_guessing :: Bool
     } |]
 
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= n * m * m * n)
 
 diag :: (KnownNat n) => Vec n (Vec n a) -> Vec n a
-diag = zipWith (flip (!!)) indicesI
+-- diag = zipWith (flip (!!)) indicesI
+diag Nil = Nil
+diag (Cons (Cons x xs) xss) = Cons x (diag (tail <$> xss))
 
 foo
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
@@ -130,7 +132,11 @@ foo initials enable_propagate commit_guess shift_in pop = (head_cell, result, ce
     pops :: Grid n m (Signal dom (Maybe (Cell n m)))
     pops = unbundle . fmap sequenceA $ pop
 
-    prev_bufs = unbundle . fmap diag . bundle . fmap neighbours <$> neighbourhood units
+    prev_bufs :: Grid n m (Signal dom (Mask n m), Signal dom (Mask n m), Signal dom (Mask n m))
+    prev_bufs = (,,)
+        <$> rowwise rotateL1 (row_neighbour <$> units)
+        <*> columnwise rotateL1 (col_neighbour <$> units)
+        <*> boxwise rotateL1 (box_neighbour <$> units)
 
     units :: Grid n m (Signals dom (CellUnit n m))
     units = unit <$> initials <*> shift_ins <*> guess_laters <*> pops <*> prev_bufs
@@ -150,15 +156,8 @@ foo initials enable_propagate commit_guess shift_in pop = (head_cell, result, ce
     all_unique = foldGrid (.&&.) (is_unique <$> units)
     any_failed  = foldGrid (.||.) ((.== conflicted) <$> cells)
 
-    neighbourhood :: Grid n m a -> Grid n m (Vec 3 a)
-    neighbourhood grid = sequenceA $
-        rowwise rotateL1 grid :>
-        columnwise rotateL1 grid :>
-        boxwise rotateL1 grid :>
-        Nil
-
-    unit :: Cell n m -> Signal dom (Maybe (Cell n m)) -> Signal dom Bool -> Signal dom (Maybe (Cell n m)) -> Vec 3 (Signal dom (Mask n m)) -> Signals dom (CellUnit n m)
-    unit initial shift_in try_guess pop prevs@(prev_row :> prev_col :> prev_box :> Nil) = CellUnit{..}
+    unit :: Cell n m -> Signal dom (Maybe (Cell n m)) -> Signal dom Bool -> Signal dom (Maybe (Cell n m)) -> (Signal dom (Mask n m), Signal dom (Mask n m), Signal dom (Mask n m)) -> Signals dom (CellUnit n m)
+    unit initial shift_in try_guess pop (prev_row, prev_col, prev_box) = CellUnit{..}
       where
         load = shift_in .<|>. pop
 
@@ -168,16 +167,21 @@ foo initials enable_propagate commit_guess shift_in pop = (head_cell, result, ce
         cell' =
                 load
           .<|>. enable (commit_guess .&&. guess_this) first_guess
-          .<|>. enable enable_propagate (applyMasks <$> cell <*> bundle (propagator_bufs))
+          .<|>. enable enable_propagate (applyMasks <$> cell <*> bundle (row_buf :> col_buf :> box_buf :> Nil))
           .<|. cell
         is_unique = isUnique <$> cell
         changed = cell' ./=. cell_before_propagation
 
         extend_mask mask = combineMask <$> mask <*> is_unique <*> cell
 
-        propagator_bufs = register wildMask . mux new_round (pure wildMask) <$> prevs
+        propagator_buf = register wildMask . mux new_round (pure wildMask)
+        row_buf = propagator_buf prev_row
+        col_buf = propagator_buf prev_col
+        box_buf = propagator_buf prev_box
 
-        neighbours = bundle $ extend_mask <$> propagator_bufs
+        row_neighbour = extend_mask row_buf
+        col_neighbour = extend_mask col_buf
+        box_neighbour = extend_mask box_buf
 
         (first_guess, next_guess) = unbundle $ mux try_guess (splitCell <$> cell) (bundle (cell, cell))
         guess_this = enable_propagate .&&. try_guess .&&. (not <$> is_unique)
