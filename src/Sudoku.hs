@@ -1,5 +1,6 @@
 {-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf, ViewPatterns, NumericUnderscores, TupleSections #-}
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS -fplugin=Protocols.Plugin #-}
 module Sudoku where
 
@@ -10,6 +11,7 @@ import Clash.Class.Counter.Internal
 import Data.Maybe
 import Control.Monad.State
 import Data.Proxy
+import Data.Char (chr)
 
 import Protocols
 import qualified Protocols.Df as Df
@@ -39,9 +41,14 @@ data St n m
     | ShiftOut Bool (Cnt n m)
     deriving (Generic, NFDataX, Show, Eq)
 
-type Dbg n m = (Sudoku n m, St n m)
 
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= n * m * m * n, 1 <= StackSize n m)
+
+showGrid :: forall n m. (Showable n m) => Sudoku n m -> String
+showGrid = formatModel (Proxy @(FormatGrid n m)) . fmap (chr . fromIntegral . showCell) . toList . flattenGrid
+
+instance (Showable n m) => Show (Sudoku n m) where
+    show = showGrid
 
 controller'
     :: forall n m dom k. (Solvable n m)
@@ -53,13 +60,11 @@ controller'
        )
 controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
   where
-    (unbundle -> (shift_in', shift_out, in_ack, enable_propagate, commit_guess, stack_cmd), st) = mealyStateB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, result, sp)
+    (shift_in', shift_out, in_ack, enable_propagate, commit_guess, stack_cmd) = mealyStateB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, result, sp)
     -- shift_out = enable out_enabled head_cell
 
     step (shift_in, out_ack, head_cell, result, sp) = do
-      st <- get
-      x <-
-        get >>= {- (\x -> traceShowM (x, result) >> pure x) >>= -} \case
+        get >>= \case
             ShiftIn i -> do
                 when (isJust shift_in) $ put $ maybe (Busy sp) ShiftIn $ countSuccChecked i
                 pure (shift_in, Nothing, Ack True, False, False, Nothing)
@@ -90,7 +95,6 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
                         pure Nothing
                 let shift_out = Just $ if solved then head_cell else conflicted
                 pure (shift_in, shift_out, Ack False, False, False, Nothing)
-      pure (x, (st))
 
     (head_cell, result, grid, can_guess, next_guesses) = propagator (register False enable_propagate) (commit_guess) shift_in' popped
     popped = stack_rd
