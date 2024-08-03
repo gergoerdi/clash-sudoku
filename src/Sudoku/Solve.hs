@@ -16,11 +16,7 @@ import Sudoku.Stack
 
 import Control.Arrow (second, (***))
 import Data.Maybe
-import Barbies
-import Barbies.Bare
 import Barbies.TH
-
-import Debug.Trace
 
 rotateL1 :: Vec n a -> Vec n a
 rotateL1 Nil = Nil
@@ -98,8 +94,7 @@ diag (Cons (Cons x xs) xss) = Cons x (diag (tail <$> xss))
 
 foo
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
-    => Grid n m (Cell n m)
-    -> Signal dom Bool
+    => Signal dom Bool
     -> Signal dom Bool
     -> Signal dom (Maybe (Cell n m))
     -> Signal dom (Maybe (Sudoku n m))
@@ -109,7 +104,7 @@ foo
        , Signal dom Bool
        , Grid n m (Signal dom (Cell n m))
        )
-foo initials enable_propagate commit_guess shift_in pop = (head_cell, result, cells, can_guess, conts)
+foo enable_propagate commit_guess shift_in pop = (head_cell, result, cells, can_guess, conts)
   where
     cnt = register (0 :: Index (n * m)) $ do
         result <- result
@@ -130,7 +125,7 @@ foo initials enable_propagate commit_guess shift_in pop = (head_cell, result, ce
         <*> boxwise rotateL1 (box_neighbour <$> units)
 
     units :: Grid n m (Signals dom (CellUnit n m))
-    units = unit <$> initials <*> shift_ins <*> guess_laters <*> pops <*> prev_bufs
+    units = pure unit <*> shift_ins <*> guess_laters <*> pops <*> prev_bufs
 
     cells = cell <$> units
     conts = cont <$> units
@@ -147,8 +142,8 @@ foo initials enable_propagate commit_guess shift_in pop = (head_cell, result, ce
     all_unique = foldGrid (.&&.) (is_unique <$> units)
     any_failed  = foldGrid (.||.) ((.== conflicted) <$> cells)
 
-    unit :: Cell n m -> Signal dom (Maybe (Cell n m)) -> Signal dom Bool -> Signal dom (Maybe (Cell n m)) -> (Signal dom (Mask n m), Signal dom (Mask n m), Signal dom (Mask n m)) -> Signals dom (CellUnit n m)
-    unit initial shift_in try_guess pop (prev_row, prev_col, prev_box) = CellUnit{..}
+    unit :: Signal dom (Maybe (Cell n m)) -> Signal dom Bool -> Signal dom (Maybe (Cell n m)) -> (Signal dom (Mask n m), Signal dom (Mask n m), Signal dom (Mask n m)) -> Signals dom (CellUnit n m)
+    unit shift_in try_guess pop (prev_row, prev_col, prev_box) = CellUnit{..}
       where
         load = shift_in .<|>. pop
 
