@@ -147,23 +147,27 @@ foo enable_propagate commit_guess shift_in pop = (head_cell, result, cells, can_
       where
         load = shift_in .<|>. pop
 
-        cell = register initial {- conflicted #-} cell'
-        cell_before_propagation = regEn conflicted new_round cell
-
-        cell' =
-                load
-          .<|>. enable (commit_guess .&&. guess_this) first_guess
-          .<|>. enable enable_propagate (applyMasks <$> cell <*> bundle (row_buf :> col_buf :> box_buf :> Nil))
-          .<|. cell
+        cell = register conflicted cell'
         is_unique = isUnique <$> cell
-        changed = cell' ./=. cell_before_propagation
 
-        extend_mask mask = combineMask <$> mask <*> is_unique <*> cell
+        (cell', changed) = unbundle do
+            load <- load
+            guess <- enable (commit_guess .&&. guess_this) first_guess
+            propagate <- enable enable_propagate (applyMask <$> cell <*> mask)
+            old <- cell
+            pure $ case load <|> guess of
+                Just new_value -> (new_value, True)
+                Nothing -> case propagate of
+                    Just propagate -> (propagate, propagate /= old)
+                    Nothing -> (old, False)
+
+        extend_mask mask = extendMask <$> mask <*> is_unique <*> cell
 
         propagator_buf = register wildMask . mux new_round (pure wildMask)
         row_buf = propagator_buf prev_row
         col_buf = propagator_buf prev_col
         box_buf = propagator_buf prev_box
+        mask = combineMask <$> row_buf <*> (combineMask <$> col_buf <*> box_buf)
 
         row_neighbour = extend_mask row_buf
         col_neighbour = extend_mask col_buf

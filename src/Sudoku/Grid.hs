@@ -29,8 +29,11 @@ newtype Mask n m = Mask{ maskBits :: BitVector (n * m) }
     deriving anyclass (NFDataX)
     deriving newtype (Eq, Show)
 
-combineMask :: (KnownNat n, KnownNat m) => Mask n m -> Bool -> Cell n m -> Mask n m
-combineMask mask is_unique new
+combineMask :: (KnownNat n, KnownNat m) => Mask n m -> Mask n m -> Mask n m
+combineMask (Mask m1) (Mask m2) = Mask (m1 .&. m2)
+
+extendMask :: (KnownNat n, KnownNat m) => Mask n m -> Bool -> Cell n m -> Mask n m
+extendMask mask is_unique new
     | is_unique
     = Mask $ maskBits mask .&. complement (cellBits new)
     | otherwise
