@@ -10,10 +10,14 @@ newtype Matrix n m a = FromRows{ matrixRows :: Vec n (Vec m a) }
     deriving newtype (NFDataX, BitPack)
 
 instance Functor (Matrix n m) where
+    {-# INLINE fmap #-}
     fmap f = FromRows . fmap (fmap f) . matrixRows
 
 instance (KnownNat n, KnownNat m) => Applicative (Matrix n m) where
+    {-# INLINE pure #-}
     pure x = FromRows . pure . pure $ x
+
+    {-# INLINE (<*>) #-}
     mf <*> mx = FromRows $ zipWith (<*>) (matrixRows mf) (matrixRows mx)
 
 instance (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Foldable (Matrix n m) where

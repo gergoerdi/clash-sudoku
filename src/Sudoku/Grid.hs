@@ -118,10 +118,14 @@ newtype Grid n m a = Grid{ getGrid :: Matrix n m (Matrix m n a) }
     -- deriving newtype (BitPack)
 
 instance Functor (Grid n m) where
+    -- {-# INLINE fmap #-}
     fmap f = Grid . fmap (fmap f) . getGrid
 
 instance (KnownNat n, KnownNat m) => Applicative (Grid n m) where
+    -- {-# INLINE pure #-}
     pure = Grid . pure . pure
+
+    -- {-# INLINE (<*>) #-}
     bf <*> bx = Grid $ (<*>) <$> getGrid bf <*> getGrid bx
 
 instance (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Foldable (Grid n m) where
