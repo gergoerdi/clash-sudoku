@@ -96,8 +96,7 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
                 let shift_out = Just $ if solved then head_cell else conflicted
                 pure (shift_in, shift_out, Ack False, False, False, Nothing)
 
-    -- (head_cell, result, grid, can_guess, next_guesses) = propagator (register False enable_propagate) (commit_guess) shift_in' popped
-    (head_cell, result, grid, can_guess, next_guesses) = foo @n @m (pure conflicted) enable_propagate commit_guess shift_in' popped
+    (head_cell, result, grid, can_guess, next_guesses) = propagator enable_propagate commit_guess shift_in' popped
     popped = stack_rd
 
     (stack_rd, sp) = stack (SNat @(StackSize n m)) (emptySudoku @n @m) stack_cmd (bundle next_guesses)

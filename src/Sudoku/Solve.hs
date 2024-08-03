@@ -37,43 +37,12 @@ shiftInGridAt0 x grid = (unflattenGrid grid', x')
   where
     (grid', x' :> Nil) = shiftInAt0 (flattenGrid grid) (x :> Nil)
 
-unzipMatrix :: Matrix n m (a, b) -> (Matrix n m a, Matrix n m b)
-unzipMatrix = (FromRows *** FromRows) . unzip . fmap unzip . matrixRows
-
-unzipGrid :: Grid n m (a, b) -> (Grid n m a, Grid n m b)
-unzipGrid = (Grid *** Grid) . unzipMatrix . fmap unzipMatrix . getGrid
-
 data PropagatorResult
     = Solved
     | Failure
     | Guess
     | Progress
     deriving (Generic, NFDataX, Eq, Show)
-
-neighbourMasks
-    :: forall n m dom. (KnownNat n, KnownNat m, 1 <= m, 1 <= n, 1 <= n * m)
-    => (HiddenClockResetEnable dom)
-    => Grid n m (Signal dom (Cell n m))
-    -> Grid n m (Signal dom Bool)
-    -> Grid n m (Vec (3 * (n * m - 1)) (Signal dom (Mask n m)))
-neighbourMasks cells uniques =
-    rowwise others masks .++. columnwise others masks .++. boxwise others masks
-  where
-    masks = cellMask <$> cells <*> uniques
-
-    cellMask :: Signal dom (Cell n m) -> Signal dom Bool -> Signal dom (Mask n m)
-    cellMask c is_unique = mux is_unique (Mask . complement . cellBits <$> c) (pure wildMask)
-
-    (.++.) = liftA2 (++)
-    infixr 5 .++.
-
-propagate
-    :: forall n m dom k. (KnownNat n, KnownNat m, KnownNat k)
-    => (HiddenClockResetEnable dom)
-    => Signal dom (Cell n m)
-    -> Vec k (Signal dom (Mask n m))
-    -> Signal dom (Cell n m)
-propagate cell neighbour_masks = applyMasks <$> cell <*> bundle neighbour_masks
 
 declareBareB [d|
   data CellUnit n m = CellUnit
@@ -87,12 +56,7 @@ declareBareB [d|
 
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= n * m * m * n)
 
-diag :: (KnownNat n) => Vec n (Vec n a) -> Vec n a
--- diag = zipWith (flip (!!)) indicesI
-diag Nil = Nil
-diag (Cons (Cons x xs) xss) = Cons x (diag (tail <$> xss))
-
-foo
+propagator
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
     => Signal dom Bool
     -> Signal dom Bool
@@ -104,7 +68,7 @@ foo
        , Signal dom Bool
        , Grid n m (Signal dom (Cell n m))
        )
-foo enable_propagate commit_guess shift_in pop = (head_cell, result, cells, can_guess, conts)
+propagator enable_propagate commit_guess shift_in pop = (head_cell, result, cells, can_guess, conts)
   where
     cnt = register (0 :: Index (n * m)) $ do
         result <- result
@@ -190,69 +154,3 @@ foo enable_propagate commit_guess shift_in pop = (head_cell, result, cells, can_
         -- mux should_guess (pure Failure) $
         pure Progress
         -- pure Failure
-
-propagator
-    :: forall n m dom. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= n * m * m * n)
-    => (HiddenClockResetEnable dom)
-    => Signal dom Bool
-    -> Signal dom Bool
-    -> Signal dom (Maybe (Cell n m))
-    -> Signal dom (Maybe (Sudoku n m))
-    -> ( Signal dom (Cell n m)
-       , Signal dom PropagatorResult
-       , Grid n m (Signal dom (Cell n m))
-       , Signal dom Bool
-       , Grid n m (Signal dom (Cell n m))
-       )
-propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid cells), result, cells, can_guess, conts)
-  where
-    pops :: Grid n m (Signal dom (Maybe (Cell n m)))
-    pops = unbundle . fmap sequenceA $ pop
-
-    ((_shift_out, keep_guessing), units) =
-        mapAccumR unit (shift_in, should_guess) (flattenGrid $ ((,) <$> pops <*> neighbourMasks cells uniques))
-
-    cells = unflattenGrid $ cell <$> units
-    uniques = unflattenGrid $ is_unique <$> units
-    changeds = changed <$> units
-    conts = unflattenGrid $ cont <$> units
-
-    faileds = fmap (.== conflicted) cells
-
-    should_guess = not <$> any_changed
-    can_guess = should_guess .&&. (not <$> keep_guessing)
-
-    fresh = register False $ isJust <$> shift_in .||. isJust <$> pop
-    all_unique = foldGrid (.&&.) uniques
-    any_changed = fold @(n * m * m * n - 1) (.||.) changeds
-    any_failed  = foldGrid (.||.) faileds
-
-    result =
-        mux fresh (pure Progress) $
-        mux all_unique (pure Solved) $
-        mux any_failed (pure Failure) $
-        mux can_guess (pure Guess) $
-        mux should_guess (pure Failure) $
-        pure Progress
-
-    unit
-        :: forall k. (KnownNat k)
-        => (Signal dom (Maybe (Cell n m)), Signal dom Bool)
-        -> (Signal dom (Maybe (Cell n m)), Vec k (Signal dom (Mask n m)))
-        -> ((Signal dom (Maybe (Cell n m)), Signal dom Bool), Signals dom (CellUnit n m))
-    unit (shift_in, try_guess) (pop, neighbour_masks) = ((shift_out, keep_guessing), CellUnit{..})
-      where
-        load = shift_in .<|>. pop
-        shift_out = enable (isJust <$> shift_in) cell
-
-        cell = register conflicted cell'
-        cell' = load .<|>. enable (commit_guess .&&. guess_this) first_guess .<|>. enable enable_propagate (propagate cell neighbour_masks) .<|. cell
-        changed = register False $ cell ./=. cell'
-        is_unique = isUnique <$> cell
-
-        (first_guess, next_guess) = unbundle $ mux try_guess (splitCell <$> cell) (bundle (cell, cell))
-
-        can_guess = not <$> is_unique
-        guess_this = enable_propagate .&&. try_guess .&&. can_guess
-        cont = mux guess_this next_guess cell
-        keep_guessing = try_guess .&&. (not <$> guess_this)
