@@ -171,14 +171,16 @@ solve = consume . simulateCSE @System (exposeClockResetEnable $ controller @n @m
     consume = go []
       where
         go acc (x:xs)
-          | x == conflicted
-          = Nothing
+            | x == conflicted
+            = Nothing
 
-          | Just cells <- V.fromList (L.reverse acc)
-          = Just $ unflattenGrid cells
+            | Just cells <- V.fromList (L.reverse acc')
+            = Just $ unflattenGrid cells
 
-          | otherwise
-          = go (x:acc) xs
+            | otherwise
+            =  go acc' xs
+          where
+            acc' = x : acc
 
 main :: IO ()
 main = do
