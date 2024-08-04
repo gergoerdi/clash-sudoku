@@ -64,7 +64,7 @@ deriving anyclass instance (NFDataX (Ptr c a), NFDataX (Ptr c b)) => NFDataX (Pt
 deriving newtype instance (Counter (Ptr c a), Counter (Ptr c b)) => Counter (Ptr c (a :++ b))
 
 -- | Literal
-instance (SymbolLength_ sep, KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Format Char sep where
+instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Format Char sep where
     newtype Ptr Char sep = SymbolPtr (Index (SymbolLength sep))
         deriving stock (Show, Generic)
         deriving newtype (NFDataX)
