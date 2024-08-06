@@ -1,9 +1,12 @@
-{-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf #-}
+{-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE TemplateHaskell #-} -- For declaring Barbie types
 module Sudoku.Solve (propagator, PropagatorResult(..)) where
 
 import Clash.Prelude hiding (mapAccumR)
-import RetroClash.Utils
+import Clash.Class.Counter
+import RetroClash.Utils hiding (changed)
+import RetroClash.Barbies
 
 import Sudoku.Hacks
 import Sudoku.Matrix
@@ -12,6 +15,9 @@ import Sudoku.Stack
 
 import Control.Arrow (second, (***))
 import Data.Maybe
+import Barbies
+import Barbies.Bare
+import Barbies.TH
 
 import Debug.Trace
 
@@ -49,6 +55,14 @@ propagate
     -> Signal dom (Cell n m)
 propagate cell neighbour_masks = applyMasks <$> cell <*> bundle neighbour_masks
 
+declareBareB [d|
+  data CellUnit n m = CellUnit
+    { cell :: Cell n m
+    , is_unique :: Bool
+    , changed :: Bool
+    , cont :: Cell n m
+    } |]
+
 data PropagatorResult
     = Solved
     | Failure
@@ -69,16 +83,20 @@ propagator
        , Signal dom Bool
        , Grid n m (Signal dom (Cell n m))
        )
-propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid grid), result, grid, can_guess, next_guesses)
+propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid cells), result, cells, can_guess, conts)
   where
     pops :: Grid n m (Signal dom (Maybe (Cell n m)))
     pops = unbundle . fmap sequenceA $ pop
 
-    ((_shift_out, keep_guessing), unzip4 -> (unflattenGrid -> grid, unflattenGrid -> uniques, changeds, unflattenGrid -> next_guesses)) =
-        mapAccumR unit (shift_in, should_guess) (flattenGrid $ ((,) <$> pops <*> neighbourMasks grid uniques))
+    ((_shift_out, keep_guessing), units) =
+        mapAccumR unit (shift_in, should_guess) (flattenGrid $ ((,) <$> pops <*> neighbourMasks cells uniques))
 
-    -- uniques = fmap (isUnique <$>) grid
-    faileds = fmap (.== conflicted) grid
+    cells = unflattenGrid $ cell <$> units
+    uniques = unflattenGrid $ is_unique <$> units
+    changeds = changed <$> units
+    conts = unflattenGrid $ cont <$> units
+
+    faileds = fmap (.== conflicted) cells
 
     should_guess = not <$> any_changed
     can_guess = should_guess .&&. (not <$> keep_guessing)
@@ -100,20 +118,20 @@ propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid grid)
         :: forall k. (KnownNat k)
         => (Signal dom (Maybe (Cell n m)), Signal dom Bool)
         -> (Signal dom (Maybe (Cell n m)), Vec k (Signal dom (Mask n m)))
-        -> ((Signal dom (Maybe (Cell n m)), Signal dom Bool), (Signal dom (Cell n m), Signal dom Bool, Signal dom Bool, Signal dom (Cell n m)))
-    unit (shift_in, try_guess) (pop, neighbour_masks) = ((shift_out, keep_guessing), (r, unique, changed, cont))
+        -> ((Signal dom (Maybe (Cell n m)), Signal dom Bool), Signals dom (CellUnit n m))
+    unit (shift_in, try_guess) (pop, neighbour_masks) = ((shift_out, keep_guessing), CellUnit{..})
       where
         load = shift_in .<|>. pop
-        shift_out = enable (isJust <$> shift_in) r
+        shift_out = enable (isJust <$> shift_in) cell
 
-        r = register conflicted r'
-        r' = load .<|>. enable (commit_guess .&&. guess_this) first_guess .<|>. enable enable_propagate (propagate r neighbour_masks) .<|. r
-        changed = register False $ r ./=. r'
-        unique = isUnique <$> r
+        cell = register conflicted cell'
+        cell' = load .<|>. enable (commit_guess .&&. guess_this) first_guess .<|>. enable enable_propagate (propagate cell neighbour_masks) .<|. cell
+        changed = register False $ cell ./=. cell'
+        is_unique = isUnique <$> cell
 
-        (first_guess, next_guess) = unbundle $ mux try_guess (splitCell <$> r) (bundle (r, r))
+        (first_guess, next_guess) = unbundle $ mux try_guess (splitCell <$> cell) (bundle (cell, cell))
 
-        can_guess = not <$> unique
+        can_guess = not <$> is_unique
         guess_this = enable_propagate .&&. try_guess .&&. can_guess
-        cont = mux guess_this next_guess r
+        cont = mux guess_this next_guess cell
         keep_guessing = try_guess .&&. (not <$> guess_this)

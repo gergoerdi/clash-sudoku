@@ -68,6 +68,13 @@ packages:
   original:
     hackage: clash-shake-0.3.2
 - completed:
+    hackage: barbies-th-0.1.11@sha256:df9648ae23b2a97f7766fae2ca923b7554b53775925ba15fbcb062cc837e1040,1660
+    pantry-tree:
+      sha256: 34c01c9fb405d5e10849a73c82d2a8706156d5ba5120d9f28747b8b92a2e825b
+      size: 657
+  original:
+    hackage: barbies-th-0.1.11
+- completed:
     commit: 19b386c4aa3ff690758ae089c7754303f3500cc9
     git: https://github.com/cchalmers/circuit-notation.git
     name: circuit-notation
