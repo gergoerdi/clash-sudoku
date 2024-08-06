@@ -108,17 +108,9 @@ foo
        , Grid n m (Signal dom (Cell n m))
        , Signal dom Bool
        , Grid n m (Signal dom (Cell n m))
-       , Signal dom String
        )
-foo initials enable_propagate commit_guess shift_in pop = (head_cell, result, cells, can_guess, conts, dbg)
+foo initials enable_propagate commit_guess shift_in pop = (head_cell, result, cells, can_guess, conts)
   where
-    dbg = do
-        -- fresh <- fresh
-        cnt <- cnt
-        head_cell <- head_cell
-        result <- result
-        pure $ unwords [show cnt, show result]
-
     cnt = register (0 :: Index (n * m)) $ do
         result <- result
         enable_propagate <- enable_propagate
@@ -126,7 +118,6 @@ foo initials enable_propagate commit_guess shift_in pop = (head_cell, result, ce
         pure $ case result of
             Progress | enable_propagate -> countSucc cnt
             _ -> cnt
-        -- mux fresh 0 $ mux enable_propagate (countSucc <$> cnt) cnt
     new_round = cnt .== 0
 
     pops :: Grid n m (Signal dom (Maybe (Cell n m)))
