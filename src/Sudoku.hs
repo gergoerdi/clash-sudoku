@@ -50,12 +50,9 @@ controller'
     -> Signal dom Ack
     -> ( Signal dom Ack
        , Signal dom (Df.Data (Cell n m))
-       , Signal dom (Dbg n m)
        )
-controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out, _dbg)
+controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
   where
-    _dbg = bundle (bundle grid, st)
-
     (unbundle -> (shift_in', shift_out, in_ack, enable_propagate, commit_guess, stack_cmd), st) = mealyStateB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, result, sp, bundle next_guesses)
     -- shift_out = enable out_enabled head_cell
 
@@ -100,21 +97,11 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out, _dbg)
 
     (stack_rd, sp) = stack (SNat @(StackSize n m)) (emptySudoku @n @m) stack_cmd
 
-controllerDbg
-    :: forall n m dom. (Solvable n m)
-    => (HiddenClockResetEnable dom)
-    => Circuit (Df dom (Cell n m)) (Df dom (Cell n m), CSignal dom (Dbg n m))
-controllerDbg = Circuit \(shift_in, (out_ack, _)) ->
-    let (in_ack, shift_out, dbg) = controller' @n @m shift_in out_ack
-    in (in_ack, (shift_out, dbg))
-
 controller
     :: forall n m dom. (Solvable n m)
     => (HiddenClockResetEnable dom)
     => Circuit (Df dom (Cell n m)) (Df dom (Cell n m))
-controller = circuit \shift_in -> do
-    (shift_out, _dbg) <- controllerDbg -< shift_in
-    idC -< shift_out
+controller = Circuit $ uncurry controller'
 
 -- From git@github.com:bittide/bittide-hardware.git
 uartDf
