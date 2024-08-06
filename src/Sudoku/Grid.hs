@@ -25,6 +25,9 @@ unique :: (KnownNat n, KnownNat m) => Index (n * m) -> Cell n m
 unique n = Cell $ 1 `rotateR` 1 `rotateR` fromIntegral n
 
 newtype Mask n m = Mask{ maskBits :: BitVector (n * m) }
+    deriving stock (Generic)
+    deriving anyclass (NFDataX)
+    deriving newtype (Eq, Show)
 
 combineMask :: (KnownNat n, KnownNat m) => Mask n m -> Bool -> Cell n m -> Mask n m
 combineMask mask is_unique new
@@ -35,6 +38,9 @@ combineMask mask is_unique new
 
 applyMasks :: (KnownNat n, KnownNat m) => Cell n m -> Vec k (Mask n m) -> Cell n m
 applyMasks (Cell s0) xs = Cell $ fold (.&.) (s0 :> map maskBits xs)
+
+applyMask :: (KnownNat n, KnownNat m) => Cell n m -> Mask n m -> Cell n m
+applyMask (Cell c) (Mask m) = Cell $ c .&. m
 
 wildMask :: (KnownNat n, KnownNat m) => Mask n m
 wildMask = Mask maxBound
@@ -76,13 +82,13 @@ showCell :: (Showable n m) => Cell n m -> Unsigned 8
 showCell x = case getUnique x of
     _ | x == wild -> ascii '_'
     _ | x == conflicted -> ascii '!'
-    Unset -> ascii '?'
+    Unset -> ascii '_'
     Unique x
       | x' < 9 -> ascii '1' + x'
       | otherwise -> ascii 'A' + 1 + x' - 10
       where
         x' = fromIntegral x
-    Conflict -> ascii '!'
+    Conflict -> ascii '?'
 
 type Readable n m = (KnownNat n, KnownNat m, n * m <= (9 + 26))
 

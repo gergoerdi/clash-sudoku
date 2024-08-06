@@ -1,7 +1,8 @@
 {-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE TemplateHaskell #-} -- For declaring Barbie types
-module Sudoku.Solve (propagator, PropagatorResult(..)) where
+{-# LANGUAGE PartialTypeSignatures #-}
+module Sudoku.Solve  where
 
 import Clash.Prelude hiding (mapAccumR)
 import Clash.Class.Counter
@@ -21,8 +22,24 @@ import Barbies.TH
 
 import Debug.Trace
 
-foldGrid :: (n * m * m * n ~ k + 1) => (a -> a -> a) -> Grid n m a -> a
-foldGrid f = fold f . flattenGrid
+rotateL1 :: Vec n a -> Vec n a
+rotateL1 Nil = Nil
+rotateL1 (Cons x xs) = Cons x' xs'
+  where
+    (x', xs') = mapAccumR (\next x -> (x, next)) x xs
+
+foldGrid :: forall n m a. (1 <= n * m * m * n) => (a -> a -> a) -> Grid n m a -> a
+foldGrid f = fold @(n * m * m * n - 1) f . flattenGrid
+
+shiftInGridAtN :: forall n m a. (KnownNat n, KnownNat m) => Grid n m a -> a -> (a, Grid n m a)
+shiftInGridAtN grid x = (x', unflattenGrid grid')
+  where
+    (grid', x' :> Nil) = shiftInAtN (flattenGrid grid) (x :> Nil)
+
+shiftInGridAt0 :: forall n m a. (KnownNat n, KnownNat m) => a -> Grid n m a -> (Grid n m a, a)
+shiftInGridAt0 x grid = (unflattenGrid grid', x')
+  where
+    (grid', x' :> Nil) = shiftInAt0 (flattenGrid grid) (x :> Nil)
 
 unzipMatrix :: Matrix n m (a, b) -> (Matrix n m a, Matrix n m b)
 unzipMatrix = (FromRows *** FromRows) . unzip . fmap unzip . matrixRows
@@ -68,7 +85,117 @@ declareBareB [d|
     , is_unique :: Bool
     , changed :: Bool
     , cont :: Cell n m
+    , neighbours :: Vec 3 (Mask n m)
+    , keep_guessing :: Bool
     } |]
+
+type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= n * m * m * n)
+
+diag :: (KnownNat n) => Vec n (Vec n a) -> Vec n a
+diag = zipWith (flip (!!)) indicesI
+
+foo
+    :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
+    => Grid n m (Cell n m)
+    -> Signal dom Bool
+    -> Signal dom Bool
+    -> Signal dom (Maybe (Cell n m))
+    -> Signal dom (Maybe (Sudoku n m))
+    -> ( Signal dom (Cell n m)
+       , Signal dom PropagatorResult
+       , Grid n m (Signal dom (Cell n m))
+       , Signal dom Bool
+       , Grid n m (Signal dom (Cell n m))
+       , Signal dom String
+       )
+foo initials enable_propagate commit_guess shift_in pop = (head_cell, result, cells, can_guess, conts, dbg)
+  where
+    dbg = do
+        -- fresh <- fresh
+        cnt <- cnt
+        head_cell <- head_cell
+        result <- result
+        pure $ unwords [show cnt, show result]
+
+    cnt = register (0 :: Index (n * m)) $ do
+        result <- result
+        enable_propagate <- enable_propagate
+        cnt <- cnt
+        pure $ case result of
+            Progress | enable_propagate -> countSucc cnt
+            _ -> cnt
+        -- mux fresh 0 $ mux enable_propagate (countSucc <$> cnt) cnt
+    new_round = cnt .== 0
+
+    pops :: Grid n m (Signal dom (Maybe (Cell n m)))
+    pops = unbundle . fmap sequenceA $ pop
+
+    prev_bufs = unbundle . fmap diag . bundle . fmap neighbours <$> neighbourhood units
+
+    units :: Grid n m (Signals dom (CellUnit n m))
+    units = unit <$> initials <*> shift_ins <*> guess_laters <*> pops <*> prev_bufs
+
+    cells = cell <$> units
+    conts = cont <$> units
+
+    shift_ins :: Grid n m (Signal dom (Maybe (Cell n m)))
+    (_shift_out, shift_ins) = shiftInGridAtN (enable (isJust <$> shift_in) <$> cells) shift_in
+    head_cell = head @(n * m * m * n - 1) $ flattenGrid cells
+    (guess_laters, guessing_failed) = shiftInGridAt0 (pure True) (keep_guessing <$> units)
+
+    should_guess = not <$> any_changed
+    can_guess = {- should_guess .&&. -} (not <$> guessing_failed)
+
+    any_changed = foldGrid (.||.) (changed <$> units)
+    all_unique = foldGrid (.&&.) (is_unique <$> units)
+    any_failed  = foldGrid (.||.) ((.== conflicted) <$> cells)
+
+    neighbourhood :: Grid n m a -> Grid n m (Vec 3 a)
+    neighbourhood grid = sequenceA $
+        rowwise rotateL1 grid :>
+        columnwise rotateL1 grid :>
+        boxwise rotateL1 grid :>
+        Nil
+
+    unit :: Cell n m -> Signal dom (Maybe (Cell n m)) -> Signal dom Bool -> Signal dom (Maybe (Cell n m)) -> Vec 3 (Signal dom (Mask n m)) -> Signals dom (CellUnit n m)
+    unit initial shift_in try_guess pop prevs@(prev_row :> prev_col :> prev_box :> Nil) = CellUnit{..}
+      where
+        load = shift_in .<|>. pop
+
+        cell = register initial {- conflicted #-} cell'
+        cell_before_propagation = regEn conflicted new_round cell
+
+        cell' =
+                load
+          .<|>. enable (commit_guess .&&. guess_this) first_guess
+          .<|>. enable enable_propagate (applyMasks <$> cell <*> bundle (propagator_bufs))
+          .<|. cell
+        is_unique = isUnique <$> cell
+        changed = cell' ./=. cell_before_propagation
+
+        extend_mask mask = combineMask <$> mask <*> is_unique <*> cell
+
+        propagator_bufs = register wildMask . mux new_round (pure wildMask) <$> prevs
+
+        neighbours = bundle $ extend_mask <$> propagator_bufs
+
+        (first_guess, next_guess) = unbundle $ mux try_guess (splitCell <$> cell) (bundle (cell, cell))
+        guess_this = enable_propagate .&&. try_guess .&&. (not <$> is_unique)
+        cont = mux guess_this next_guess cell
+        keep_guessing = try_guess .&&. (not <$> guess_this)
+
+    fresh = {- register False $ -} isJust <$> shift_in .||. isJust <$> pop
+
+    result =
+        mux (not <$> new_round) (pure Progress) $
+        mux fresh (pure Progress) $
+        mux any_failed (pure Failure) $
+        mux all_unique (pure Solved) $
+        mux any_changed (pure Progress) $
+        mux can_guess (pure Guess) $
+        -- mux should_guess (pure Failure) $
+        pure Progress
+        -- pure Failure
 
 propagator
     :: forall n m dom. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= n * m * m * n)

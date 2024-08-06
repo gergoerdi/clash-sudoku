@@ -11,6 +11,7 @@ import qualified Data.List as L
 import qualified Clash.Sized.Vector as V
 import Data.Proxy
 
+import Sudoku.Solve (Solvable)
 import Sudoku.Grid
 import Format
 import Sudoku

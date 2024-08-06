@@ -6,6 +6,7 @@ module Sudoku where
 
 import Clash.Prelude hiding (lift)
 import Clash.Annotations.TH
+import Clash.Class.Counter
 import Clash.Class.Counter.Internal
 
 import Data.Maybe
@@ -23,8 +24,9 @@ import Sudoku.Grid
 import Sudoku.Solve hiding (Propagate, controller)
 import Sudoku.Stack
 import Format
+import Data.Char (chr)
 
--- import Debug.Trace
+import Debug.Trace
 
 countSuccChecked :: Counter a => a -> Maybe a
 countSuccChecked x = x' <$ guard (not overflow)
@@ -42,8 +44,6 @@ data St n m
     deriving (Generic, NFDataX, Show, Eq)
 
 
-type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= n * m * m * n, 1 <= StackSize n m)
-
 showGrid :: forall n m. (Showable n m) => Sudoku n m -> String
 showGrid = formatModel (Proxy @(FormatGrid n m)) . fmap (chr . fromIntegral . showCell) . toList . flattenGrid
 
@@ -51,7 +51,7 @@ instance (Showable n m) => Show (Sudoku n m) where
     show = showGrid
 
 controller'
-    :: forall n m dom k. (Solvable n m)
+    :: forall n m dom k. (Solvable n m, Showable n m)
     => (HiddenClockResetEnable dom)
     => Signal dom (Df.Data (Cell n m))
     -> Signal dom Ack
@@ -96,13 +96,14 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
                 let shift_out = Just $ if solved then head_cell else conflicted
                 pure (shift_in, shift_out, Ack False, False, False, Nothing)
 
-    (head_cell, result, grid, can_guess, next_guesses) = propagator (register False enable_propagate) (commit_guess) shift_in' popped
+    -- (head_cell, result, grid, can_guess, next_guesses) = propagator (register False enable_propagate) (commit_guess) shift_in' popped
+    (head_cell, result, grid, can_guess, next_guesses, dbg) = foo @n @m (pure conflicted) enable_propagate commit_guess shift_in' popped
     popped = stack_rd
 
     (stack_rd, sp) = stack (SNat @(StackSize n m)) (emptySudoku @n @m) stack_cmd (bundle next_guesses)
 
 controller
-    :: forall n m dom. (Solvable n m)
+    :: forall n m dom. (Solvable n m, Showable n m)
     => (HiddenClockResetEnable dom)
     => Circuit (Df dom (Cell n m)) (Df dom (Cell n m))
 controller = Circuit $ uncurry controller'
