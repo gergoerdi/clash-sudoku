@@ -127,9 +127,10 @@ propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid cells
         cell = register conflicted cell'
         cell' = load .<|>. enable (commit_guess .&&. guess_this) first_guess .<|>. enable enable_propagate (propagate cell neighbour_masks) .<|. cell
         changed = register False $ cell ./=. cell'
-        is_unique = isUnique <$> cell
 
-        (first_guess, next_guess) = unbundle $ mux try_guess (splitCell <$> cell) (bundle (cell, cell))
+        first_guess = cellFirstBit <$> cell
+        next_guess = cellOtherBits <$> cell <*> first_guess
+        is_unique = next_guess .== conflicted
 
         can_guess = not <$> is_unique
         guess_this = enable_propagate .&&. try_guess .&&. can_guess
