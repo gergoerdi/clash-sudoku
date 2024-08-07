@@ -93,7 +93,6 @@ propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid cells
 
     cells = unflattenGrid $ cell <$> units
     uniques = unflattenGrid $ is_unique <$> units
-    changeds = changed <$> units
     conts = unflattenGrid $ cont <$> units
 
     faileds = fmap (.== conflicted) cells
@@ -103,16 +102,16 @@ propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid cells
 
     fresh = register False $ isJust <$> shift_in .||. isJust <$> pop
     all_unique = foldGrid (.&&.) uniques
-    any_changed = fold @(n * m * m * n - 1) (.||.) changeds
+    any_changed = fold @(n * m * m * n - 1) (.||.) (changed <$> units)
     any_failed  = foldGrid (.||.) faileds
 
     result =
         mux fresh (pure Progress) $
-        mux all_unique (pure Solved) $
         mux any_failed (pure Failure) $
+        mux all_unique (pure Solved) $
+        mux any_changed (pure Progress) $
         mux can_guess (pure Guess) $
-        mux should_guess (pure Failure) $
-        pure Progress
+        pure Failure
 
     unit
         :: forall k. (KnownNat k)
@@ -125,8 +124,20 @@ propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid cells
         shift_out = enable (isJust <$> shift_in) cell
 
         cell = register conflicted cell'
-        cell' = load .<|>. enable (commit_guess .&&. guess_this) first_guess .<|>. enable enable_propagate (propagate cell neighbour_masks) .<|. cell
-        changed = register False $ cell ./=. cell'
+
+        -- TODO: why do we need to delay this?
+        changed = register False changed_
+        (cell', changed_) = unbundle do
+            load <- load
+            guess <- enable (commit_guess .&&. guess_this) first_guess
+            propagate <- enable enable_propagate $ propagate cell neighbour_masks
+            old <- cell
+            pure $ let new = fromMaybe old $ load <|> guess <|> propagate in (new, new /= old)
+            -- pure $ case load <|> guess of
+            --     Just new_value -> (new_value, True)
+            --     Nothing -> case propagate of
+            --         Just propagate -> (propagate, propagate /= old)
+            --         Nothing -> (old, False)
 
         first_guess = cellFirstBit <$> cell
         next_guess = cellOtherBits <$> cell <*> first_guess
