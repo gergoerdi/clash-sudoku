@@ -21,8 +21,8 @@ import Barbies.TH
 
 import Debug.Trace
 
-foldGrid :: (n * m * m * n ~ k + 1) => (a -> a -> a) -> Grid n m a -> a
-foldGrid f = fold f . flattenGrid
+foldGrid :: forall n m a. (1 <= n * m * m * n) => (a -> a -> a) -> Grid n m a -> a
+foldGrid f = fold @(n * m * m * n - 1) f . flattenGrid
 
 unzipMatrix :: Matrix n m (a, b) -> (Matrix n m a, Matrix n m b)
 unzipMatrix = (FromRows *** FromRows) . unzip . fmap unzip . matrixRows
