@@ -39,6 +39,9 @@ applyMasks (Cell s0) xs = Cell $ fold (.&.) (s0 :> map maskBits xs)
 wildMask :: (KnownNat n, KnownNat m) => Mask n m
 wildMask = Mask maxBound
 
+cellMask :: (KnownNat n, KnownNat m) => Cell n m -> Mask n m
+cellMask = Mask . complement . cellBits
+
 data Unique a
     = Unique a
     | Conflict
@@ -53,25 +56,14 @@ getUnique = foldl propagate Unset . zip indicesI . bv2v . cellBits
                        | b == low             = u
                        | otherwise            = Conflict
 
-isUnique :: (KnownNat n, KnownNat m) => Cell n m -> Bool
-isUnique x = popCount (cellBits x) == 1
+lastBit :: (KnownNat n) => BitVector n -> BitVector n
+lastBit x = x `xor` (x .&. (x - 1))
 
-firstBit :: (KnownNat n) => BitVector n -> BitVector n
-firstBit = v2bv . snd . mapAccumL (\ b x -> let x' = if b then low else x in (b || x' == high, x')) False . bv2v
-  where
-    f seen_high bit = (seen_high || bit == high, if seen_high then low else bit)
-
-cellFirstBit :: (KnownNat n, KnownNat m) => Cell n m -> Cell n m
-cellFirstBit = Cell . firstBit . cellBits
+cellLastBit :: (KnownNat n, KnownNat m) => Cell n m -> Cell n m
+cellLastBit = Cell . lastBit . cellBits
 
 cellOtherBits :: (KnownNat n, KnownNat m) => Cell n m -> Cell n m -> Cell n m
 cellOtherBits (Cell c) (Cell bit) = Cell $ c .&. complement bit
-
-splitCell :: (KnownNat n, KnownNat m) => Cell n m -> (Cell n m, Cell n m)
-splitCell (Cell s) = (Cell s', Cell (s .&. complement s'))
-  where
-    s' = firstBit s
-
 
 ascii :: Char -> Unsigned 8
 ascii = fromIntegral . ord
