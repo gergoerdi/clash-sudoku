@@ -89,7 +89,7 @@ propagator enable_propagate commit_guess shift_in pop = (head @(n * m * m * n - 
     should_guess = not <$> any_changed
     can_guess = should_guess .&&. (not <$> keep_guessing)
 
-    fresh = register False $ isJust <$> shift_in .||. isJust <$> pop
+    fresh = isJust <$> shift_in .||. isJust <$> pop
     all_unique = foldGrid (.&&.) (is_unique <$> units)
     any_changed = foldGrid (.||.) (changed <$> units)
     any_failed  = foldGrid (.||.) ((.== conflicted) <$> cells)
