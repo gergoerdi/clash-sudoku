@@ -24,6 +24,11 @@ import Debug.Trace
 foldGrid :: forall n m a. (1 <= n * m * m * n) => (a -> a -> a) -> Grid n m a -> a
 foldGrid f = fold @(n * m * m * n - 1) f . flattenGrid
 
+shiftInGridAtN :: forall n m a. (KnownNat n, KnownNat m) => Grid n m a -> a -> (a, Grid n m a)
+shiftInGridAtN grid x = (x', unflattenGrid grid')
+  where
+    (grid', x' :> Nil) = shiftInAtN (flattenGrid grid) (x :> Nil)
+
 neighboursMasks
     :: forall n m dom. (KnownNat n, KnownNat m, 1 <= m, 1 <= n, 2 <= n * m)
     => (HiddenClockResetEnable dom)
@@ -40,6 +45,7 @@ declareBareB [d|
     , is_unique :: Bool
     , changed :: Bool
     , cont :: Cell n m
+    , keep_guessing :: Bool
     } |]
 
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, 1 <= n * m * m * n)
@@ -69,8 +75,10 @@ propagator enable_propagate commit_guess shift_in pop = (head @(n * m * m * n - 
     pops = unbundle . fmap sequenceA $ pop
 
     units :: Grid n m (Signals dom (CellUnit n m))
-    ((_shift_out, guessing_failed), unflattenGrid -> units) =
-        mapAccumR unit (shift_in, should_guess) (flattenGrid $ ((,) <$> pops <*> neighboursMasks masks))
+    units = pure unit <*> shift_ins <*> prev_guesses <*> pops <*> neighboursMasks masks
+
+    (_shift_out, shift_ins) = shiftInGridAtN (enable (isJust <$> shift_in) . cell <$> units) shift_in
+    (guessing_failed, prev_guesses) = shiftInGridAtN (keep_guessing <$> units) should_guess
 
     masks = mask <$> units
     cells = cell <$> units
@@ -93,10 +101,12 @@ propagator enable_propagate commit_guess shift_in pop = (head @(n * m * m * n - 
         pure Failure
 
     unit
-        :: (Signal dom (Maybe (Cell n m)), Signal dom Bool)
-        -> (Signal dom (Maybe (Cell n m)), Signal dom (Mask n m))
-        -> ((Signal dom (Maybe (Cell n m)), Signal dom Bool), Signals dom (CellUnit n m))
-    unit (shift_in, try_guess) (pop, neighbours_mask) = ((shift_out, keep_guessing), CellUnit{..})
+        :: Signal dom (Maybe (Cell n m))
+        -> Signal dom Bool
+        -> Signal dom (Maybe (Cell n m))
+        -> Signal dom (Mask n m)
+        -> Signals dom (CellUnit n m)
+    unit shift_in try_guess pop neighbours_mask = CellUnit{..}
       where
         load = shift_in .<|>. pop
         shift_out = enable (isJust <$> shift_in) cell
