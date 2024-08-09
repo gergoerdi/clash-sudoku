@@ -33,17 +33,11 @@ unzipGrid = (Grid *** Grid) . unzipMatrix . fmap unzipMatrix . getGrid
 neighbourMasks
     :: forall n m dom. (KnownNat n, KnownNat m, 1 <= m, 1 <= n, 1 <= n * m)
     => (HiddenClockResetEnable dom)
-    => Grid n m (Signal dom (Cell n m))
-    -> Grid n m (Signal dom Bool)
+    => Grid n m (Signal dom (Mask n m))
     -> Grid n m (Vec (3 * (n * m - 1)) (Signal dom (Mask n m)))
-neighbourMasks cells uniques =
+neighbourMasks masks =
     rowwise others masks .++. columnwise others masks .++. boxwise others masks
   where
-    masks = cellMask <$> cells <*> uniques
-
-    cellMask :: Signal dom (Cell n m) -> Signal dom Bool -> Signal dom (Mask n m)
-    cellMask c is_unique = mux is_unique (Mask . complement . cellBits <$> c) (pure wildMask)
-
     (.++.) = liftA2 (++)
     infixr 5 .++.
 
@@ -58,6 +52,7 @@ propagate cell neighbour_masks = applyMasks <$> cell <*> bundle neighbour_masks
 declareBareB [d|
   data CellUnit n m = CellUnit
     { cell :: Cell n m
+    , mask :: Mask n m
     , is_unique :: Bool
     , changed :: Bool
     , cont :: Cell n m
@@ -83,17 +78,19 @@ propagator
        , Signal dom Bool
        , Grid n m (Signal dom (Cell n m))
        )
-propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid cells), result, cells, can_guess, conts)
+propagator enable_propagate commit_guess shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), result, cells, can_guess, conts)
   where
     pops :: Grid n m (Signal dom (Maybe (Cell n m)))
     pops = unbundle . fmap sequenceA $ pop
 
-    ((_shift_out, keep_guessing), units) =
-        mapAccumR unit (shift_in, should_guess) (flattenGrid $ ((,) <$> pops <*> neighbourMasks cells uniques))
+    units :: Grid n m (Signals dom (CellUnit n m))
+    ((_shift_out, keep_guessing), unflattenGrid -> units) =
+        mapAccumR unit (shift_in, should_guess) (flattenGrid $ ((,) <$> pops <*> neighbourMasks masks))
 
-    cells = unflattenGrid $ cell <$> units
-    uniques = unflattenGrid $ is_unique <$> units
-    conts = unflattenGrid $ cont <$> units
+    masks = mask <$> units
+    cells = cell <$> units
+    uniques = is_unique <$> units
+    conts = cont <$> units
 
     faileds = fmap (.== conflicted) cells
 
@@ -102,7 +99,7 @@ propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid cells
 
     fresh = register False $ isJust <$> shift_in .||. isJust <$> pop
     all_unique = foldGrid (.&&.) uniques
-    any_changed = fold @(n * m * m * n - 1) (.||.) (changed <$> units)
+    any_changed = foldGrid (.||.) (changed <$> units)
     any_failed  = foldGrid (.||.) faileds
 
     result =
@@ -124,6 +121,7 @@ propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid cells
         shift_out = enable (isJust <$> shift_in) cell
 
         cell = register conflicted cell'
+        mask = mux is_unique (cellMask <$> cell) (pure wildMask)
 
         -- TODO: why do we need to delay this?
         changed = register False changed_
