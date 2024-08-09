@@ -14,6 +14,7 @@ import Data.Proxy
 import Sudoku.Grid
 import Format
 import Sudoku
+import Sudoku.Solve (Solvable)
 
 model_encodeSerial :: Int -> Unsigned 8 -> [Bit]
 model_encodeSerial stretch x = mconcat
