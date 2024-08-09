@@ -84,18 +84,15 @@ propagator enable_propagate commit_guess shift_in pop = (head @(n * m * m * n - 
 
     masks = mask <$> units
     cells = cell <$> units
-    uniques = is_unique <$> units
     conts = cont <$> units
-
-    faileds = fmap (.== conflicted) cells
 
     should_guess = not <$> any_changed
     can_guess = should_guess .&&. (not <$> keep_guessing)
 
     fresh = register False $ isJust <$> shift_in .||. isJust <$> pop
-    all_unique = foldGrid (.&&.) uniques
+    all_unique = foldGrid (.&&.) (is_unique <$> units)
     any_changed = foldGrid (.||.) (changed <$> units)
-    any_failed  = foldGrid (.||.) faileds
+    any_failed  = foldGrid (.||.) ((.== conflicted) <$> cells)
 
     result =
         mux fresh (pure Progress) $
@@ -126,11 +123,6 @@ propagator enable_propagate commit_guess shift_in pop = (head @(n * m * m * n - 
             propagate <- enable enable_propagate $ propagate cell neighbour_masks
             old <- cell
             pure $ let new = fromMaybe old $ load <|> guess <|> propagate in (new, new /= old)
-            -- pure $ case load <|> guess of
-            --     Just new_value -> (new_value, True)
-            --     Nothing -> case propagate of
-            --         Just propagate -> (propagate, propagate /= old)
-            --         Nothing -> (old, False)
 
         first_guess = cellLastBit <$> cell
         next_guess = cellOtherBits <$> cell <*> first_guess
