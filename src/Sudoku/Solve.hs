@@ -24,12 +24,6 @@ import Debug.Trace
 foldGrid :: forall n m a. (1 <= n * m * m * n) => (a -> a -> a) -> Grid n m a -> a
 foldGrid f = fold @(n * m * m * n - 1) f . flattenGrid
 
-unzipMatrix :: Matrix n m (a, b) -> (Matrix n m a, Matrix n m b)
-unzipMatrix = (FromRows *** FromRows) . unzip . fmap unzip . matrixRows
-
-unzipGrid :: Grid n m (a, b) -> (Grid n m a, Grid n m b)
-unzipGrid = (Grid *** Grid) . unzipMatrix . fmap unzipMatrix . getGrid
-
 neighbourMasks
     :: forall n m dom. (KnownNat n, KnownNat m, 1 <= m, 1 <= n, 1 <= n * m)
     => (HiddenClockResetEnable dom)
