@@ -1,7 +1,7 @@
 {-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE TemplateHaskell #-} -- For declaring Barbie types
-module Sudoku.Solve (propagator, PropagatorResult(..)) where
+module Sudoku.Solve (Solvable, propagator, PropagatorResult(..)) where
 
 import Clash.Prelude hiding (mapAccumR)
 import Clash.Class.Counter
@@ -65,9 +65,10 @@ declareBareB [d|
     , cont :: Cell n m
     } |]
 
+type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= n * m * m * n)
+
 propagator
-    :: forall n m dom. (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= n * m * m * n)
-    => (HiddenClockResetEnable dom)
+    :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
     => Signal dom Bool
     -> Signal dom Bool
     -> Signal dom (Maybe (Cell n m))

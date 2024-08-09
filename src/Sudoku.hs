@@ -42,8 +42,6 @@ data St n m
     deriving (Generic, NFDataX, Show, Eq)
 
 
-type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= n * m * m * n, 1 <= StackSize n m)
-
 showGrid :: forall n m. (Showable n m) => Sudoku n m -> String
 showGrid = formatModel (Proxy @(FormatGrid n m)) . fmap (chr . fromIntegral . showCell) . toList . flattenGrid
 
