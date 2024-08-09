@@ -139,7 +139,7 @@ propagator enable_propagate commit_guess shift_in pop = (head (flattenGrid cells
             --         Just propagate -> (propagate, propagate /= old)
             --         Nothing -> (old, False)
 
-        first_guess = cellFirstBit <$> cell
+        first_guess = cellLastBit <$> cell
         next_guess = cellOtherBits <$> cell <*> first_guess
         is_unique = next_guess .== conflicted
 
