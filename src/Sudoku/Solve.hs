@@ -31,24 +31,14 @@ data PropagatorResult
     | Progress
     deriving (Generic, NFDataX, Eq, Show)
 
-neighbourMasks
-    :: forall n m dom. (KnownNat n, KnownNat m, 1 <= m, 1 <= n, 1 <= n * m)
+neighboursMasks
+    :: forall n m dom. (KnownNat n, KnownNat m, 1 <= m, 1 <= n, 2 <= n * m)
     => (HiddenClockResetEnable dom)
     => Grid n m (Signal dom (Mask n m))
-    -> Grid n m (Vec (3 * (n * m - 1)) (Signal dom (Mask n m)))
-neighbourMasks masks =
-    rowwise others masks .++. columnwise others masks .++. boxwise others masks
+    -> Grid n m (Signal dom (Mask n m))
+neighboursMasks masks = combine <$> rowwise others masks <*> columnwise others masks <*> boxwise others masks
   where
-    (.++.) = liftA2 (++)
-    infixr 5 .++.
-
-propagate
-    :: forall n m dom k. (KnownNat n, KnownNat m, KnownNat k)
-    => (HiddenClockResetEnable dom)
-    => Signal dom (Cell n m)
-    -> Vec k (Signal dom (Mask n m))
-    -> Signal dom (Cell n m)
-propagate cell neighbour_masks = applyMasks <$> cell <*> bundle neighbour_masks
+    combine ms1 ms2 ms3 = fold @(3 * (n * m - 1) - 1) (liftA2 (<>)) (ms1 ++ ms2 ++ ms3)
 
 declareBareB [d|
   data CellUnit n m = CellUnit
@@ -59,7 +49,7 @@ declareBareB [d|
     , cont :: Cell n m
     } |]
 
-type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, 1 <= n * m * m * n)
+type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, 1 <= n * m * m * n)
 
 propagator
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
@@ -79,15 +69,15 @@ propagator enable_propagate commit_guess shift_in pop = (head @(n * m * m * n - 
     pops = unbundle . fmap sequenceA $ pop
 
     units :: Grid n m (Signals dom (CellUnit n m))
-    ((_shift_out, keep_guessing), unflattenGrid -> units) =
-        mapAccumR unit (shift_in, should_guess) (flattenGrid $ ((,) <$> pops <*> neighbourMasks masks))
+    ((_shift_out, guessing_failed), unflattenGrid -> units) =
+        mapAccumR unit (shift_in, should_guess) (flattenGrid $ ((,) <$> pops <*> neighboursMasks masks))
 
     masks = mask <$> units
     cells = cell <$> units
     conts = cont <$> units
 
     should_guess = not <$> any_changed
-    can_guess = should_guess .&&. (not <$> keep_guessing)
+    can_guess = should_guess .&&. (not <$> guessing_failed)
 
     fresh = isJust <$> shift_in .||. isJust <$> pop
     all_unique = foldGrid (.&&.) (is_unique <$> units)
@@ -103,18 +93,17 @@ propagator enable_propagate commit_guess shift_in pop = (head @(n * m * m * n - 
         pure Failure
 
     unit
-        :: forall k. (KnownNat k)
-        => (Signal dom (Maybe (Cell n m)), Signal dom Bool)
-        -> (Signal dom (Maybe (Cell n m)), Vec k (Signal dom (Mask n m)))
+        :: (Signal dom (Maybe (Cell n m)), Signal dom Bool)
+        -> (Signal dom (Maybe (Cell n m)), Signal dom (Mask n m))
         -> ((Signal dom (Maybe (Cell n m)), Signal dom Bool), Signals dom (CellUnit n m))
-    unit (shift_in, try_guess) (pop, neighbour_masks) = ((shift_out, keep_guessing), CellUnit{..})
+    unit (shift_in, try_guess) (pop, neighbours_mask) = ((shift_out, keep_guessing), CellUnit{..})
       where
         load = shift_in .<|>. pop
         shift_out = enable (isJust <$> shift_in) cell
 
         cell = register conflicted cell'
-        mask = mux is_unique (cellMask <$> cell) (pure wildMask)
-        propagated = propagate cell neighbour_masks
+        mask = mux is_unique (cellMask <$> cell) (pure mempty)
+        propagated = applyMask <$> neighbours_mask <*> cell
 
         cell' = do
             load <- load

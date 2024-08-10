@@ -28,18 +28,14 @@ unique n = Cell $ 1 `rotateR` 1 `rotateR` fromIntegral n
 
 newtype Mask n m = Mask{ maskBits :: BitVector (n * m) }
 
-combineMask :: (KnownNat n, KnownNat m) => Mask n m -> Bool -> Cell n m -> Mask n m
-combineMask mask is_unique new
-    | is_unique
-    = Mask $ maskBits mask .&. complement (cellBits new)
-    | otherwise
-    = mask
+instance (KnownNat n, KnownNat m) => Semigroup (Mask n m) where
+    Mask m1 <> Mask m2 = Mask (m1 .&. m2)
 
-applyMasks :: (KnownNat n, KnownNat m) => Cell n m -> Vec k (Mask n m) -> Cell n m
-applyMasks (Cell s0) xs = Cell $ fold (.&.) (s0 :> map maskBits xs)
+instance (KnownNat n, KnownNat m) => Monoid (Mask n m) where
+    mempty = Mask maxBound
 
-wildMask :: (KnownNat n, KnownNat m) => Mask n m
-wildMask = Mask maxBound
+applyMask :: (KnownNat n, KnownNat m) => Mask n m -> Cell n m -> Cell n m
+applyMask (Mask m) (Cell c) = Cell $ c .&. m
 
 cellMask :: (KnownNat n, KnownNat m) => Cell n m -> Mask n m
 cellMask = Mask . complement . cellBits
