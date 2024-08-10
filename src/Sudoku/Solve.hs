@@ -91,7 +91,7 @@ propagator enable_propagate commit_guess shift_in pop = (head @(n * m * m * n - 
 
     fresh = isJust <$> shift_in .||. isJust <$> pop
     all_unique = foldGrid (.&&.) (is_unique <$> units)
-    any_changed = foldGrid (.||.) (changed <$> units)
+    any_changed = register False $ foldGrid (.||.) (changed <$> units)
     any_failed  = foldGrid (.||.) ((.== conflicted) <$> cells)
 
     result =
@@ -115,9 +115,7 @@ propagator enable_propagate commit_guess shift_in pop = (head @(n * m * m * n - 
         cell = register conflicted cell'
         mask = mux is_unique (cellMask <$> cell) (pure wildMask)
 
-        -- TODO: why do we need to delay this?
-        changed = register False changed_
-        (cell', changed_) = unbundle do
+        (cell', changed) = unbundle do
             load <- load
             guess <- enable (commit_guess .&&. guess_this) first_guess
             propagate <- enable enable_propagate $ propagate cell neighbour_masks
