@@ -124,8 +124,7 @@ propagator enable_propagate commit_guess shift_in pop = (head @(n * m * m * n - 
             old <- cell
             pure $ let new = fromMaybe old $ load <|> guess <|> propagate in (new, new /= old)
 
-        first_guess = cellLastBit <$> cell
-        next_guess = cellOtherBits <$> cell <*> first_guess
+        (first_guess, next_guess) = unbundle $ splitCell <$> cell
         is_unique = next_guess .== conflicted
 
         can_guess = not <$> is_unique
