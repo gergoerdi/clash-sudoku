@@ -115,12 +115,11 @@ propagator enable_propagate commit_guess shift_in pop = (head @(n * m * m * n - 
         mask = mux is_unique (cellMask <$> cell) (pure mempty)
         propagated = applyMask <$> neighbours_mask <*> cell
 
-        cell' = do
-            load <- load
-            guess <- enable (commit_guess .&&. guess_this) first_guess
-            propagated <- enable enable_propagate propagated
-            old <- cell
-            pure $ fromMaybe old $ load <|> guess <|> propagated
+        cell' =
+            load .<|>.
+            enable (commit_guess .&&. guess_this) first_guess .<|>.
+            enable enable_propagate propagated .<|.
+            cell
         changed = cell' ./=. cell
 
         (first_guess, next_guess) = unbundle $ splitCell <$> cell
