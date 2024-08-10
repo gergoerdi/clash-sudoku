@@ -114,13 +114,15 @@ propagator enable_propagate commit_guess shift_in pop = (head @(n * m * m * n - 
 
         cell = register conflicted cell'
         mask = mux is_unique (cellMask <$> cell) (pure wildMask)
+        propagated = propagate cell neighbour_masks
 
-        (cell', changed) = unbundle do
+        cell' = do
             load <- load
             guess <- enable (commit_guess .&&. guess_this) first_guess
-            propagate <- enable enable_propagate $ propagate cell neighbour_masks
+            propagated <- enable enable_propagate propagated
             old <- cell
-            pure $ let new = fromMaybe old $ load <|> guess <|> propagate in (new, new /= old)
+            pure $ fromMaybe old $ load <|> guess <|> propagated
+        changed = cell' ./=. cell
 
         (first_guess, next_guess) = unbundle $ splitCell <$> cell
         is_unique = next_guess .== conflicted
