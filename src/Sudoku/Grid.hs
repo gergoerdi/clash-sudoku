@@ -59,11 +59,11 @@ getUnique = foldl propagate Unset . zip indicesI . bv2v . cellBits
 lastBit :: (KnownNat n) => BitVector n -> BitVector n
 lastBit x = x `xor` (x .&. (x - 1))
 
-cellLastBit :: (KnownNat n, KnownNat m) => Cell n m -> Cell n m
-cellLastBit = Cell . lastBit . cellBits
-
-cellOtherBits :: (KnownNat n, KnownNat m) => Cell n m -> Cell n m -> Cell n m
-cellOtherBits (Cell c) (Cell bit) = Cell $ c .&. complement bit
+splitCell :: (KnownNat n, KnownNat m) => Cell n m -> (Cell n m, Cell n m)
+splitCell (Cell c) = (Cell last, Cell rest)
+  where
+    last = lastBit c
+    rest = c .&. complement last
 
 ascii :: Char -> Unsigned 8
 ascii = fromIntegral . ord
