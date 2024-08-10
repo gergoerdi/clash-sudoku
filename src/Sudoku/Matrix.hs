@@ -39,3 +39,9 @@ toRowMajorOrder = concat . matrixRows
 
 fromRowMajorOrder :: (KnownNat n, KnownNat m) => Vec (n * m) a -> Matrix n m a
 fromRowMajorOrder = FromRows . unconcatI
+
+transposeMatrix
+    :: (KnownNat n, KnownNat m)
+    => Matrix n m a
+    -> Matrix m n a
+transposeMatrix = FromRows . transpose . matrixRows

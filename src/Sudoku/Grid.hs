@@ -1,4 +1,4 @@
-{-# LANGUAGE StandaloneDeriving, DerivingStrategies, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE StandaloneDeriving, DerivingStrategies, DerivingVia, GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Sudoku.Grid where
@@ -8,11 +8,13 @@ import Sudoku.Matrix
 
 import Data.Char (ord, chr)
 import Control.Monad (guard)
+import Data.Ord (Down(..))
 
 newtype Cell n m = Cell{ cellBits :: BitVector (n * m) }
     deriving stock (Generic)
     deriving anyclass (NFDataX)
     deriving newtype (Eq, Show)
+    deriving (Ord) via Down (BitVector (n * m)) -- So that the ordering makes it easy to check solutions
 deriving anyclass instance (KnownNat n, KnownNat m) => BitPack (Cell n m)
 
 wild :: (KnownNat n, KnownNat m) => Cell n m
@@ -166,18 +168,19 @@ gridFromRows
     -> Grid n m a
 gridFromRows = Grid . FromRows . unconcatI . fmap (FromRows . unconcatI)
 
+rowmap
+    :: (KnownNat n, KnownNat m, 1 <= (n * m))
+    => (Vec (n * m) a -> b)
+    -> Grid n m a
+    -> Vec (n * m) b
+rowmap f = fmap f . gridToRows
+
 rowwise
     :: (KnownNat n, KnownNat m, 1 <= n * m)
     => (Vec (m * n) a -> Vec (m * n) b)
     -> Grid n m a
     -> Grid n m b
-rowwise f = gridFromRows . fmap f . gridToRows
-
-transposeMatrix
-    :: (KnownNat n, KnownNat m)
-    => Matrix n m a
-    -> Matrix m n a
-transposeMatrix = FromRows . transpose . matrixRows
+rowwise f = gridFromRows . rowmap f
 
 transposeGrid
     :: (KnownNat n, KnownNat m)
@@ -185,12 +188,19 @@ transposeGrid
     -> Grid m n a
 transposeGrid = gridFromRows . transpose . gridToRows
 
+colmap
+    :: (KnownNat n, KnownNat m, 1 <= (n * m))
+    => (Vec (n * m) a -> b)
+    -> Grid n m a
+    -> Vec (n * m) b
+colmap f = rowmap f . transposeGrid
+
 columnwise
     :: (KnownNat n, KnownNat m, 1 <= (n * m))
     => (Vec (n * m) a -> Vec (n * m) b)
     -> Grid n m a
     -> Grid n m b
-columnwise f = transposeGrid . rowwise f . transposeGrid
+columnwise f = transposeGrid . gridFromRows . colmap f
 
 toBoxes
     :: (KnownNat n, KnownNat m)
@@ -204,12 +214,19 @@ fromBoxes
     -> Grid n m a
 fromBoxes = Grid . FromRows . fmap (fmap FromRows . transpose . fmap unconcatI) . matrixRows
 
+boxmap
+    :: (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    => (Vec (n * m) a -> b)
+    -> Grid n m a
+    -> Matrix n m b
+boxmap f = fmap f . toBoxes
+
 boxwise
     :: (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
     => (Vec (n * m) a -> Vec (n * m) b)
     -> Grid n m a
     -> Grid n m b
-boxwise f = fromBoxes . fmap f . toBoxes
+boxwise f = fromBoxes . boxmap f
 
 mapAccumGrid
     :: forall n m a s b. (KnownNat n, KnownNat m)

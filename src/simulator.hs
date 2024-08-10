@@ -11,6 +11,7 @@ import qualified Data.List as L
 import qualified Clash.Sized.Vector as V
 import Data.Proxy
 
+import Sudoku.Matrix
 import Sudoku.Grid
 import Format
 import Sudoku
@@ -183,10 +184,25 @@ solve = consume . simulateCSE @System (exposeClockResetEnable $ controller @n @m
           where
             acc' = x : acc
 
+checkSolved :: forall n m. (Solvable n m) => Sudoku n m -> Bool
+checkSolved grid = and
+  [ fold @(n * m - 1) (&&) (rowmap valid grid)
+  , fold @(n * m - 1) (&&) (colmap valid grid)
+  , fold @(n * m - 1) (&&) (toRowMajorOrder $ boxmap valid grid)
+  ]
+  where
+    valid xs = L.sort (toList xs) == [ unique i | i <- [minBound..maxBound] ]
+
 main :: IO ()
 main = do
-    -- putStr $ sim_topEntity grid1
-    maybe (putStrLn "Unsolvable") print $ solve grid1
-    maybe (putStrLn "Unsolvable") print $ solve grid2
-    maybe (putStrLn "Unsolvable") print $ solve unsolvable
-    maybe (putStrLn "Unsolvable") print $ solve hexodoku
+    test "grid1" grid1
+    test "grid2" grid2
+    test "should be unsolvable" unsolvable
+    test "hexodoku" hexodoku
+  where
+    test label grid = do
+        putStrLn label
+        case solve grid of
+            Nothing -> putStrLn "Unsolvable" >> putStrLn ""
+            Just grid' | checkSolved grid' -> print grid'
+                       | otherwise -> putStrLn "Invalid solution!" >> print grid'
