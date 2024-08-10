@@ -117,10 +117,16 @@ propagator enable_propagate commit_guess shift_in pop = (head @(n * m * m * n - 
 
         cell' = do
             load <- load
-            guess <- enable (commit_guess .&&. guess_this) first_guess
-            propagated <- enable enable_propagate propagated
+            can_guess <- commit_guess .&&. guess_this
+            can_propagate <- enable_propagate
+            guess <- first_guess
+            propagated <- propagated
             old <- cell
-            pure $ fromMaybe old $ load <|> guess <|> propagated
+            pure if
+                | Just load <- load -> load
+                | can_guess        -> guess
+                | can_propagate    -> propagated
+                | otherwise        -> old
         changed = cell' ./=. cell
 
         (first_guess, next_guess) = unbundle $ splitCell <$> cell
