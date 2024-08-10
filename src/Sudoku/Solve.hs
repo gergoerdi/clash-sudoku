@@ -3,12 +3,11 @@
 {-# LANGUAGE TemplateHaskell #-} -- For declaring Barbie types
 module Sudoku.Solve (Solvable, propagator, PropagatorResult(..)) where
 
-import Clash.Prelude hiding (mapAccumR)
+import Clash.Prelude
 import Clash.Class.Counter
 import RetroClash.Utils hiding (changed)
 import RetroClash.Barbies
 
-import Sudoku.Hacks
 import Sudoku.Matrix
 import Sudoku.Grid
 import Sudoku.Stack
