@@ -9,6 +9,7 @@ import Sudoku.Matrix
 import Data.Char (ord, chr)
 import Control.Monad (guard)
 import Data.Ord (Down(..))
+import Data.Word (Word8)
 
 newtype Cell n m = Cell{ cellBits :: BitVector (n * m) }
     deriving stock (Generic)
@@ -63,12 +64,12 @@ splitCell (Cell c) = (Cell last, Cell rest)
     last = lastBit c
     rest = c .&. complement last
 
-ascii :: Char -> Unsigned 8
+ascii :: Char -> Word8
 ascii = fromIntegral . ord
 
 type Showable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, n * m <= (9 + 26))
 
-showCell :: (Showable n m) => Cell n m -> Unsigned 8
+showCell :: (Showable n m) => Cell n m -> Word8
 showCell x = case getUnique x of
     _ | x == wild -> ascii '_'
     _ | x == conflicted -> ascii '!'
@@ -82,7 +83,7 @@ showCell x = case getUnique x of
 
 type Readable n m = (KnownNat n, KnownNat m, n * m <= (9 + 26))
 
-parseCell :: (Readable n m) => Unsigned 8 -> Maybe (Cell n m)
+parseCell :: (Readable n m) => Word8 -> Maybe (Cell n m)
 parseCell x
     | x `elem` [ascii '0', ascii '_', ascii '.']
     = Just wild

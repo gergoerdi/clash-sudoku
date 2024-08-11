@@ -6,10 +6,10 @@ module Main where
 import Clash.Prelude hiding (lift)
 import Protocols.Internal (simulateCSE)
 
-import Data.Char (ord, chr)
+import Data.Char (chr)
 import qualified Data.List as L
 import qualified Clash.Sized.Vector as V
-import Data.Proxy
+import Data.Word
 
 import Sudoku.Matrix
 import Sudoku.Grid
@@ -17,7 +17,7 @@ import Format
 import Sudoku
 import Sudoku.Solve (Solvable)
 
-model_encodeSerial :: Int -> Unsigned 8 -> [Bit]
+model_encodeSerial :: Int -> Word8 -> [Bit]
 model_encodeSerial stretch x = mconcat
     [ pause
     , startBit
@@ -31,11 +31,11 @@ model_encodeSerial stretch x = mconcat
     dataBits = L.map (slow . lsb) $ L.take 8 . L.iterate (`shiftR` 1) $ x
     stopBit = slow high
 
-model_encodeSerials :: Int -> [Unsigned 8] -> [Bit]
+model_encodeSerials :: Int -> [Word8] -> [Bit]
 model_encodeSerials stretch xs = (<> L.repeat high) $
     L.concatMap (\x -> model_encodeSerial stretch x <> L.replicate (10 * 1 * stretch) high) xs
 
-model_decodeSerial :: Int -> [Bit] -> [Unsigned 8]
+model_decodeSerial :: Int -> [Bit] -> [Word8]
 model_decodeSerial stretch = wait
   where
     wait [] = []

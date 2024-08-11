@@ -12,6 +12,7 @@ import Data.Maybe
 import Control.Monad.State
 import Data.Proxy
 import Data.Char (chr)
+import Data.Word
 
 import Protocols
 import qualified Protocols.Df as Df
@@ -141,7 +142,7 @@ board
     :: forall n m dom. (HiddenClockResetEnable dom, Readable n m, Showable n m, Solvable n m)
     => SNat n
     -> SNat m
-    -> Circuit (Df dom (Unsigned 8)) (Df dom (Unsigned 8))
+    -> Circuit (Df dom Word8) (Df dom Word8)
 board n m =
     Df.mapMaybe parseCell |> controller @n @m |> Df.map showCell |>
     format (Proxy @(FormatGrid n m)) |> Df.map (either ascii id)
