@@ -1,10 +1,9 @@
 {-# LANGUAGE BlockArguments, LambdaCase, TupleSections #-}
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, PolyKinds #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving, DerivingStrategies, StandaloneDeriving, DeriveFunctor #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 module Format
     ( ascii
-    , Consume
+    , Forward
     , (:*)
     , (:++)
     , format
@@ -40,63 +39,48 @@ ascii c
 data PunctuatedBy c
     = Literal c
     | ForwardData
-    deriving (Generic, NFDataX, Functor)
+    deriving (Generic, NFDataX)
 
 class (Counter (Ptr fmt), NFDataX (Ptr fmt)) => Format (fmt :: k) where
-    data Ptr fmt
-    format1 :: Ptr fmt -> PunctuatedBy Char
+    type Ptr fmt
+    format1 :: proxy fmt -> Ptr fmt -> PunctuatedBy Char
 
 -- | Consume one token of input and forward it to the output
-data Consume
+data Forward
 
-instance Format Consume where
-    data Ptr Consume = Consume
-        deriving (Show, Generic, NFDataX, Eq, Enum, Bounded, Counter)
+instance Format Forward where
+    type Ptr Forward = Index 1
 
-    format1 Consume = ForwardData
+    format1 _ _ = ForwardData
 
 -- | Repetition
 data a :* (rep :: Nat)
 
 instance (Format a, KnownNat rep, 1 <= rep) => Format (a :* rep) where
-    newtype Ptr (a :* rep) = Repeat (Index rep, Ptr a)
-        deriving stock (Generic)
+    type Ptr (a :* rep) = (Index rep, Ptr a)
 
-    format1 (Repeat (_, k)) = format1 k
-
-deriving anyclass instance (KnownNat rep, 1 <= rep, NFDataX (Ptr a)) => NFDataX (Ptr (a :* rep))
-deriving newtype instance (KnownNat rep, 1 <= rep, Counter (Ptr a)) => Counter (Ptr (a :* rep))
+    format1 _ (_, fmt) = format1 (Proxy @a) fmt
 
 -- | Concatenation
 data a :++ b
 
 instance (Format a, Format b) => Format (a :++ b) where
-    newtype Ptr (a :++ b) = Append (Either (Ptr a) (Ptr b))
-        deriving stock (Generic)
+    type Ptr (a :++ b) = Either (Ptr a) (Ptr b)
 
-    format1 (Append xy) = case xy of
-        Left x -> format1 x
-        Right y -> format1 y
-
-deriving anyclass instance (NFDataX (Ptr a), NFDataX (Ptr b)) => NFDataX (Ptr (a :++ b))
-deriving newtype instance (Counter (Ptr a), Counter (Ptr b)) => Counter (Ptr (a :++ b))
+    format1 _ = either (format1 (Proxy @a)) (format1 (Proxy @b))
 
 -- | Literal
 instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Format sep where
-    newtype Ptr sep = SymbolPtr (Index (SymbolLength sep))
-        deriving stock (Show, Generic)
-        deriving newtype (NFDataX)
+    type Ptr sep = Index (SymbolLength sep)
 
-    format1 (SymbolPtr i) = Literal $ noDeDup $ symbolAt (Proxy @(UnconsSymbol sep)) i
-
-deriving newtype instance (KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Counter (Ptr sep)
+    format1 _ i = Literal $ noDeDup $ symbolAt (Proxy @(UnconsSymbol sep)) i
 
 {-# INLINE format #-}
 format :: forall dom fmt a. _ => Proxy fmt -> Circuit (Df dom a) (Df dom (Either Word8 a))
 format fmt = Df.expander (countMin :: Ptr fmt) \ptr x ->
     let ptr' = countSucc ptr
-        consume = case format1 ptr' of { ForwardData -> True; _ -> False }
-        output = case format1 ptr of
+        consume = case format1 fmt ptr' of { ForwardData -> True; _ -> False }
+        output = case format1 fmt ptr of
             Literal sep -> Left (ascii sep)
             ForwardData -> Right x
     in (ptr', output, consume)
@@ -107,7 +91,7 @@ format' fmt = format fmt |> Df.map (either id id)
 formatModel :: forall fmt a. _ => Proxy fmt -> [a] -> [Either Word8 a]
 formatModel fmt = go (countMin :: Ptr fmt)
   where
-    go ptr cs = case format1 ptr of
+    go ptr cs = case format1 fmt ptr of
         Literal sep -> Left (ascii sep) : go ptr' cs
         ForwardData -> case cs of
             c:cs' -> Right c : go ptr' cs'
