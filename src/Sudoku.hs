@@ -139,8 +139,7 @@ serialize baud par_circuit = circuit \rx -> do
     idC -< tx
 
 type FormatGrid n m =
-    ((((Consume :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n
-    -- ({- "| " :++ -} ((Consume :++ " ") :* n :++ "| ") :* m ) :++ "\r\n" :* m
+    ((((Forward :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n
 
 board
     :: forall n m dom. (HiddenClockResetEnable dom, Readable n m, Showable n m, Solvable n m)
