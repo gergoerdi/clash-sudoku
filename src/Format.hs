@@ -1,38 +1,56 @@
 {-# LANGUAGE BlockArguments, LambdaCase, TupleSections #-}
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, PolyKinds #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving, DerivingStrategies, StandaloneDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, DerivingStrategies, StandaloneDeriving, DeriveFunctor #-}
 {-# LANGUAGE PartialTypeSignatures #-}
-module Format where
+module Format
+    ( ascii
+    , Consume
+    , (:*)
+    , (:++)
+    , format
+    , formatModel
+    ) where
 
 import Format.SymbolAt
 
 import Clash.Prelude
 import Clash.Class.Counter
 import Clash.Class.Counter.Internal
+import Clash.Magic
 import Protocols
 import Protocols.Internal (mapCircuit)
 import qualified Protocols.Df as Df
 import Data.Proxy
+import Data.Char (ord)
+import Data.Word
+import Text.Printf
 
 import qualified Protocols.Hedgehog as H
 import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
-data Formatted c
+ascii :: Char -> Word8
+ascii c
+    | code <= 0x7f = fromIntegral code
+    | otherwise = clashCompileError "Not an ASCII code point"
+  where
+    code = ord c
+
+data PunctuatedBy c
     = Literal c
     | ForwardData
-    deriving (Generic, NFDataX)
+    deriving (Generic, NFDataX, Functor)
 
-class (Counter (Ptr c fmt), NFDataX (Ptr c fmt)) => Format c (fmt :: k) where
-    data Ptr c fmt
-    format1 :: Ptr c fmt -> Formatted c
+class (Counter (Ptr fmt), NFDataX (Ptr fmt)) => Format (fmt :: k) where
+    data Ptr fmt
+    format1 :: Ptr fmt -> PunctuatedBy Char
 
 -- | Consume one token of input and forward it to the output
 data Consume
 
-instance Format c Consume where
-    data Ptr c Consume = Consume
+instance Format Consume where
+    data Ptr Consume = Consume
         deriving (Show, Generic, NFDataX, Eq, Enum, Bounded, Counter)
 
     format1 Consume = ForwardData
@@ -40,54 +58,59 @@ instance Format c Consume where
 -- | Repetition
 data a :* (rep :: Nat)
 
-instance (Format c a, KnownNat rep, 1 <= rep) => Format c (a :* rep) where
-    newtype Ptr c (a :* rep) = Repeat (Index rep, Ptr c a)
+instance (Format a, KnownNat rep, 1 <= rep) => Format (a :* rep) where
+    newtype Ptr (a :* rep) = Repeat (Index rep, Ptr a)
         deriving stock (Generic)
 
     format1 (Repeat (_, k)) = format1 k
 
-deriving anyclass instance (KnownNat rep, 1 <= rep, NFDataX (Ptr c a)) => NFDataX (Ptr c (a :* rep))
-deriving newtype instance (KnownNat rep, 1 <= rep, Counter (Ptr c a)) => Counter (Ptr c (a :* rep))
+deriving anyclass instance (KnownNat rep, 1 <= rep, NFDataX (Ptr a)) => NFDataX (Ptr (a :* rep))
+deriving newtype instance (KnownNat rep, 1 <= rep, Counter (Ptr a)) => Counter (Ptr (a :* rep))
 
 -- | Concatenation
 data a :++ b
 
-instance (Format c a, Format c b) => Format c (a :++ b) where
-    newtype Ptr c (a :++ b) = Append (Either (Ptr c a) (Ptr c b))
+instance (Format a, Format b) => Format (a :++ b) where
+    newtype Ptr (a :++ b) = Append (Either (Ptr a) (Ptr b))
         deriving stock (Generic)
 
     format1 (Append xy) = case xy of
         Left x -> format1 x
         Right y -> format1 y
 
-deriving anyclass instance (NFDataX (Ptr c a), NFDataX (Ptr c b)) => NFDataX (Ptr c (a :++ b))
-deriving newtype instance (Counter (Ptr c a), Counter (Ptr c b)) => Counter (Ptr c (a :++ b))
+deriving anyclass instance (NFDataX (Ptr a), NFDataX (Ptr b)) => NFDataX (Ptr (a :++ b))
+deriving newtype instance (Counter (Ptr a), Counter (Ptr b)) => Counter (Ptr (a :++ b))
 
 -- | Literal
-instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Format Char sep where
-    newtype Ptr Char sep = SymbolPtr (Index (SymbolLength sep))
+instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Format sep where
+    newtype Ptr sep = SymbolPtr (Index (SymbolLength sep))
         deriving stock (Show, Generic)
         deriving newtype (NFDataX)
 
-    format1 (SymbolPtr i) = Literal $ noDeDup symbolAt (Proxy @(UnconsSymbol sep)) i
+    format1 (SymbolPtr i) = Literal $ noDeDup $ symbolAt (Proxy @(UnconsSymbol sep)) i
 
-deriving newtype instance (KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Counter (Ptr Char sep)
+deriving newtype instance (KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Counter (Ptr sep)
 
-format :: forall dom fmt c a. _ => Proxy fmt -> Circuit (Df dom a) (Df dom (Either c a))
-format fmt = Df.expander (let ptr = countMin :: Ptr c fmt in (ptr, format1 ptr)) \(ptr, out) ->
+{-# INLINE format #-}
+format :: forall dom fmt a. _ => Proxy fmt -> Circuit (Df dom a) (Df dom (Either Word8 a))
+format fmt = Df.expander (countMin :: Ptr fmt) \ptr x ->
     let ptr' = countSucc ptr
-        out' = format1 ptr'
-    in case out of
-        Literal sep -> \_ -> ((ptr', out'), Left sep, case out' of { ForwardData -> True; _ -> False })
-        ForwardData -> \x -> ((ptr', out'), Right x, False)
+        consume = case format1 ptr' of { ForwardData -> True; _ -> False }
+        output = case format1 ptr of
+            Literal sep -> Left (ascii sep)
+            ForwardData -> Right x
+    in (ptr', output, consume)
 
-formatModel :: forall fmt a. _ => Proxy fmt -> [a] -> [a]
-formatModel fmt = go (countMin :: Ptr a fmt)
+format' :: forall dom fmt c a. _ => Proxy fmt -> Circuit (Df dom Word8) (Df dom Word8)
+format' fmt = format fmt |> Df.map (either id id)
+
+formatModel :: forall fmt a. _ => Proxy fmt -> [a] -> [Either Word8 a]
+formatModel fmt = go (countMin :: Ptr fmt)
   where
     go ptr cs = case format1 ptr of
-        Literal sep -> sep : go ptr' cs
+        Literal sep -> Left (ascii sep) : go ptr' cs
         ForwardData -> case cs of
-            c:cs' -> c : go ptr' cs'
+            c:cs' -> Right c : go ptr' cs'
             [] -> []
       where
         ptr' = countSucc ptr
@@ -98,7 +121,7 @@ prop_format fmt =
       H.defExpectOptions
       gen_input
       (\_ _ _ -> formatModel fmt)
-      (exposeClockResetEnable $ format @System fmt |> Df.map (either id id))
+      (exposeClockResetEnable $ format @System fmt)
   where
-    gen_input :: H.Gen [Char]
-    gen_input = Gen.list (Range.linear 0 100) Gen.alpha
+    gen_input :: H.Gen [Word8]
+    gen_input = Gen.list (Range.linear 0 100) (ascii <$> Gen.alpha)

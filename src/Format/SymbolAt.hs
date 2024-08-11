@@ -17,6 +17,7 @@ instance IndexableSymbol' Nothing where
 instance (IndexableSymbol s, KnownChar c) => IndexableSymbol' (Just '(c, s)) where
     type SymbolLength' (Just '(c, s)) = 1 + SymbolLength s
 
+    {-# INLINE symbolAt #-}
     symbolAt _ i
         | i == 0
         = charVal (Proxy @c)

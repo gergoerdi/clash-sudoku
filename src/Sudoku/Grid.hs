@@ -5,6 +5,7 @@ module Sudoku.Grid where
 
 import Clash.Prelude
 import Sudoku.Matrix
+import Format (ascii)
 
 import Data.Char (ord, chr)
 import Control.Monad (guard)
@@ -63,9 +64,6 @@ splitCell (Cell c) = (Cell last, Cell rest)
   where
     last = lastBit c
     rest = c .&. complement last
-
-ascii :: Char -> Word8
-ascii = fromIntegral . ord
 
 type Showable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, n * m <= (9 + 26))
 
