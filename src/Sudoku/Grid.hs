@@ -1,6 +1,7 @@
 {-# LANGUAGE StandaloneDeriving, DerivingStrategies, DerivingVia, GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS -fconstraint-solver-iterations=10 #-}
 module Sudoku.Grid where
 
 import Clash.Prelude
@@ -103,8 +104,7 @@ parseCell x
 
 newtype Grid n m a = Grid{ getGrid :: Matrix n m (Matrix m n a) }
     deriving stock (Generic)
-    deriving anyclass (NFDataX)
-    -- deriving newtype (BitPack)
+    deriving newtype (NFDataX, BitPack)
 
 instance Functor (Grid n m) where
     -- {-# INLINE fmap #-}

@@ -21,9 +21,6 @@ import Barbies.TH
 
 import Debug.Trace
 
-foldGrid :: forall n m a. (1 <= n * m * m * n) => (a -> a -> a) -> Grid n m a -> a
-foldGrid f = fold @(n * m * m * n - 1) f . flattenGrid
-
 shiftInGridAtN :: forall n m a. (KnownNat n, KnownNat m) => Grid n m a -> a -> (a, Grid n m a)
 shiftInGridAtN grid x = (x', unflattenGrid grid')
   where
@@ -88,9 +85,9 @@ propagator enable_propagate commit_guess shift_in pop = (head @(n * m * m * n - 
     can_guess = should_guess .&&. (not <$> guessing_failed)
 
     fresh = isJust <$> shift_in .||. isJust <$> pop
-    all_unique = foldGrid (.&&.) (is_unique <$> units)
-    any_changed = register False $ foldGrid (.||.) (changed <$> units)
-    any_failed  = foldGrid (.||.) ((.== conflicted) <$> cells)
+    all_unique = bitToBool . reduceAnd <$> bundle (is_unique <$> units)
+    any_changed = register False $ bitToBool . reduceOr <$> bundle (changed <$> units)
+    any_failed  = bitToBool . reduceOr <$> bundle ((.== conflicted) <$> cells)
 
     result =
         mux fresh (pure Progress) $
