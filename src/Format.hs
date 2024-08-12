@@ -41,15 +41,15 @@ data PunctuatedBy c
     | ForwardData
     deriving (Generic, NFDataX)
 
-class (Counter (Ptr fmt), NFDataX (Ptr fmt)) => Format (fmt :: k) where
-    type Ptr fmt
-    format1 :: proxy fmt -> Ptr fmt -> PunctuatedBy Char
+class (Counter (State fmt), NFDataX (State fmt)) => Format (fmt :: k) where
+    type State fmt
+    format1 :: proxy fmt -> State fmt -> PunctuatedBy Char
 
 -- | Consume one token of input and forward it to the output
 data Forward
 
 instance Format Forward where
-    type Ptr Forward = Index 1
+    type State Forward = Index 1
 
     format1 _ _ = ForwardData
 
@@ -57,7 +57,7 @@ instance Format Forward where
 data a :* (rep :: Nat)
 
 instance (Format a, KnownNat rep, 1 <= rep) => Format (a :* rep) where
-    type Ptr (a :* rep) = (Index rep, Ptr a)
+    type State (a :* rep) = (Index rep, State a)
 
     format1 _ (_, fmt) = format1 (Proxy @a) fmt
 
@@ -65,31 +65,36 @@ instance (Format a, KnownNat rep, 1 <= rep) => Format (a :* rep) where
 data a :++ b
 
 instance (Format a, Format b) => Format (a :++ b) where
-    type Ptr (a :++ b) = Either (Ptr a) (Ptr b)
+    type State (a :++ b) = Either (State a) (State b)
 
     format1 _ = either (format1 (Proxy @a)) (format1 (Proxy @b))
 
 -- | Literal
 instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Format sep where
-    type Ptr sep = Index (SymbolLength sep)
+    type State sep = Index (SymbolLength sep)
 
     format1 _ i = Literal $ noDeDup $ symbolAt (Proxy @(UnconsSymbol sep)) i
 
 {-# INLINE format #-}
-format :: forall dom fmt a. _ => Proxy fmt -> Circuit (Df dom a) (Df dom (Either Word8 a))
-format fmt = Df.expander (countMin :: Ptr fmt) \ptr x ->
-    let ptr' = countSucc ptr
-        consume = case format1 fmt ptr' of { ForwardData -> True; _ -> False }
-        output = case format1 fmt ptr of
-            Literal sep -> Left (ascii sep)
+format
+    :: (HiddenClockResetEnable dom, Format fmt)
+    => Proxy fmt
+    -> Circuit (Df dom a) (Df dom (Either Word8 a))
+format fmt = Df.expander countMin \s x ->
+    let output = case format1 fmt s of
             ForwardData -> Right x
-    in (ptr', output, consume)
+            Literal sep -> Left (ascii sep)
+        s' = countSucc s
+        consume = case format1 fmt s' of
+            ForwardData -> True
+            _ -> False
+    in (s', output, consume)
 
 format' :: forall dom fmt c a. _ => Proxy fmt -> Circuit (Df dom Word8) (Df dom Word8)
 format' fmt = format fmt |> Df.map (either id id)
 
 formatModel :: forall fmt a. _ => Proxy fmt -> [a] -> [Either Word8 a]
-formatModel fmt = go (countMin :: Ptr fmt)
+formatModel fmt = go (countMin :: State fmt)
   where
     go ptr cs = case format1 fmt ptr of
         Literal sep -> Left (ascii sep) : go ptr' cs
