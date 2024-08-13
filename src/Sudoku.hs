@@ -63,31 +63,31 @@ controller'
        )
 controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
   where
-    (shift_in', shift_out, in_ack, enable_propagate, enable_guess, stack_cmd) = mealyStateB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Progress result, sp)
+    (shift_in', shift_out, in_ack, propagator_cmd, stack_cmd) = mealyStateB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Progress result, sp)
 
     step (shift_in, out_ack, head_cell, result, sp) = do
         get >>= \case
             ShiftIn i -> do
                 when (isJust shift_in) $ put $ maybe (Busy sp) ShiftIn $ countSuccChecked i
-                pure (shift_in, Nothing, Ack True, False, False, Nothing)
+                pure (shift_in, Nothing, Ack True, Nothing, Nothing)
             WaitPush top_sp -> do
                 put $ Busy top_sp
-                pure (Nothing, Nothing, Ack False, False, True, Just $ Push ())
+                pure (Nothing, Nothing, Ack False, Just CommitGuess, Just $ Push ())
             Busy top_sp -> do
                 case result of
                     Guess -> do
                         put $ WaitPush top_sp
-                        pure (Nothing, Nothing, Ack False, True, False, Just $ Push ())
+                        pure (Nothing, Nothing, Ack False, Just Propagate, Just $ Push ())
                     Failure -> do
                         let underflow = sp == top_sp
                         when underflow do
                             put $ ShiftOut False 0
-                        pure (Nothing, Nothing, Ack False, True, False, Pop <$ guard (not underflow))
+                        pure (Nothing, Nothing, Ack False, Just Propagate, Pop <$ guard (not underflow))
                     Progress -> do
-                        pure (Nothing, Nothing, Ack False, True, False, Nothing)
+                        pure (Nothing, Nothing, Ack False, Just Propagate, Nothing)
                     Solved -> do
                         put $ ShiftOut True 0
-                        pure (Nothing, Nothing, Ack False, True, False, Nothing)
+                        pure (Nothing, Nothing, Ack False, Just Propagate, Nothing)
             ShiftOut solved i -> do
                 shift_in <- case out_ack of
                     Ack True -> do
@@ -96,9 +96,9 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
                     _ -> do
                         pure Nothing
                 let shift_out = Just $ if solved then head_cell else conflicted
-                pure (shift_in, shift_out, Ack False, False, False, Nothing)
+                pure (shift_in, shift_out, Ack False, Nothing, Nothing)
 
-    (head_cell, result, next_guesses) = propagator enable_propagate enable_guess shift_in' popped
+    (head_cell, result, next_guesses) = propagator propagator_cmd shift_in' popped
     popped = stack_rd
 
     (stack_rd, sp) = stack (SNat @(StackSize n m)) stack_cmd (bundle next_guesses)

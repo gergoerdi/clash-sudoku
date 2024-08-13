@@ -1,7 +1,7 @@
 {-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE TemplateHaskell #-} -- For declaring Barbie types
-module Sudoku.Solve (Solvable, propagator, PropagatorResult(..)) where
+module Sudoku.Solve (Solvable, propagator, PropagatorCmd(..), PropagatorResult(..)) where
 
 import Clash.Prelude hiding (mapAccumR)
 import RetroClash.Utils hiding (changed)
@@ -38,6 +38,10 @@ declareBareB [d|
 
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, 1 <= n * m * m * n)
 
+data PropagatorCmd
+    = Propagate
+    | CommitGuess
+
 data PropagatorResult
     = Solved
     | Failure
@@ -47,15 +51,14 @@ data PropagatorResult
 
 propagator
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
-    => Signal dom Bool
-    -> Signal dom Bool
+    => Signal dom (Maybe PropagatorCmd)
     -> Signal dom (Maybe (Cell n m))
     -> Signal dom (Maybe (Sudoku n m))
     -> ( Signal dom (Cell n m)
        , Signal dom PropagatorResult
        , Grid n m (Signal dom (Cell n m))
        )
-propagator enable_propagate enable_guess shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), result, conts)
+propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), result, conts)
   where
     pops :: Grid n m (Signal dom (Maybe (Cell n m)))
     pops = unbundle . fmap sequenceA $ pop
@@ -101,16 +104,16 @@ propagator enable_propagate enable_guess shift_in pop = (head @(n * m * m * n - 
 
         cell' = do
             load <- load
-            use_guess <- enable_guess .&&. guess_this
-            can_propagate <- enable_propagate
+            cmd <- cmd
+            guess_this <- guess_this
             guess <- first_guess
             propagated <- propagated
             old <- cell
             pure if
-                | Just load <- load -> load
-                | use_guess        -> guess
-                | can_propagate    -> propagated
-                | otherwise        -> old
+                | Just load <- load                   -> load
+                | Just Propagate <- cmd               -> propagated
+                | Just CommitGuess <- cmd, guess_this -> guess
+                | otherwise                           -> old
         changed = cell' ./=. cell
 
         (first_guess, next_guess) = unbundle $ splitCell <$> cell
