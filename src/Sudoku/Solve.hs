@@ -73,19 +73,17 @@ propagator enable_propagate enable_guess shift_in pop = (head @(n * m * m * n - 
     units = pure unit <*> shift_ins <*> prev_guesses <*> pops <*> neighboursMasks masks
 
     (_shift_out, shift_ins) = shiftInGridAtN (enable (isJust <$> shift_in) . cell <$> units) shift_in
-    (guessing_failed, prev_guesses) = shiftInGridAtN (keep_guessing <$> units) should_guess
+    (guessing_failed, prev_guesses) = shiftInGridAtN (keep_guessing <$> units) (pure True)
 
     masks = mask <$> units
     cells = cell <$> units
     conts = cont <$> units
 
-    should_guess = not <$> any_changed
-    can_guess = should_guess .&&. (not <$> guessing_failed)
-
     fresh = isJust <$> shift_in .||. isJust <$> pop
     all_unique = bitToBool . reduceAnd <$> bundle (is_unique <$> units)
-    any_changed = register False $ bitToBool . reduceOr <$> bundle (changed <$> units)
+    any_changed = bitToBool . reduceOr <$> bundle (changed <$> units)
     any_failed  = bitToBool . reduceOr <$> bundle ((.== conflicted) <$> cells)
+    can_guess = not <$> all_unique
 
     result =
         mux fresh (pure Progress) $
@@ -112,14 +110,14 @@ propagator enable_propagate enable_guess shift_in pop = (head @(n * m * m * n - 
 
         cell' = do
             load <- load
-            can_guess <- enable_guess .&&. guess_this
+            use_guess <- enable_guess .&&. guess_this
             can_propagate <- enable_propagate
             guess <- first_guess
             propagated <- propagated
             old <- cell
             pure if
                 | Just load <- load -> load
-                | can_guess        -> guess
+                | use_guess        -> guess
                 | can_propagate    -> propagated
                 | otherwise        -> old
         changed = cell' ./=. cell
@@ -128,6 +126,6 @@ propagator enable_propagate enable_guess shift_in pop = (head @(n * m * m * n - 
         is_unique = next_guess .== conflicted
 
         can_guess = not <$> is_unique
-        guess_this = enable_propagate .&&. try_guess .&&. can_guess
+        guess_this = try_guess .&&. can_guess
         cont = mux guess_this next_guess cell
-        keep_guessing = try_guess .&&. (not <$> guess_this)
+        keep_guessing = try_guess .&&. is_unique
