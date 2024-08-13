@@ -63,10 +63,8 @@ propagator
     -> ( Signal dom (Cell n m)
        , Signal dom PropagatorResult
        , Grid n m (Signal dom (Cell n m))
-       , Signal dom Bool
-       , Grid n m (Signal dom (Cell n m))
        )
-propagator enable_propagate commit_guess shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), result, cells, can_guess, conts)
+propagator enable_propagate enable_guess shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), result, conts)
   where
     pops :: Grid n m (Signal dom (Maybe (Cell n m)))
     pops = unbundle . fmap sequenceA $ pop

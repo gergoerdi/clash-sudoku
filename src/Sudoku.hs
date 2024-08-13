@@ -61,7 +61,7 @@ controller'
        )
 controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
   where
-    (shift_in', shift_out, in_ack, enable_propagate, commit_guess, stack_cmd) = mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Progress result, sp)
+    (shift_in', shift_out, in_ack, enable_propagate, enable_guess, stack_cmd) = mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Progress result, sp)
     -- shift_out = enable out_enabled head_cell
 
     step (shift_in, out_ack, head_cell, result, sp) = do
@@ -71,7 +71,7 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
                 pure (shift_in, Nothing, Ack True, False, False, Nothing)
             WaitPush top_sp -> do
                 put $ Busy top_sp
-                pure (Nothing, Nothing, Ack False, True, True, Just $ Push ())
+                pure (Nothing, Nothing, Ack False, False, True, Just $ Push ())
             Busy top_sp -> do
                 case result of
                     Guess -> do
@@ -97,7 +97,7 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
                 let shift_out = Just $ if solved then head_cell else conflicted
                 pure (shift_in, shift_out, Ack False, False, False, Nothing)
 
-    (head_cell, result, grid, can_guess, next_guesses) = propagator (register False enable_propagate) (commit_guess) shift_in' popped
+    (head_cell, result, next_guesses) = propagator enable_propagate enable_guess shift_in' popped
     popped = stack_rd
 
     (stack_rd, sp) = stack (SNat @(StackSize n m)) stack_cmd (bundle next_guesses)
