@@ -8,8 +8,7 @@ import Clash.Prelude
 import Sudoku.Matrix
 import Format (ascii)
 
-import Data.Char (ord, chr)
-import Control.Monad (guard)
+import Data.Char (chr)
 import Data.Ord (Down(..))
 import Data.Word (Word8)
 

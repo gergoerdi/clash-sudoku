@@ -62,7 +62,6 @@ controller'
 controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
   where
     (shift_in', shift_out, in_ack, enable_propagate, enable_guess, stack_cmd) = mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Progress result, sp)
-    -- shift_out = enable out_enabled head_cell
 
     step (shift_in, out_ack, head_cell, result, sp) = do
         get >>= \case

@@ -1,6 +1,5 @@
 {-# LANGUAGE BlockArguments, LambdaCase, TupleSections #-}
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, PolyKinds #-}
-{-# LANGUAGE PartialTypeSignatures #-}
 module Format
     ( ascii
     , Forward
@@ -15,14 +14,11 @@ import Format.SymbolAt
 import Clash.Prelude
 import Clash.Class.Counter
 import Clash.Class.Counter.Internal
-import Clash.Magic
 import Protocols
-import Protocols.Internal (mapCircuit)
 import qualified Protocols.Df as Df
 import Data.Proxy
 import Data.Char (ord)
 import Data.Word
-import Text.Printf
 
 import qualified Protocols.Hedgehog as H
 import qualified Hedgehog as H
@@ -90,10 +86,13 @@ format fmt = Df.expander countMin \s x ->
             _ -> False
     in (s', output, consume)
 
-format' :: forall dom fmt c a. _ => Proxy fmt -> Circuit (Df dom Word8) (Df dom Word8)
+format'
+    :: forall dom fmt c a. (HiddenClockResetEnable dom, Format fmt)
+    => Proxy fmt
+    -> Circuit (Df dom Word8) (Df dom Word8)
 format' fmt = format fmt |> Df.map (either id id)
 
-formatModel :: forall fmt a. _ => Proxy fmt -> [a] -> [Either Word8 a]
+formatModel :: forall fmt a. (Format fmt) => Proxy fmt -> [a] -> [Either Word8 a]
 formatModel fmt = go (countMin :: State fmt)
   where
     go ptr cs = case format1 fmt ptr of
@@ -104,7 +103,7 @@ formatModel fmt = go (countMin :: State fmt)
       where
         ptr' = countSucc ptr
 
-prop_format :: _ => Proxy fmt -> H.Property
+prop_format :: (Format fmt) => Proxy fmt -> H.Property
 prop_format fmt =
     H.idWithModelSingleDomain
       H.defExpectOptions
