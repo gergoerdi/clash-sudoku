@@ -4,22 +4,13 @@
 module Sudoku.Solve (Solvable, propagator, PropagatorResult(..)) where
 
 import Clash.Prelude hiding (mapAccumR)
-import Clash.Class.Counter
 import RetroClash.Utils hiding (changed)
 import RetroClash.Barbies
 
-import Sudoku.Hacks
-import Sudoku.Matrix
 import Sudoku.Grid
-import Sudoku.Stack
 
-import Control.Arrow (second, (***))
 import Data.Maybe
-import Barbies
-import Barbies.Bare
 import Barbies.TH
-
-import Debug.Trace
 
 shiftInGridAtN :: forall n m a. (KnownNat n, KnownNat m) => Grid n m a -> a -> (a, Grid n m a)
 shiftInGridAtN grid x = (x', unflattenGrid grid')
