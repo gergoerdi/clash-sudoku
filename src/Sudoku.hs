@@ -25,11 +25,6 @@ import Format
 
 -- import Debug.Trace
 
-countSuccChecked :: Counter a => a -> Maybe a
-countSuccChecked x = x' <$ guard (not overflow)
-  where
-    (overflow, x') = countSuccOverflow x
-
 type StackSize n m = ((n * m) * (m * n))
 type Cnt n m = Index ((n * m) * (m * n))
 
