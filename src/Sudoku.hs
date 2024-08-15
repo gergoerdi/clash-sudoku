@@ -166,3 +166,13 @@ topEntity clk rst = withClockResetEnable clk rst enableGen $
     snd . toSignals (serialize (SNat @9600) (board (SNat @3) (SNat @3))) . (, pure ())
 
 makeTopEntity 'topEntity
+
+topEntity2
+    :: "CLK_100MHZ" ::: Clock System
+    -> "RESET"      ::: Reset System
+    -> "RX"         ::: Signal System (Df.Data Word8)
+    -> "TX"         ::: Signal System (Df.Data Word8)
+topEntity2 clk rst = withClockResetEnable clk rst enableGen $
+    snd . toSignals (formatGrid (SNat @3) (SNat @3)) . (, pure $ Ack True)
+
+makeTopEntity 'topEntity2
