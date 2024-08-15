@@ -19,7 +19,6 @@ import qualified Protocols.Df as Df
 import Data.Proxy
 import Data.Char (ord)
 import Data.Word
-import qualified Data.List as L
 
 import qualified Protocols.Hedgehog as H
 import qualified Hedgehog as H
@@ -33,78 +32,82 @@ ascii c
   where
     code = ord c
 
-data PunctuatedBy c
-    = Literal c
-    | ForwardData
+data Format1 a b
+    = Punctuate b
+    | Consume (a -> Maybe b)
     deriving (Generic, NFDataX)
 
-class (Counter (State fmt), NFDataX (State fmt)) => Format (fmt :: k) where
-    type State fmt
-    format1 :: proxy fmt -> State fmt -> (Bool, PunctuatedBy Word8)
+class (Counter (State fmt a b), NFDataX (State fmt a b)) => Format a b (fmt :: k) where
+    type State fmt a b
+    format1 :: proxy fmt -> State fmt a b -> Format1 a b
+
+-- | Consume one token of input without producing any output
+data Drop
+
+instance Format a b Drop where
+    type State Drop a b = Index 1
+
+    format1 _ _ = Consume (const Nothing)
 
 -- | Consume one token of input and forward it to the output
 data Forward
 
-instance Format Forward where
-    type State Forward = Index 1
+instance Format a a Forward where
+    type State Forward a a = Index 1
 
-    format1 _ _ = (True, ForwardData)
+    format1 _ _ = Consume Just
 
 -- | Repetition
 data a :* (rep :: Nat)
 
-instance (Format a, KnownNat rep, 1 <= rep) => Format (a :* rep) where
-    type State (a :* rep) = (Index rep, State a)
+instance (Format a b fmt, KnownNat rep, 1 <= rep) => Format a b (fmt :* rep) where
+    type State (fmt :* rep) a b = (Index rep, State fmt a b)
 
-    format1 _ (_, fmt) = format1 (Proxy @a) fmt
+    format1 _ (_, fmt) = format1 (Proxy @fmt) fmt
 
 -- | Concatenation
 data a :++ b
 
-instance (Format a, Format b) => Format (a :++ b) where
-    type State (a :++ b) = Either (State a) (State b)
+instance (Format a b fmt1, Format a b fmt2) => Format a b (fmt1 :++ fmt2) where
+    type State (fmt1 :++ fmt2) a b = Either (State fmt1 a b) (State fmt2 a b)
 
-    format1 _ = either (format1 (Proxy @a)) (format1 (Proxy @b))
+    format1 _ = either (format1 (Proxy @fmt1)) (format1 (Proxy @fmt2))
 
 -- | Literal
-instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Format sep where
-    type State sep = Index (SymbolLength sep)
+instance (IndexableSymbol symbol, KnownNat (SymbolLength symbol), 1 <= SymbolLength symbol) => Format a Word8 symbol where
+    type State symbol a Word8 = Index (SymbolLength symbol)
 
-    format1 _ i = (False, Literal $ ascii $ noDeDup $ symbolAt (Proxy @(UnconsSymbol sep)) i)
+    format1 _ i = Punctuate $ ascii $ noDeDup $ symbolAt (Proxy @(UnconsSymbol symbol)) i
 
 {-# INLINE format #-}
 format
-    :: (HiddenClockResetEnable dom, Format fmt)
-    => Proxy fmt
-    -> Circuit (Df dom a) (Df dom (Either Word8 a))
-format fmt = Df.compander (countMin, True) \(s, ready) x ->
-    let (consume, output) = format1 fmt s
-        retry = (s, True)
-        continue = (countSucc s, ready && not consume)
-    in case output of
-        ForwardData | not ready -> (retry, Nothing, True)
-        Literal sep -> (continue, Just (Left sep), False)
-        ForwardData -> (continue, Just (Right x), False)
-
-format'
-    :: forall dom fmt c a. (HiddenClockResetEnable dom, Format fmt)
+    :: forall dom fmt a b. (HiddenClockResetEnable dom, Format Word8 Word8 fmt)
     => Proxy fmt
     -> Circuit (Df dom Word8) (Df dom Word8)
-format' fmt = format fmt |> Df.map (either id id)
+format fmt = Df.compander countMin \s x ->
+    let output = case format1 fmt s of
+            Punctuate y -> Just y
+            Consume f -> f x
+        s' = countSucc s
+        consume = case format1 fmt s' :: Format1 Word8 Word8 of
+            Consume{} -> True
+            _ -> False
+    in (s', output, consume)
 
-formatModel :: forall fmt a. (Format fmt) => Proxy fmt -> [a] -> [Either Word8 a]
-formatModel fmt = go (countMin :: State fmt)
+formatModel :: forall fmt a b. (Format a b fmt) => Proxy fmt -> [a] -> [b]
+formatModel fmt = go countMin
   where
-    go s cs = case output of
-        Literal sep -> Left sep : go s' (if consume then L.tail cs else cs)
-        ForwardData -> case cs of
-            c:cs' -> Right c : go s' (if consume then cs' else cs)
+    go s xs = case format1 fmt s of
+        Punctuate sep -> sep : go s' xs
+        Consume output -> case xs of
             [] -> []
+            x:xs' -> maybe id (:) (output x) $ go s' xs'
       where
-        (consume, output) = format1 fmt s
         s' = countSucc s
 
-prop_format :: (Format fmt) => Proxy fmt -> H.Property
+type Fmt = Forward :++ " " :++ (Drop :++ "!" :* 3)
+
+prop_format :: (Format Word8 Word8 fmt) => Proxy fmt -> H.Property
 prop_format fmt =
     H.idWithModelSingleDomain
       H.defExpectOptions

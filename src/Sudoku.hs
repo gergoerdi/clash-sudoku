@@ -43,7 +43,7 @@ data St n m
 
 showGrid :: forall n m. (Showable n m) => Sudoku n m -> String
 showGrid =
-    fmap (chr . fromIntegral . either id id) .
+    fmap (chr . fromIntegral @Word8) .
     formatModel (Proxy @(FormatGrid n m)) .
     fmap showCell .
     toList . flattenGrid
@@ -148,14 +148,14 @@ board
 board n m =
     Df.mapMaybe parseCell |>
     controller @n @m |>
-    Df.map showCell |> formatGrid n m
+    Df.map showCell |> format (Proxy @(FormatGrid n m))
 
 formatGrid
     :: forall n m dom. (HiddenClockResetEnable dom, Readable n m, Showable n m, Solvable n m)
     => SNat n
     -> SNat m
     -> Circuit (Df dom Word8) (Df dom Word8)
-formatGrid n m = format (Proxy @(FormatGrid n m)) |> Df.map (either id id)
+formatGrid n m = format (Proxy @(FormatGrid n m))
 
 topEntity
     :: "CLK_100MHZ" ::: Clock System
