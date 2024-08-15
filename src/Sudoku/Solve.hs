@@ -87,6 +87,13 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
         mux can_guess (pure Guess) $
         pure Failure
 
+    (enable_propagate, enable_guess) = unbundle do
+        cmd <- cmd
+        pure $ case cmd of
+            Just Propagate -> (True, False)
+            Just CommitGuess -> (False, True)
+            _ -> (False, False)
+
     unit
         :: Signal dom (Maybe (Cell n m))
         -> Signal dom Bool
@@ -104,16 +111,17 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
 
         cell' = do
             load <- load
-            cmd <- cmd
-            guess_this <- guess_this
+            can_propagate <- enable_propagate
+            use_guess <- enable_guess .&&. guess_this
             guess <- first_guess
             propagated <- propagated
             old <- cell
             pure if
-                | Just load <- load                   -> load
-                | Just Propagate <- cmd               -> propagated
-                | Just CommitGuess <- cmd, guess_this -> guess
-                | otherwise                           -> old
+                | Just load <- load -> load
+                | use_guess         -> guess
+                | can_propagate     -> propagated
+                | otherwise         -> old
+
         changed = cell' ./=. cell
 
         (first_guess, next_guess) = unbundle $ splitCell <$> cell
