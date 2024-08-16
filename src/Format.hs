@@ -19,6 +19,7 @@ import qualified Protocols.Df as Df
 import Data.Proxy
 import Data.Char (ord)
 import Data.Word
+import qualified Data.List as L
 
 import qualified Protocols.Hedgehog as H
 import qualified Hedgehog as H
@@ -39,7 +40,7 @@ data PunctuatedBy c
 
 class (Counter (State fmt), NFDataX (State fmt)) => Format (fmt :: k) where
     type State fmt
-    format1 :: proxy fmt -> State fmt -> PunctuatedBy Char
+    format1 :: proxy fmt -> State fmt -> (Bool, PunctuatedBy Word8)
 
 -- | Consume one token of input and forward it to the output
 data Forward
@@ -47,7 +48,7 @@ data Forward
 instance Format Forward where
     type State Forward = Index 1
 
-    format1 _ _ = ForwardData
+    format1 _ _ = (True, ForwardData)
 
 -- | Repetition
 data a :* (rep :: Nat)
@@ -69,22 +70,21 @@ instance (Format a, Format b) => Format (a :++ b) where
 instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Format sep where
     type State sep = Index (SymbolLength sep)
 
-    format1 _ i = Literal $ noDeDup $ symbolAt (Proxy @(UnconsSymbol sep)) i
+    format1 _ i = (False, Literal $ ascii $ noDeDup $ symbolAt (Proxy @(UnconsSymbol sep)) i)
 
 {-# INLINE format #-}
 format
     :: (HiddenClockResetEnable dom, Format fmt)
     => Proxy fmt
     -> Circuit (Df dom a) (Df dom (Either Word8 a))
-format fmt = Df.expander countMin \s x ->
-    let output = case format1 fmt s of
-            ForwardData -> Right x
-            Literal sep -> Left (ascii sep)
-        s' = countSucc s
-        consume = case format1 fmt s' of
-            ForwardData -> True
-            _ -> False
-    in (s', output, consume)
+format fmt = Df.compander (countMin, True) \(s, ready) x ->
+    let (consume, output) = format1 fmt s
+        retry = (s, True)
+        continue = (countSucc s, ready && not consume)
+    in case output of
+        ForwardData | not ready -> (retry, Nothing, True)
+        Literal sep -> (continue, Just (Left sep), False)
+        ForwardData -> (continue, Just (Right x), False)
 
 format'
     :: forall dom fmt c a. (HiddenClockResetEnable dom, Format fmt)
@@ -95,13 +95,14 @@ format' fmt = format fmt |> Df.map (either id id)
 formatModel :: forall fmt a. (Format fmt) => Proxy fmt -> [a] -> [Either Word8 a]
 formatModel fmt = go (countMin :: State fmt)
   where
-    go ptr cs = case format1 fmt ptr of
-        Literal sep -> Left (ascii sep) : go ptr' cs
+    go s cs = case output of
+        Literal sep -> Left sep : go s' (if consume then L.tail cs else cs)
         ForwardData -> case cs of
-            c:cs' -> Right c : go ptr' cs'
+            c:cs' -> Right c : go s' (if consume then cs' else cs)
             [] -> []
       where
-        ptr' = countSucc ptr
+        (consume, output) = format1 fmt s
+        s' = countSucc s
 
 prop_format :: (Format fmt) => Proxy fmt -> H.Property
 prop_format fmt =
