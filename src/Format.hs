@@ -110,7 +110,7 @@ prop_format fmt =
       H.defExpectOptions
       gen_input
       (\_ _ _ -> formatModel fmt)
-      (exposeClockResetEnable $ format @System fmt)
+      (exposeClockResetEnable @System $ format fmt)
   where
     gen_input :: H.Gen [Word8]
     gen_input = Gen.list (Range.linear 0 100) (ascii <$> Gen.alpha)
