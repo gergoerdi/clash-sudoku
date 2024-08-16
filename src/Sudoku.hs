@@ -39,7 +39,7 @@ data St n m
 showGrid :: forall n m. (Showable n m) => Sudoku n m -> String
 showGrid =
     fmap (chr . fromIntegral @Word8) .
-    formatModel (Proxy @(FormatGrid n m)) .
+    formatModel (gridFormat (SNat @n) (SNat @m)) .
     fmap showCell .
     toList . flattenGrid
 
@@ -135,6 +135,9 @@ serialize baud par_circuit = circuit \rx -> do
 type FormatGrid n m =
     ((((Forward :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n
 
+gridFormat :: SNat n -> SNat m -> Spec (FormatGrid n m) Word8 Word8
+gridFormat _ _ = Rep (Rep (Rep (Rep (Forward :++ Lit) :++ Lit) :++ Lit) :++ Lit)
+
 board
     :: forall n m dom. (HiddenClockResetEnable dom, Readable n m, Showable n m, Solvable n m)
     => SNat n
@@ -143,14 +146,14 @@ board
 board n m =
     Df.mapMaybe parseCell |>
     controller @n @m |>
-    Df.map showCell |> format (Proxy @(FormatGrid n m))
+    Df.map showCell |> format (gridFormat n m)
 
 formatGrid
     :: forall n m dom. (HiddenClockResetEnable dom, Readable n m, Showable n m, Solvable n m)
     => SNat n
     -> SNat m
     -> Circuit (Df dom Word8) (Df dom Word8)
-formatGrid n m = format (Proxy @(FormatGrid n m))
+formatGrid n m = format (gridFormat n m)
 
 topEntity
     :: "CLK_100MHZ" ::: Clock System
