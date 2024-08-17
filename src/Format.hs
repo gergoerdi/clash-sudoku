@@ -5,6 +5,8 @@ module Format
     , countSuccChecked
 
     , Forward
+    , Drop
+    , Wait
     , (:*)
     , (:++)
     , Until
@@ -75,7 +77,7 @@ instance Format Forward where
 
     format1 _ _ = Dynamic \x -> (True, Just x) :~> Nothing
 
--- Consume one token of input without producing any output
+-- | Consume one token of input without producing any output
 data Drop
 
 instance Format Drop where
@@ -83,6 +85,15 @@ instance Format Drop where
 
     start _ = ()
     format1 _ _ = Dynamic \x -> (True, Nothing) :~> Nothing
+
+-- | Wait until new input is available, without consuming it
+data Wait
+
+instance Format Wait where
+    type State Wait = ()
+
+    start _ = ()
+    format1 _ _ = Dynamic \x -> (False, Nothing) :~> Nothing
 
 -- | Repetition
 data a :* (rep :: Nat)
@@ -129,30 +140,27 @@ instance (Format fmt) => Format (Loop fmt) where
     format1 _ = mapState (Just . fromMaybe (start (Proxy @fmt))) . format1 (Proxy @fmt)
 
 -- | Branch
-data Until (ch :: Char) fmt1 fmt2
+data Until (ch :: Char) fmt
 
-data UntilState fmt1 fmt2
+data UntilState fmt
     = Checking
-    | Looping fmt1
-    | Finished fmt2
+    | Looping fmt
     deriving (Generic, NFDataX, Show)
 
-instance (KnownChar ch, Format fmt1, Format fmt2) => Format (Until ch fmt1 fmt2) where
-    type State (Until ch fmt1 fmt2) = UntilState (State fmt1) (State fmt2)
+instance (KnownChar ch, Format fmt) => Format (Until ch fmt) where
+    type State (Until ch fmt) = UntilState (State fmt)
 
     start _ = Checking
 
     format1 _ Checking = Dynamic \x ->
         if x == ascii ch then
-            let s' = Finished $ start (Proxy @fmt2)
-            in (True, Nothing) :~> Just s'
+            (True, Nothing) :~> Nothing
         else
-            let s' = Looping $ start (Proxy @fmt1)
-            in (False, Nothing) :~> Just s'
+            (False, Nothing) :~> Just enter
       where
+        enter = Looping $ start (Proxy @fmt)
         ch = charVal (Proxy @ch)
-    format1 _ (Looping s) = mapState (Looping <$>) $ format1 (Proxy @fmt1) s
-    format1 _ (Finished s) = mapState (Finished <$>) $ format1 (Proxy @fmt2) s
+    format1 _ (Looping s) = mapState (Just . maybe Checking Looping) $ format1 (Proxy @fmt) s
 
 {-# INLINE format #-}
 format

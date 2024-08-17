@@ -169,7 +169,7 @@ type GridFormat n m =
     ((((Forward :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n
 
 type OutputFormat n m =
-    Until '@' Forward ("\r\n" :++ GridFormat n m)
+    Wait :++ "Solver cycle count: " :++ Until '@' Forward :++ "\r\n" :++ GridFormat n m
 
 board
     :: forall n m dom. (HiddenClockResetEnable dom, Readable n m, Showable n m, Solvable n m)
