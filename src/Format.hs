@@ -68,7 +68,7 @@ instance Format Forward where
 
     start _ = ()
 
-    format1 _ () = Dynamic \x -> (True, Just x) :~> Nothing
+    format1 _ _ = Dynamic \x -> (True, Just x) :~> Nothing
 
 -- | Repetition
 data a :* (rep :: Nat)
@@ -104,6 +104,32 @@ instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength se
     format1 _ i = Static $ (False, Just char) :~> countSuccChecked i
       where
         char = ascii $ noDeDup $ symbolAt (Proxy @sep) i
+
+-- | Branch/loop
+data Until (ch :: Char) fmt1 fmt2
+
+data UntilState fmt1 fmt2
+    = Checking
+    | Looping fmt1
+    | Finished fmt2
+    deriving (Generic, NFDataX, Show)
+
+instance (KnownChar ch, Format fmt1, Format fmt2) => Format (Until ch fmt1 fmt2) where
+    type State (Until ch fmt1 fmt2) = UntilState (State fmt1) (State fmt2)
+
+    start _ = Checking
+
+    format1 _ Checking = Dynamic \x ->
+        if x == ascii ch then
+            let s' = Finished $ start (Proxy @fmt2)
+            in (True, Nothing) :~> Just s'
+        else
+            let s' = Looping $ start (Proxy @fmt1)
+            in (False, Nothing) :~> Just s'
+      where
+        ch = charVal (Proxy @ch)
+    format1 _ (Looping s) = mapState (Just . maybe Checking Looping) $ format1 (Proxy @fmt1) s
+    format1 _ (Finished s) = mapState (Just . Finished . fromMaybe (start (Proxy @fmt2))) $ format1 (Proxy @fmt2) s
 
 {-# INLINE format #-}
 format
