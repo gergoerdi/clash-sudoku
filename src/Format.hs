@@ -1,5 +1,6 @@
 {-# LANGUAGE BlockArguments, LambdaCase, TupleSections #-}
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, PolyKinds #-}
+{-# LANGUAGE DeriveFunctor #-}
 module Format
     ( ascii
     , Forward
@@ -27,6 +28,7 @@ import Data.Word
 import qualified Data.List as L
 import Control.Monad (guard)
 import Data.Maybe
+import Data.Bifunctor
 
 import qualified Protocols.Hedgehog as H
 import qualified Hedgehog as H
@@ -40,18 +42,23 @@ ascii c
   where
     code = ord c
 
-data Stateful s a = a :~> Maybe s
+-- | A @b@ value that potentially depends on an @a@ parameter
+data Dep a b
+    = Static b
+    | Dynamic (a -> b)
+    deriving (Functor)
 
-type Produce s b = Stateful s (Bool, Maybe b)
+-- | A transition to a new state @s@, potentially consuming the input and potentially producing output @b@
+data Transition s b = Transition Bool (Maybe b) s
+    deriving (Functor)
 
-data Format1 s a b
-    = Static (Produce s b)
-    | Dynamic (a -> Produce s b)
+instance Bifunctor Transition where
+    bimap f g (Transition consume output next) = Transition consume (g <$> output) (f next)
 
-mapState :: (Maybe s -> Maybe s') -> Format1 s a b -> Format1 s' a b
-mapState f = \case
-    Static (y :~> s) -> Static (y :~> f s)
-    Dynamic step -> Dynamic \x -> case step x of y :~> s -> y :~> f s
+type Format1 a s b = Dep a (Transition (Maybe s) b)
+
+mapState :: (Maybe s -> Maybe s') -> Format1 a s b -> Format1 a s' b
+mapState = fmap . first
 
 countSuccChecked :: Counter a => a -> Maybe a
 countSuccChecked x = x' <$ guard (not overflow)
@@ -62,7 +69,7 @@ class (NFDataX (State fmt)) => Format (fmt :: k) where
     type State fmt
 
     start :: proxy fmt -> State fmt
-    format1 :: proxy fmt -> State fmt -> Format1 (State fmt) Word8 Word8
+    format1 :: proxy fmt -> State fmt -> Format1 Word8 (State fmt) Word8
 
 -- | Consume one token of input and forward it to the output
 data Forward
@@ -72,7 +79,7 @@ instance Format Forward where
 
     start _ = ()
 
-    format1 _ _ = Dynamic \x -> (True, Just x) :~> Nothing
+    format1 _ _ = Dynamic \x -> Transition True (Just x) Nothing
 
 -- | Consume one token of input without producing any output
 data Drop
@@ -81,7 +88,7 @@ instance Format Drop where
     type State Drop = ()
 
     start _ = ()
-    format1 _ _ = Dynamic \x -> (True, Nothing) :~> Nothing
+    format1 _ _ = Dynamic \x -> Transition True Nothing Nothing
 
 -- | Wait until new input is available, without consuming it
 data Wait
@@ -90,7 +97,7 @@ instance Format Wait where
     type State Wait = ()
 
     start _ = ()
-    format1 _ _ = Dynamic \x -> (False, Nothing) :~> Nothing
+    format1 _ _ = Dynamic \x -> Transition False Nothing Nothing
 
 -- | Repetition
 data a :* (rep :: Nat)
@@ -123,7 +130,7 @@ instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength se
 
     start _ = countMin
 
-    format1 _ i = Static $ (False, Just char) :~> countSuccChecked i
+    format1 _ i = Static $ Transition False (Just char) (countSuccChecked i)
       where
         char = ascii $ noDeDup $ symbolAt (Proxy @sep) i
 
@@ -151,9 +158,9 @@ instance (KnownChar ch, Format fmt) => Format (Until ch fmt) where
 
     format1 _ Checking = Dynamic \x ->
         if x == ascii ch then
-            (True, Nothing) :~> Nothing
+            Transition True Nothing Nothing
         else
-            (False, Nothing) :~> Just enter
+            Transition False Nothing (Just enter)
       where
         enter = Looping $ start (Proxy @fmt)
         ch = charVal (Proxy @ch)
@@ -165,19 +172,19 @@ format
     => Proxy fmt
     -> Circuit (Df dom Word8) (Df dom Word8)
 format fmt = Df.compander (begin, True) \(s, ready) x ->
-    let retry = (s, True)
-        produce ((consume, mb_y) :~> s') = ((fromMaybe begin s', ready && not consume), mb_y, False)
+    let next_input = ((s, True), Nothing, True)
+        produce (Transition consume y s') = ((fromMaybe begin s', ready && not consume), y, False)
     in case format1 fmt s of
-        Dynamic step | not ready -> (retry, Nothing, True)
+        Dynamic step | not ready -> next_input
         Static step -> produce step
         Dynamic step -> produce (step x)
   where
-    begin = start (Proxy @fmt)
+    begin = start fmt
 
 formatModel :: forall fmt a. (Format fmt) => Proxy fmt -> [Word8] -> [Word8]
 formatModel fmt = go begin
   where
-    begin = start (Proxy @fmt)
+    begin = start fmt
 
     go s cs = case format1 fmt s of
         Static step -> produce step
@@ -187,7 +194,7 @@ formatModel fmt = go begin
       where
         next = fromMaybe begin
         output = maybe id (:)
-        produce ((consume, mb_y) :~> s') = output mb_y $ go (next s') $ if consume then L.tail cs else cs
+        produce (Transition consume mb_y s') = output mb_y $ go (next s') $ if consume then L.tail cs else cs
 
 prop_format :: (Format fmt) => Proxy fmt -> H.Property
 prop_format fmt =
