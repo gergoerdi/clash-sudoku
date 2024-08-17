@@ -2,6 +2,8 @@
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, PolyKinds #-}
 module Format
     ( ascii
+    , countSuccChecked
+
     , Forward
     , (:*)
     , (:++)
@@ -9,7 +11,8 @@ module Format
     , Loop
     , format
     , formatModel
-    , countSuccChecked
+
+    , prop_format
     ) where
 
 import Format.SymbolAt
