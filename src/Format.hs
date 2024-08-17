@@ -5,6 +5,8 @@ module Format
     , Forward
     , (:*)
     , (:++)
+    , Until
+    , Loop
     , format
     , formatModel
     , countSuccChecked
@@ -114,7 +116,16 @@ instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength se
       where
         char = ascii $ noDeDup $ symbolAt (Proxy @(UnconsSymbol sep)) i
 
--- | Branch/loop
+-- | Loop
+data Loop fmt
+
+instance (Format fmt) => Format (Loop fmt) where
+    type State (Loop fmt) = State fmt
+
+    start _ = start (Proxy @fmt)
+    format1 _ = mapState (Just . fromMaybe (start (Proxy @fmt))) . format1 (Proxy @fmt)
+
+-- | Branch
 data Until (ch :: Char) fmt1 fmt2
 
 data UntilState fmt1 fmt2
@@ -137,8 +148,8 @@ instance (KnownChar ch, Format fmt1, Format fmt2) => Format (Until ch fmt1 fmt2)
             in (False, Nothing) :~> Just s'
       where
         ch = charVal (Proxy @ch)
-    format1 _ (Looping s) = mapState (Just . maybe Checking Looping) $ format1 (Proxy @fmt1) s
-    format1 _ (Finished s) = mapState (Just . Finished . fromMaybe (start (Proxy @fmt2))) $ format1 (Proxy @fmt2) s
+    format1 _ (Looping s) = mapState (Looping <$>) $ format1 (Proxy @fmt1) s
+    format1 _ (Finished s) = mapState (Finished <$>) $ format1 (Proxy @fmt2) s
 
 {-# INLINE format #-}
 format
