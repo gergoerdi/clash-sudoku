@@ -4,7 +4,8 @@
 {-# OPTIONS -fplugin=Protocols.Plugin #-}
 module Sudoku where
 
-import Clash.Prelude hiding (lift)
+import Clash.Prelude hiding (lift, mapAccumR)
+import Clash.Class.Counter
 import Clash.Annotations.TH
 
 import Data.Maybe
@@ -20,6 +21,7 @@ import Clash.Cores.UART(uart, ValidBaud)
 import Sudoku.Grid
 import Sudoku.Solve
 import Sudoku.Stack
+import Sudoku.Hacks
 import Format
 
 -- import Debug.Trace
@@ -27,10 +29,27 @@ import Format
 type StackSize n m = ((n * m) * (m * n))
 type Cnt n m = Index ((n * m) * (m * n))
 
+type Digit = Index 10
+newtype BCD n = BCD{ bcdDigits :: Vec n Digit }
+    deriving (Generic, NFDataX, Eq, Show)
+
+bcdMin :: (KnownNat n, 1 <= n) => BCD n
+bcdMin = BCD $ repeat 0
+
+bcdSucc :: (KnownNat n, 1 <= n) => BCD n -> BCD n
+bcdSucc = BCD . snd . mapAccumR f 1 . bcdDigits
+  where
+    f :: Unsigned 1 -> Digit -> (Unsigned 1, Digit)
+    f c d = let (c', d', _) = countSucc (0, d, c) in (c', d')
+
+showDigit :: Digit -> Word8
+showDigit n = ascii '0' + fromIntegral n
+
 data St n m
     = ShiftIn (Cnt n m)
-    | Busy (Index (StackSize n m))
-    | WaitPush (Index (StackSize n m))
+    | Busy (Index (StackSize n m)) (BCD 6)
+    | WaitPush (Index (StackSize n m)) (BCD 6)
+    | ShiftOutCnt Bool (BCD 6) (Index (6 + 1))
     | ShiftOut Bool (Cnt n m)
     deriving (Generic, NFDataX, Show, Eq)
 
@@ -45,16 +64,13 @@ showGrid =
 instance (Showable n m) => Show (Sudoku n m) where
     show = showGrid
 
-type Digit = Index 10
-type BCD n = Vec n Digit
-
 controller'
     :: forall n m dom k. (Solvable n m)
     => (HiddenClockResetEnable dom)
     => Signal dom (Df.Data (Cell n m))
     -> Signal dom Ack
     -> ( Signal dom Ack
-       , Signal dom (Df.Data (Cell n m))
+       , Signal dom (Df.Data (Either Word8 (Cell n m)))
        )
 controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
   where
@@ -66,32 +82,42 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
                 Ack False -> id
         get >>= \case
             ShiftIn i -> do
-                when (isJust shift_in) $ put $ maybe (Busy sp) ShiftIn $ countSuccChecked i
+                when (isJust shift_in) $ put $ maybe (Busy sp bcdMin) ShiftIn $ countSuccChecked i
                 pure (shift_in, Nothing, Ack True, Nothing, Nothing)
-            WaitPush top_sp -> do
-                put $ Busy top_sp
+            WaitPush top_sp cnt -> do
+                let cnt' = bcdSucc cnt
+                put $ Busy top_sp cnt'
                 pure (Nothing, Nothing, Ack False, Just CommitGuess, Just $ Push ())
-            Busy top_sp -> do
+            Busy top_sp cnt -> do
+                let cnt' = bcdSucc cnt
                 case result of
                     Guess -> do
-                        put $ WaitPush top_sp
+                        put $ WaitPush top_sp cnt'
                         pure (Nothing, Nothing, Ack False, Just Propagate, Just $ Push ())
                     Failure -> do
+                        put $ Busy top_sp cnt'
                         let underflow = sp == top_sp
                         when underflow do
-                            put $ ShiftOut False 0
+                            put $ ShiftOutCnt False cnt 0
                         pure (Nothing, Nothing, Ack False, Just Propagate, Pop <$ guard (not underflow))
                     Progress -> do
+                        put $ Busy top_sp cnt'
                         pure (Nothing, Nothing, Ack False, Just Propagate, Nothing)
                     Solved -> do
-                        put $ ShiftOut True 0
+                        put $ ShiftOutCnt True cnt 0
                         pure (Nothing, Nothing, Ack False, Just Propagate, Nothing)
+            ShiftOutCycles solved cycles i -> do
+                let cycles' = BCD . (`rotateLeftS` (SNat @1)) . bcdDigits $ cycles
+                    s' = maybe (ShiftOutCyclesDelim solved) (ShiftOutCycles solved cycles') $ countSuccChecked i
+                    output = showDigit . head . bcdDigits $ cycles
+                putWhenOutAck s'
+                pure (Nothing, Just (Left output), Ack False, Nothing, Nothing)
             ShiftOut solved i -> do
                 putWhenOutAck $ maybe (ShiftIn 0) (ShiftOut solved) $ countSuccChecked i
                 let shift_in = case out_ack of
                         Ack True -> Just conflicted
                         Ack False -> Nothing
-                    shift_out = Just $ if solved then head_cell else conflicted
+                    shift_out = Just $ Right $ if solved then head_cell else conflicted
                 pure (shift_in, shift_out, Ack False, Nothing, Nothing)
 
     (head_cell, result, next_guesses) = propagator propagator_cmd shift_in' popped
@@ -102,7 +128,7 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
 controller
     :: forall n m dom. (Solvable n m)
     => (HiddenClockResetEnable dom)
-    => Circuit (Df dom (Cell n m)) (Df dom (Cell n m))
+    => Circuit (Df dom (Cell n m)) (Df dom (Either Word8 (Cell n m)))
 controller = Circuit $ uncurry controller'
 
 -- From git@github.com:bittide/bittide-hardware.git
@@ -149,7 +175,7 @@ board
 board n m =
     Df.mapMaybe parseCell |>
     controller @n @m |>
-    Df.map showCell |> formatGrid n m
+    Df.map (either id showCell) |> format (Proxy @(OutputFormat n m))
 
 formatGrid
     :: forall n m dom. (HiddenClockResetEnable dom, Readable n m, Showable n m, Solvable n m)
