@@ -45,6 +45,9 @@ showGrid =
 instance (Showable n m) => Show (Sudoku n m) where
     show = showGrid
 
+type Digit = Index 10
+type BCD n = Vec n Digit
+
 controller'
     :: forall n m dom k. (Solvable n m)
     => (HiddenClockResetEnable dom)
@@ -134,6 +137,9 @@ serialize baud par_circuit = circuit \rx -> do
 
 type GridFormat n m =
     ((((Forward :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n
+
+type OutputFormat n m =
+    Wait :++ "Solver cycle count: " :++ Until '@' Forward :++ "\r\n" :++ GridFormat n m
 
 board
     :: forall n m dom. (HiddenClockResetEnable dom, Readable n m, Showable n m, Solvable n m)
