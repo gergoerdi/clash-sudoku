@@ -172,7 +172,8 @@ solve = consume . simulateCSE @System (exposeClockResetEnable $ controller @n @m
   where
     consume = go []
       where
-        go acc (x:xs)
+        go acc (Left _:xs) = go acc xs
+        go acc (Right x:xs)
             | x == conflicted
             = Nothing
 
