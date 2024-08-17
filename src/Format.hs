@@ -7,6 +7,7 @@ module Format
     , (:++)
     , format
     , formatModel
+    , countSuccChecked
     ) where
 
 import Format.SymbolAt
@@ -20,6 +21,8 @@ import Data.Proxy
 import Data.Char (ord)
 import Data.Word
 import qualified Data.List as L
+import Control.Monad (guard)
+import Data.Maybe
 
 import qualified Protocols.Hedgehog as H
 import qualified Hedgehog as H
@@ -33,30 +36,52 @@ ascii c
   where
     code = ord c
 
-data PunctuatedBy c
-    = Literal c
-    | ForwardData
-    deriving (Generic, NFDataX)
+data Stateful s a = a :~> Maybe s
 
-class (Counter (State fmt), NFDataX (State fmt)) => Format (fmt :: k) where
+type Produce s b = Stateful s (Bool, Maybe b)
+
+data Format1 s a b
+    = Static (Produce s b)
+    | Dynamic (a -> Produce s b)
+
+mapState :: (Maybe s -> Maybe s') -> Format1 s a b -> Format1 s' a b
+mapState f = \case
+    Static (y :~> s) -> Static (y :~> f s)
+    Dynamic step -> Dynamic \x -> case step x of y :~> s -> y :~> f s
+
+countSuccChecked :: Counter a => a -> Maybe a
+countSuccChecked x = x' <$ guard (not overflow)
+  where
+    (overflow, x') = countSuccOverflow x
+
+class (NFDataX (State fmt)) => Format (fmt :: k) where
     type State fmt
-    format1 :: proxy fmt -> State fmt -> (Bool, PunctuatedBy Word8)
+
+    start :: proxy fmt -> State fmt
+    format1 :: proxy fmt -> State fmt -> Format1 (State fmt) Word8 Word8
 
 -- | Consume one token of input and forward it to the output
 data Forward
 
 instance Format Forward where
-    type State Forward = Index 1
+    type State Forward = ()
 
-    format1 _ _ = (True, ForwardData)
+    start _ = ()
+
+    format1 _ () = Dynamic \x -> (True, Just x) :~> Nothing
 
 -- | Repetition
 data a :* (rep :: Nat)
 
-instance (Format a, KnownNat rep, 1 <= rep) => Format (a :* rep) where
-    type State (a :* rep) = (Index rep, State a)
+instance (Format fmt, KnownNat rep, 1 <= rep) => Format (fmt :* rep) where
+    type State (fmt :* rep) = (Index rep, State fmt)
 
-    format1 _ (_, fmt) = format1 (Proxy @a) fmt
+    start _ = (countMin, start (Proxy @fmt))
+
+    format1 _ (i, s) = mapState (maybe repeat continue) $ format1 (Proxy @fmt) s
+      where
+        continue s' = Just (i, s')
+        repeat = (, start (Proxy @fmt)) <$> countSuccChecked i
 
 -- | Concatenation
 data a :++ b
@@ -64,45 +89,51 @@ data a :++ b
 instance (Format a, Format b) => Format (a :++ b) where
     type State (a :++ b) = Either (State a) (State b)
 
-    format1 _ = either (format1 (Proxy @a)) (format1 (Proxy @b))
+    start _ = Left (start (Proxy @a))
+
+    format1 _ = either
+      (mapState (maybe (Just . Right $ start (Proxy @b)) (Just . Left)) . format1 (Proxy @a))
+      (mapState (maybe Nothing (Just . Right)) . format1 (Proxy @b))
 
 -- | Literal
 instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Format sep where
     type State sep = Index (SymbolLength sep)
 
-    format1 _ i = (False, Literal $ ascii $ noDeDup $ symbolAt (Proxy @(UnconsSymbol sep)) i)
+    start _ = countMin
+
+    format1 _ i = Static $ (False, Just char) :~> countSuccChecked i
+      where
+        char = ascii $ noDeDup $ symbolAt (Proxy @(UnconsSymbol sep)) i
 
 {-# INLINE format #-}
 format
-    :: (HiddenClockResetEnable dom, Format fmt)
-    => Proxy fmt
-    -> Circuit (Df dom a) (Df dom (Either Word8 a))
-format fmt = Df.compander (countMin, True) \(s, ready) x ->
-    let (consume, output) = format1 fmt s
-        retry = (s, True)
-        continue = (countSucc s, ready && not consume)
-    in case output of
-        ForwardData | not ready -> (retry, Nothing, True)
-        Literal sep -> (continue, Just (Left sep), False)
-        ForwardData -> (continue, Just (Right x), False)
-
-format'
-    :: forall dom fmt c a. (HiddenClockResetEnable dom, Format fmt)
+    :: forall dom fmt. (HiddenClockResetEnable dom, Format fmt)
     => Proxy fmt
     -> Circuit (Df dom Word8) (Df dom Word8)
-format' fmt = format fmt |> Df.map (either id id)
-
-formatModel :: forall fmt a. (Format fmt) => Proxy fmt -> [a] -> [Either Word8 a]
-formatModel fmt = go (countMin :: State fmt)
+format fmt = Df.compander (begin, True) \(s, ready) x ->
+    let retry = (s, True)
+        produce ((consume, mb_y) :~> s') = ((fromMaybe begin s', ready && not consume), mb_y, False)
+    in case format1 fmt s of
+        Dynamic step | not ready -> (retry, Nothing, True)
+        Static step -> produce step
+        Dynamic step -> produce (step x)
   where
-    go s cs = case output of
-        Literal sep -> Left sep : go s' (if consume then L.tail cs else cs)
-        ForwardData -> case cs of
-            c:cs' -> Right c : go s' (if consume then cs' else cs)
-            [] -> []
+    begin = start (Proxy @fmt)
+
+formatModel :: forall fmt a. (Format fmt) => Proxy fmt -> [Word8] -> [Word8]
+formatModel fmt = go begin
+  where
+    begin = start (Proxy @fmt)
+
+    go s cs = case format1 fmt s of
+        Static step -> produce step
+        Dynamic step
+            | (c:_) <- cs -> produce (step c)
+            | otherwise -> []
       where
-        (consume, output) = format1 fmt s
-        s' = countSucc s
+        next = fromMaybe begin
+        output = maybe id (:)
+        produce ((consume, mb_y) :~> s') = output mb_y $ go (next s') $ if consume then L.tail cs else cs
 
 prop_format :: (Format fmt) => Proxy fmt -> H.Property
 prop_format fmt =

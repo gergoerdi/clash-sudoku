@@ -6,7 +6,6 @@ module Sudoku where
 
 import Clash.Prelude hiding (lift)
 import Clash.Annotations.TH
-import Clash.Class.Counter.Internal
 
 import Data.Maybe
 import Control.Monad.State
@@ -27,11 +26,6 @@ import Format
 
 -- import Debug.Trace
 
-countSuccChecked :: Counter a => a -> Maybe a
-countSuccChecked x = x' <$ guard (not overflow)
-  where
-    (overflow, x') = countSuccOverflow x
-
 type StackSize n m = ((n * m) * (m * n))
 type Cnt n m = Index ((n * m) * (m * n))
 
@@ -45,8 +39,8 @@ data St n m
 
 showGrid :: forall n m. (Showable n m) => Sudoku n m -> String
 showGrid =
-    fmap (chr . fromIntegral . either id id) .
-    formatModel (Proxy @(FormatGrid n m)) .
+    fmap (chr . fromIntegral) .
+    formatModel (Proxy @(GridFormat n m)) .
     fmap showCell .
     toList . flattenGrid
 
@@ -139,7 +133,7 @@ serialize baud par_circuit = circuit \rx -> do
     out_byte <- Df.map pack <| par_circuit <| Df.map unpack <| buffer -< in_byte
     idC -< tx
 
-type FormatGrid n m =
+type GridFormat n m =
     ((((Forward :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n
 
 board
@@ -157,7 +151,7 @@ formatGrid
     => SNat n
     -> SNat m
     -> Circuit (Df dom Word8) (Df dom Word8)
-formatGrid n m = format (Proxy @(FormatGrid n m)) |> Df.map (either id id)
+formatGrid n m = format (Proxy @(GridFormat n m))
 
 topEntity
     :: "CLK_100MHZ" ::: Clock System
