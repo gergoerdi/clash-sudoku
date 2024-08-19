@@ -8,6 +8,7 @@ import RetroClash.Utils hiding (changed)
 import RetroClash.Barbies
 
 import Sudoku.Grid
+import Sudoku.Matrix
 
 import Data.Maybe
 import Barbies.TH
@@ -22,10 +23,34 @@ neighboursMasks
     :: forall n m dom. (KnownNat n, KnownNat m, 1 <= m, 1 <= n, 2 <= n * m)
     => (HiddenClockResetEnable dom)
     => Grid n m (Signal dom (Mask n m))
-    -> Grid n m (Signal dom (Mask n m))
-neighboursMasks masks = combine <$> rowwise others masks <*> columnwise others masks <*> boxwise others masks
+    -> (Signal dom Bool, Grid n m (Signal dom (Mask n m)))
+neighboursMasks masks = (failed, combine <$> rows <*> columns <*> boxes)
   where
-    combine ms1 ms2 ms3 = fold @(3 * (n * m - 1) - 1) (liftA2 (<>)) (ms1 ++ ms2 ++ ms3)
+    (.<>.) = liftA2 (<>)
+
+    row_masks :: Vec (n * m) (Signal dom (Mask n m))
+    (row_failed, row_masks) = unzip $ rowmap combineRegion masks
+    (col_failed, col_masks) = unzip $ colmap combineRegion masks
+    (box_failed, box_masks) = unzip $ toRowMajorOrder $ boxmap combineRegion masks
+
+    rows = gridFromRows . fmap repeat $ row_masks
+    columns = gridFromRows . repeat $ col_masks
+    boxes = fromBoxes . fmap repeat $ fromRowMajorOrder box_masks
+
+    combine m1 m2 m3 = m1 .<>. m2 .<>. m3
+
+    failed = (any_row_failed .||. any_col_failed .||. any_box_failed)
+
+    any_row_failed = fold @(n * m - 1) (.||.) row_failed
+    any_col_failed = fold @(n * m - 1) (.||.) col_failed
+    any_box_failed = fold @(n * m - 1) (.||.) box_failed
+
+    combineRegion :: Vec (n * m) (Signal dom (Mask n m)) -> (Signal dom Bool, Signal dom (Mask n m))
+    combineRegion = foldr f (pure False, pure mempty)
+      where
+        f :: Signal dom (Mask n m) -> (Signal dom Bool, Signal dom (Mask n m)) -> (Signal dom Bool, Signal dom (Mask n m))
+        f mask (failed, mask_acc) = (failed .||. overlapping <$> mask <*> mask_acc, mask .<>. mask_acc)
+
 
 declareBareB [d|
   data CellUnit n m = CellUnit
@@ -64,11 +89,13 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
     pops :: Grid n m (Signal dom (Maybe (Cell n m)))
     pops = unbundle . fmap sequenceA $ pop
 
+    (any_failed, neighbours_masks) = neighboursMasks masks
+
     units :: Grid n m (Signals dom (CellUnit n m))
-    units = pure unit <*> shift_ins <*> prev_guesses <*> pops <*> neighboursMasks masks
+    units = pure unit <*> shift_ins <*> prev_guesses <*> pops <*> neighbours_masks
 
     (_shift_out, shift_ins) = shiftInGridAtN (enable (isJust <$> shift_in) . cell <$> units) shift_in
-    (guessing_failed, prev_guesses) = shiftInGridAtN (keep_guessing <$> units) (pure True)
+    (_guessing_failed, prev_guesses) = shiftInGridAtN (keep_guessing <$> units) (pure True)
 
     masks = mask <$> units
     cells = cell <$> units
@@ -77,7 +104,6 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
     fresh = isJust <$> shift_in .||. isJust <$> pop
     all_unique = bitToBool . reduceAnd <$> bundle (is_unique <$> units)
     any_changed = bitToBool . reduceOr <$> bundle (changed <$> units)
-    any_failed  = bitToBool . reduceOr <$> bundle ((.== conflicted) <$> cells)
     can_guess = not <$> all_unique
 
     result =
@@ -112,7 +138,7 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
 
         cell' = do
             load <- load
-            can_propagate <- enable_propagate
+            can_propagate <- enable_propagate .&&. not <$> is_unique
             use_guess <- enable_guess .&&. guess_this
             guess <- first_guess
             propagated <- propagated

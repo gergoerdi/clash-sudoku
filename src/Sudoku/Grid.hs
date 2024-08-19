@@ -60,6 +60,9 @@ splitCell (Cell c) = (Cell last, Cell rest)
     last = lastBit c
     rest = c .&. complement last
 
+overlapping :: (KnownNat n, KnownNat m) => Mask n m -> Mask n m -> Bool
+overlapping (Mask m1) (Mask m2) = bitToBool . reduceOr $ complement m1 .&. complement m2
+
 type Showable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, n * m <= (9 + 26))
 
 showCell :: (Showable n m) => Cell n m -> Word8
