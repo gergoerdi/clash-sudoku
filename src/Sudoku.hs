@@ -49,7 +49,8 @@ data St n m
     = ShiftIn (Cnt n m)
     | Busy (Index (StackSize n m)) (BCD 6)
     | WaitPush (Index (StackSize n m)) (BCD 6)
-    | ShiftOutCnt Bool (BCD 6) (Index (6 + 1))
+    | ShiftOutCycles Bool (BCD 6) (Index 6)
+    | ShiftOutCyclesDelim Bool
     | ShiftOut Bool (Cnt n m)
     deriving (Generic, NFDataX, Show, Eq)
 
@@ -84,27 +85,27 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
             ShiftIn i -> do
                 when (isJust shift_in) $ put $ maybe (Busy sp bcdMin) ShiftIn $ countSuccChecked i
                 pure (shift_in, Nothing, Ack True, Nothing, Nothing)
-            WaitPush top_sp cnt -> do
-                let cnt' = bcdSucc cnt
-                put $ Busy top_sp cnt'
+            WaitPush top_sp cycles -> do
+                let cycles' = bcdSucc cycles
+                put $ Busy top_sp cycles'
                 pure (Nothing, Nothing, Ack False, Just CommitGuess, Just $ Push ())
-            Busy top_sp cnt -> do
-                let cnt' = bcdSucc cnt
+            Busy top_sp cycles -> do
+                let cycles' = bcdSucc cycles
                 case result of
                     Guess -> do
-                        put $ WaitPush top_sp cnt'
+                        put $ WaitPush top_sp cycles'
                         pure (Nothing, Nothing, Ack False, Just Propagate, Just $ Push ())
                     Failure -> do
-                        put $ Busy top_sp cnt'
+                        put $ Busy top_sp cycles'
                         let underflow = sp == top_sp
                         when underflow do
-                            put $ ShiftOutCnt False cnt 0
+                            put $ ShiftOutCycles False cycles 0
                         pure (Nothing, Nothing, Ack False, Just Propagate, Pop <$ guard (not underflow))
                     Progress -> do
-                        put $ Busy top_sp cnt'
+                        put $ Busy top_sp cycles'
                         pure (Nothing, Nothing, Ack False, Just Propagate, Nothing)
                     Solved -> do
-                        put $ ShiftOutCnt True cnt 0
+                        put $ ShiftOutCycles True cycles 0
                         pure (Nothing, Nothing, Ack False, Just Propagate, Nothing)
             ShiftOutCycles solved cycles i -> do
                 let cycles' = BCD . (`rotateLeftS` (SNat @1)) . bcdDigits $ cycles
@@ -112,6 +113,9 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
                     output = showDigit . head . bcdDigits $ cycles
                 putWhenOutAck s'
                 pure (Nothing, Just (Left output), Ack False, Nothing, Nothing)
+            ShiftOutCyclesDelim solved -> do
+                putWhenOutAck $ ShiftOut solved 0
+                pure (Nothing, Just (Left $ ascii '@'), Ack False, Nothing, Nothing)
             ShiftOut solved i -> do
                 putWhenOutAck $ maybe (ShiftIn 0) (ShiftOut solved) $ countSuccChecked i
                 let shift_in = case out_ack of
