@@ -4,6 +4,7 @@ module Format
     ( ascii
     , Forward
     , Drop
+    , Wait
     , (:*)
     , (:++)
     , Until
@@ -81,6 +82,15 @@ instance Format Drop where
 
     start _ = ()
     format1 _ _ = Dynamic \x -> (True, Nothing) :~> Nothing
+
+-- | Wait until new input is available, without consuming it
+data Wait
+
+instance Format Wait where
+    type State Wait = ()
+
+    start _ = ()
+    format1 _ _ = Dynamic \x -> (False, Nothing) :~> Nothing
 
 -- | Repetition
 data a :* (rep :: Nat)
