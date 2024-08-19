@@ -5,7 +5,8 @@
 module Sudoku where
 
 import Clash.Prelude hiding (lift, mapAccumR)
-import Clash.Class.Counter
+import Clash.Class.Counter.Internal (countMin)
+import Clash.Class.Counter (countSucc)
 import Clash.Annotations.TH
 
 import Data.Maybe
@@ -21,7 +22,7 @@ import Clash.Cores.UART(uart, ValidBaud)
 import Sudoku.Grid
 import Sudoku.Solve
 import Sudoku.Stack
-import Sudoku.Hacks
+import Sudoku.Hacks ()
 import Format
 
 -- import Debug.Trace
@@ -30,17 +31,7 @@ type StackSize n m = ((n * m) * (m * n))
 type Cnt n m = Index ((n * m) * (m * n))
 
 type Digit = Index 10
-newtype BCD n = BCD{ bcdDigits :: Vec n Digit }
-    deriving (Generic, NFDataX, Eq, Show)
-
-bcdMin :: (KnownNat n, 1 <= n) => BCD n
-bcdMin = BCD $ repeat 0
-
-bcdSucc :: (KnownNat n, 1 <= n) => BCD n -> BCD n
-bcdSucc = BCD . snd . mapAccumR f 1 . bcdDigits
-  where
-    f :: Unsigned 1 -> Digit -> (Unsigned 1, Digit)
-    f c d = let (c', d', _) = countSucc (0, d, c) in (c', d')
+type BCD n = Vec n Digit
 
 showDigit :: Digit -> Word8
 showDigit n = ascii '0' + fromIntegral n
@@ -83,14 +74,14 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
                 Ack False -> id
         get >>= \case
             ShiftIn i -> do
-                when (isJust shift_in) $ put $ maybe (Busy sp bcdMin) ShiftIn $ countSuccChecked i
+                when (isJust shift_in) $ put $ maybe (Busy sp countMin) ShiftIn $ countSuccChecked i
                 pure (shift_in, Nothing, Ack True, Nothing, Nothing)
             WaitPush top_sp cycles -> do
-                let cycles' = bcdSucc cycles
+                let cycles' = countSucc cycles
                 put $ Busy top_sp cycles'
                 pure (Nothing, Nothing, Ack False, Just CommitGuess, Just $ Push ())
             Busy top_sp cycles -> do
-                let cycles' = bcdSucc cycles
+                let cycles' = countSucc cycles
                 case result of
                     Guess -> do
                         put $ WaitPush top_sp cycles'
@@ -108,9 +99,9 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
                         put $ ShiftOutCycles True cycles 0
                         pure (Nothing, Nothing, Ack False, Just Propagate, Nothing)
             ShiftOutCycles solved cycles i -> do
-                let cycles' = BCD . (`rotateLeftS` (SNat @1)) . bcdDigits $ cycles
+                let cycles' = cycles `rotateLeftS` (SNat @1)
                     s' = maybe (ShiftOutCyclesDelim solved) (ShiftOutCycles solved cycles') $ countSuccChecked i
-                    output = showDigit . head . bcdDigits $ cycles
+                    output = showDigit . head $ cycles
                 putWhenOutAck s'
                 pure (Nothing, Just (Left output), Ack False, Nothing, Nothing)
             ShiftOutCyclesDelim solved -> do
