@@ -3,6 +3,7 @@
 module Format
     ( ascii
     , Forward
+    , Drop
     , (:*)
     , (:++)
     , Until
@@ -71,6 +72,15 @@ instance Format Forward where
     start _ = ()
 
     format1 _ _ = Dynamic \x -> (True, Just x) :~> Nothing
+
+-- | Consume one token of input without producing any output
+data Drop
+
+instance Format Drop where
+    type State Drop = ()
+
+    start _ = ()
+    format1 _ _ = Dynamic \x -> (True, Nothing) :~> Nothing
 
 -- | Repetition
 data a :* (rep :: Nat)
