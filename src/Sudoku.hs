@@ -18,8 +18,6 @@ import Protocols
 import qualified Protocols.Df as Df
 import Clash.Cores.UART(uart, ValidBaud)
 
-import RetroClash.Utils
-
 import Sudoku.Grid
 import Sudoku.Solve
 import Sudoku.Stack
@@ -77,9 +75,12 @@ controller'
        )
 controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
   where
-    (shift_in', shift_out, in_ack, propagator_cmd, stack_cmd) = mealyStateB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Progress result, sp)
+    (shift_in', shift_out, in_ack, propagator_cmd, stack_cmd) = mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Progress result, sp)
 
     step (shift_in, out_ack, head_cell, result, sp) = do
+        let putWhenOutAck s' = modify $ case out_ack of
+                Ack True -> const s'
+                Ack False -> id
         get >>= \case
             ShiftIn i -> do
                 when (isJust shift_in) $ put $ maybe (Busy sp bcdMin) ShiftIn $ countSuccChecked i
@@ -110,21 +111,17 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
                 let cycles' = BCD . (`rotateLeftS` (SNat @1)) . bcdDigits $ cycles
                     s' = maybe (ShiftOutCyclesDelim solved) (ShiftOutCycles solved cycles') $ countSuccChecked i
                     output = showDigit . head . bcdDigits $ cycles
-                when (case out_ack of Ack b -> b) $
-                    put s'
+                putWhenOutAck s'
                 pure (Nothing, Just (Left output), Ack False, Nothing, Nothing)
             ShiftOutCyclesDelim solved -> do
-                when (case out_ack of Ack b -> b) $
-                    put $ ShiftOut solved 0
+                putWhenOutAck $ ShiftOut solved 0
                 pure (Nothing, Just (Left $ ascii '@'), Ack False, Nothing, Nothing)
             ShiftOut solved i -> do
-                shift_in <- case out_ack of
-                    Ack True -> do
-                        put $ maybe (ShiftIn 0) (ShiftOut solved) $ countSuccChecked i
-                        pure $ Just conflicted
-                    _ -> do
-                        pure Nothing
-                let shift_out = Just $ Right $ if solved then head_cell else conflicted
+                putWhenOutAck $ maybe (ShiftIn 0) (ShiftOut solved) $ countSuccChecked i
+                let shift_in = case out_ack of
+                        Ack True -> Just conflicted
+                        Ack False -> Nothing
+                    shift_out = Just $ Right $ if solved then head_cell else conflicted
                 pure (shift_in, shift_out, Ack False, Nothing, Nothing)
 
     (head_cell, result, next_guesses) = propagator propagator_cmd shift_in' popped
