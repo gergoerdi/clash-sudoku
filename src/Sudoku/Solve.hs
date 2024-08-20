@@ -129,7 +129,6 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
         -> Signals dom (CellUnit n m)
     unit shift_in try_guess pop neighbours_mask = CellUnit{..}
       where
-        load = shift_in .<|>. pop
         shift_out = enable (isJust <$> shift_in) cell
 
         cell = register conflicted cell'
@@ -137,17 +136,19 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
         propagated = act <$> neighbours_mask <*> cell
 
         cell' = do
-            load <- load
+            shift_in <- shift_in
+            pop <- pop
             can_propagate <- enable_propagate .&&. not <$> is_unique
             use_guess <- enable_guess .&&. guess_this
             guess <- first_guess
             propagated <- propagated
             old <- cell
             pure if
-                | Just load <- load -> load
-                | use_guess         -> guess
-                | can_propagate     -> propagated
-                | otherwise         -> old
+                | Just load <- shift_in -> load
+                | Just load <- pop      -> load
+                | use_guess             -> guess
+                | can_propagate         -> propagated
+                | otherwise             -> old
 
         changed = cell' ./=. cell
 
