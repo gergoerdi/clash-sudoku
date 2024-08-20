@@ -70,7 +70,9 @@ instance (Format a, Format b) => Format (a :++ b) where
 instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Format sep where
     type State sep = Index (SymbolLength sep)
 
-    format1 _ i = (False, Literal $ ascii $ noDeDup $ symbolAt (Proxy @(UnconsSymbol sep)) i)
+    format1 _ i = (False, Literal char)
+      where
+        char = ascii $ noDeDup $ symbolAt (Proxy @sep) i
 
 {-# INLINE format #-}
 format
