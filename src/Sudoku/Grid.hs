@@ -43,19 +43,8 @@ instance (KnownNat n, KnownNat m) => Action (Mask n m) (Cell n m) where
 cellMask :: (KnownNat n, KnownNat m) => Cell n m -> Mask n m
 cellMask = Mask . complement . cellBits
 
-data Unique a
-    = Unique a
-    | Conflict
-    | Unset
-    deriving (Show)
-
-getUnique :: (KnownNat n, KnownNat m) => Cell n m -> Unique (Index (n * m))
-getUnique = foldl propagate Unset . zip indicesI . bv2v . cellBits
-  where
-    propagate :: Unique a -> (a, Bit) -> Unique a
-    propagate u (x, b) | Unset <- u, b == high = Unique x
-                       | b == low             = u
-                       | otherwise            = Conflict
+decodeOneHot :: (KnownNat n) => BitVector n -> Index n
+decodeOneHot = fst . foldl (\(i, seen) b -> let seen' = seen || bitToBool b in (if seen' then i else i + 1, seen')) (0, False) . bv2v
 
 lastBit :: (KnownNat n) => BitVector n -> BitVector n
 lastBit x = x `xor` (x .&. (x - 1))
@@ -69,16 +58,15 @@ splitCell (Cell c) = (Cell last, Cell rest)
 type Showable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, n * m <= (9 + 26))
 
 showCell :: (Showable n m) => Cell n m -> Word8
-showCell x = case getUnique x of
-    _ | x == wild -> ascii '_'
-    _ | x == conflicted -> ascii '!'
-    Unset -> ascii '?'
-    Unique x
-      | x' < 9 -> ascii '1' + x'
-      | otherwise -> ascii 'A' + 1 + x' - 10
-      where
-        x' = fromIntegral x
-    Conflict -> ascii '!'
+showCell x
+    | x == wild = ascii '_'
+    | x == conflicted = ascii '!'
+    | other == conflicted = v'
+    | otherwise = ascii '?'
+  where
+    (x', other) = splitCell x
+    v = fromIntegral $ decodeOneHot (cellBits x')
+    v' = if v < 9 then ascii '1' + v else ascii 'A' + v - 9
 
 type Readable n m = (KnownNat n, KnownNat m, n * m <= (9 + 26))
 
