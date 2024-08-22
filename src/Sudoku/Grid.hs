@@ -1,6 +1,6 @@
 {-# LANGUAGE StandaloneDeriving, DerivingStrategies, DerivingVia, GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE BlockArguments #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableInstances, MultiParamTypeClasses #-}
 {-# OPTIONS -fconstraint-solver-iterations=10 #-}
 module Sudoku.Grid where
 
@@ -11,6 +11,7 @@ import Format (ascii)
 import Data.Char (chr)
 import Data.Ord (Down(..))
 import Data.Word (Word8)
+import Data.Monoid.Action
 
 newtype Cell n m = Cell{ cellBits :: BitVector (n * m) }
     deriving stock (Generic)
@@ -36,8 +37,8 @@ instance (KnownNat n, KnownNat m) => Semigroup (Mask n m) where
 instance (KnownNat n, KnownNat m) => Monoid (Mask n m) where
     mempty = Mask maxBound
 
-applyMask :: (KnownNat n, KnownNat m) => Mask n m -> Cell n m -> Cell n m
-applyMask (Mask m) (Cell c) = Cell $ c .&. m
+instance (KnownNat n, KnownNat m) => Action (Mask n m) (Cell n m) where
+    act (Mask m) (Cell c) = Cell (c .&. m)
 
 cellMask :: (KnownNat n, KnownNat m) => Cell n m -> Mask n m
 cellMask = Mask . complement . cellBits

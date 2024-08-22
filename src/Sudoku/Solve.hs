@@ -11,6 +11,7 @@ import Sudoku.Grid
 
 import Data.Maybe
 import Barbies.TH
+import Data.Monoid.Action
 
 shiftInGridAtN :: forall n m a. (KnownNat n, KnownNat m) => Grid n m a -> a -> (a, Grid n m a)
 shiftInGridAtN grid x = (x', unflattenGrid grid')
@@ -107,7 +108,7 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
 
         cell = register conflicted cell'
         mask = mux is_unique (cellMask <$> cell) (pure mempty)
-        propagated = applyMask <$> neighbours_mask <*> cell
+        propagated = act <$> neighbours_mask <*> cell
 
         cell' = do
             load <- load

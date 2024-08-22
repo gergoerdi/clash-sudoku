@@ -25,6 +25,7 @@ dependencies:
   - lens
   - mtl
   - arrows
+  - monoid-extras
   - clash-protocols
   - clash-cores
 
