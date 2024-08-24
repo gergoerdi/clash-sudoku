@@ -43,8 +43,13 @@ instance (KnownNat n, KnownNat m) => Action (Mask n m) (Cell n m) where
 cellMask :: (KnownNat n, KnownNat m) => Cell n m -> Mask n m
 cellMask = Mask . complement . cellBits
 
-decodeOneHot :: (KnownNat n) => BitVector n -> Index n
-decodeOneHot = fst . foldl (\(i, seen) b -> let seen' = seen || bitToBool b in (if seen' then i else i + 1, seen')) (0, False) . bv2v
+decodeOneHot :: (KnownNat n, 1 <= n) => BitVector n -> Index n
+decodeOneHot = unpack . collapseBits . fmap pack . zipWith mask indicesI . bv2v
+  where
+    mask i en = if bitToBool en then i else 0
+
+    collapseBits :: (KnownNat n, KnownNat m) => Vec n (BitVector m) -> BitVector m
+    collapseBits = bitCoerce . fmap reduceOr . transpose . fmap bv2v
 
 lastBit :: (KnownNat n) => BitVector n -> BitVector n
 lastBit x = x `xor` (x .&. (x - 1))
@@ -55,7 +60,7 @@ splitCell (Cell c) = (Cell last, Cell rest)
     last = lastBit c
     rest = c .&. complement last
 
-type Showable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, n * m <= (9 + 26))
+type Showable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, n * m <= (9 + 26))
 
 showCell :: (Showable n m) => Cell n m -> Word8
 showCell x
