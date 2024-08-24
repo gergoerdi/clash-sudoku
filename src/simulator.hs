@@ -142,6 +142,22 @@ Just hard = readGrid . unlines $
     , ". . . |. . . |. . . "
     ]
 
+-- | From https://norvig.com/sudoku.html
+impossible :: Sudoku 3 3
+Just impossible = readGrid . unlines $
+    [ ". . . |. . 5 |. 8 . "
+    , ". . . |6 . 1 |. 4 3 "
+    , ". . . |. . . |. . . "
+    , "------+------+------"
+    , ". 1 . |5 . . |. . . "
+    , ". . . |1 . 6 |. . . "
+    , "3 . . |. . . |. . 5 "
+    , "------+------+------"
+    , "5 3 . |. . . |. 6 1 "
+    , ". . . |. . . |. . 4 "
+    , ". . . |. . . |. . . "
+    ]
+
 instance (Showable n m) => ShowX (Cell n m)
 
 hexodoku :: Sudoku 4 4
@@ -197,6 +213,7 @@ main :: IO ()
 main = do
     test "grid1" grid1
     test "grid2" grid2
+    test "hard" hard
     test "should be unsolvable" unsolvable
     test "hexodoku" hexodoku
   where
