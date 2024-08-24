@@ -34,6 +34,12 @@ data St n m
     | ShiftOut Bool (Cnt n m)
     deriving (Generic, NFDataX, Show, Eq)
 
+showGrid' :: forall n m a. (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => (a -> Char) -> Grid n m a -> String
+showGrid' showCell =
+    fmap (chr . fromIntegral) .
+    formatModel (Proxy @(GridFormat n m)) .
+    fmap (ascii . showCell) .
+    toList . flattenGrid
 
 showGrid :: forall n m. (Showable n m) => Sudoku n m -> String
 showGrid =
@@ -55,43 +61,43 @@ controller'
        )
 controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
   where
-    (shift_in', shift_out, in_ack, propagator_cmd, stack_cmd) = mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Progress result, sp)
+    (load_addr, load_value, shift_out, in_ack, propagator_cmd, stack_cmd) = mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Progress result, sp)
 
     step (shift_in, out_ack, head_cell, result, sp) = do
         let putWhenOutAck s' = modify $ case out_ack of
                 Ack True -> const s'
                 Ack False -> id
         get >>= \case
-            ShiftIn i -> do
-                when (isJust shift_in) $ put $ maybe (Busy sp) ShiftIn $ countSuccChecked i
-                pure (shift_in, Nothing, Ack True, Nothing, Nothing)
+            ShiftIn i -> case shift_in of
+                Just value -> do
+                    put $ maybe (Busy sp) ShiftIn $ countSuccChecked i
+                    pure (Just i, Just value, Nothing, Ack True, Nothing, Nothing)
+                Nothing -> do
+                    pure (Nothing, Nothing, Nothing, Ack False, Nothing, Nothing)
             WaitPush top_sp -> do
                 put $ Busy top_sp
-                pure (Nothing, Nothing, Ack False, Just CommitGuess, Just $ Push ())
+                pure (Nothing, Nothing, Nothing, Ack False, Just CommitGuess, Just $ Push ())
             Busy top_sp -> do
                 case result of
                     Guess -> do
                         put $ WaitPush top_sp
-                        pure (Nothing, Nothing, Ack False, Just Propagate, Just $ Push ())
+                        pure (Nothing, Nothing, Nothing, Ack False, Just Propagate, Just $ Push ())
                     Failure -> do
                         let underflow = sp == top_sp
                         when underflow do
                             put $ ShiftOut False 0
-                        pure (Nothing, Nothing, Ack False, Just Propagate, Pop <$ guard (not underflow))
+                        pure (Nothing, Nothing, Nothing, Ack False, Just Propagate, Pop <$ guard (not underflow))
                     Progress -> do
-                        pure (Nothing, Nothing, Ack False, Just Propagate, Nothing)
+                        pure (Nothing, Nothing, Nothing, Ack False, Just Propagate, Nothing)
                     Solved -> do
                         put $ ShiftOut True 0
-                        pure (Nothing, Nothing, Ack False, Just Propagate, Nothing)
+                        pure (Nothing, Nothing, Nothing, Ack False, Just Propagate, Nothing)
             ShiftOut solved i -> do
                 putWhenOutAck $ maybe (ShiftIn 0) (ShiftOut solved) $ countSuccChecked i
-                let shift_in = case out_ack of
-                        Ack True -> Just conflicted
-                        Ack False -> Nothing
-                    shift_out = Just $ if solved then head_cell else conflicted
-                pure (shift_in, shift_out, Ack False, Nothing, Nothing)
+                let shift_out = Just $ if solved then head_cell else conflicted
+                pure (Just i, Nothing, shift_out, Ack False, Nothing, Nothing)
 
-    (head_cell, result, next_guesses) = propagator propagator_cmd shift_in' popped
+    (head_cell, result, next_guesses) = propagator @n @m propagator_cmd load_addr load_value popped
     popped = stack_rd
 
     (stack_rd, sp) = stack (SNat @(StackSize n m)) stack_cmd (bundle next_guesses)
