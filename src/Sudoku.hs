@@ -18,7 +18,8 @@ import qualified Protocols.Df as Df
 import Clash.Cores.UART(uart, ValidBaud)
 
 import Sudoku.Grid
-import Sudoku.Solve
+import Sudoku.Solve (Solvable)
+import Sudoku.Solve (propagator, PropagatorCmd(..), PropagatorResult(..))
 import Sudoku.Stack
 import Format
 

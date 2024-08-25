@@ -26,6 +26,8 @@ dependencies:
   - mtl
   - arrows
   - monoid-extras
+  - generic-monoid
+  
   - clash-protocols
   - clash-cores
 
