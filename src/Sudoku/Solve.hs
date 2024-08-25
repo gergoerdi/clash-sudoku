@@ -5,7 +5,7 @@
 module Sudoku.Solve
     ( Solvable
     , propagator, PropagatorCmd(..), PropagatorResult(..)
-    , FooCmd(..), FooResult(..)
+    , foo, FooCmd(..), FooResult(..)
     ) where
 
 import Clash.Prelude hiding (mapAccumR)
@@ -27,6 +27,8 @@ import Data.Monoid.Generic
 import Data.Foldable (traverse_, for_)
 
 import Format (countSuccChecked) -- TODO
+
+import Debug.Trace
 
 -- shiftInGridAtN :: forall n m a. (KnownNat n, KnownNat m) => Grid n m a -> a -> (a, Grid n m a)
 -- shiftInGridAtN grid x = (x', unflattenGrid grid')
@@ -107,6 +109,7 @@ data FooCmd (n :: Nat) (m :: Nat)
     = Input (Addr n m) (Cell n m)
     | Solve
     | Ask (Addr n m)
+    deriving (Generic, NFDataX, Show)
 
 data FooResult (n :: Nat) (m :: Nat)
     = Idle
@@ -114,6 +117,7 @@ data FooResult (n :: Nat) (m :: Nat)
     | Failed
     | Solved_
     | Answer (Cell n m)
+    deriving (Generic, NFDataX, Show)
 
 type GridSize n m = n * m * m * n
 type StackSize n m = GridSize n m
@@ -142,13 +146,13 @@ data FooPhase (n :: Nat) (m :: Nat)
     | Guessing Bool (Index (GridSize n m))
     | Committing Bool (Index (GridSize n m))
     | Answering
-    deriving (Generic, NFDataX)
+    deriving (Generic, NFDataX, Show)
 
 data FooState n m = FooState
     { _phase :: FooPhase n m
     , _buffer :: Vec (n  * m) (Cell n m)
     }
-    deriving (Generic, NFDataX)
+    deriving (Generic, NFDataX, Show)
 makeLenses ''FooState
 
 initState :: (Solvable n m) => FooState n m
@@ -199,7 +203,7 @@ foo cmd = result
 
     goto phase' = phase .= phase'
 
-    solve (cmd, grid_rd, stack_rd) = use phase >>= \case
+    solve (cmd, grid_rd, stack_rd) = use phase >>= {- (\x -> (for_ cmd \cmd -> traceShowM (cmd, x)) >> pure x) >>= -} \case
         Idling -> case cmd of
             Just (Input i x) -> do
                 scribe gridOp $ pure $ RamWrite i x
@@ -227,6 +231,8 @@ foo cmd = result
             pure Busy
         Propagating all_solved any_changed i -> do
             (solved, failed, changed, buffer') <- propagate <$> use buffer
+            buf <- use buffer
+            -- traceShowM (buf, buffer')
             buffer .= buffer'
             if | getAny failed -> do
                      -- TODO: backtrack
@@ -249,18 +255,19 @@ foo cmd = result
                         Just i' -> do
                             goto $ Loading all_solved any_changed i' Nothing
                             pure Busy
-                        Nothing | getAll all_solved -> do
-                            goto Idling
-                            pure Solved_
-                        Nothing -> do
-                            -- TODO: guess if nothing has changed
-                            --         -- goto $ Guessing False 0
-                            --         -- scribe gridOp $ pure $ RamRead 0
-
-                            -- Start new propagation
-                            goto $ Loading mempty mempty 0 Nothing
-                            pure Busy
-            pure Busy
+                        Nothing ->
+                            if | getAll all_solved -> do
+                                     goto Idling
+                                     traceM "Solved!"
+                                     pure Solved_
+                               | getAny any_changed -> do
+                                     goto $ Loading mempty mempty 0 Nothing
+                                     pure Busy
+                               | otherwise -> do
+                                     traceM "need to guess"
+                                     goto $ Guessing False 0
+                                     scribe gridOp $ pure $ RamRead 0
+                                     pure Busy
         Guessing guessed i -> do
             let (guess, cont) = splitCell grid_rd
                 can_guess = not guessed && cont /= conflicted

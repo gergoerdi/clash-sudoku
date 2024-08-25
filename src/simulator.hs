@@ -10,12 +10,40 @@ import Data.Char (chr)
 import qualified Data.List as L
 import qualified Clash.Sized.Vector as V
 import Data.Word
+import Control.Arrow.Transformer.Automaton
 
 import Sudoku.Matrix
 import Sudoku.Grid
 import Format
 import Sudoku
 import Sudoku.Solve (Solvable)
+
+import Sudoku.Solve (foo, FooCmd(..), FooResult(..))
+
+import Debug.Trace
+
+testFoo :: forall n m. (Solvable n m) => Sudoku n m -> Sudoku n m
+testFoo = toGrid . load (signalAutomaton @System $ foo @n @m)
+  where
+    load sim = feed sim . toList . zip indicesI . concat . gridToRows
+
+    feed sim@(Automaton step) = \case
+        ((i, cell):xs) -> let (_out, sim') = step $ Just $ Input i cell in feed sim' xs
+        [] -> let (_out, sim') = step $ Just Solve in wait sim'
+
+    wait (Automaton step) = let (out, sim') = step Nothing in case out of
+        Solved_ -> readOut sim' 0
+        _ -> wait sim'
+
+    readOut (Automaton step) i = case out of
+        Answer cell -> cell : maybe [] (readOut sim') (countSuccChecked i)
+        _ -> readOut sim' i
+      where
+        (out, sim') = step $ Just $ Ask i
+
+    toGrid xs = case V.fromList xs of
+        Nothing -> error $ unwords ["Cardinality error", show $ L.length xs]
+        Just xs -> gridFromRows @n @m $ unconcatI xs
 
 model_encodeSerial :: Int -> Word8 -> [Bit]
 model_encodeSerial stretch x = mconcat
