@@ -9,6 +9,8 @@ module Sudoku.Solve
     ) where
 
 import Clash.Prelude hiding (mapAccumR)
+import Clash.Class.Counter
+import Clash.Class.Counter.Internal
 import RetroClash.Utils hiding (changed)
 import RetroClash.Barbies
 
@@ -29,6 +31,11 @@ import Data.Foldable (traverse_, for_)
 import Format (countSuccChecked) -- TODO
 
 import Debug.Trace
+
+countPredChecked :: Counter a => a -> Maybe a
+countPredChecked x = x' <$ guard (not underflow)
+  where
+    (underflow, x') = countPredOverflow x
 
 -- shiftInGridAtN :: forall n m a. (KnownNat n, KnownNat m) => Grid n m a -> a -> (a, Grid n m a)
 -- shiftInGridAtN grid x = (x', unflattenGrid grid')
@@ -89,7 +96,7 @@ declareBareB [d|
     -- , keep_guessing :: Bool
     } |]
 
-type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, 1 <= n * m * m * n)
+type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, 1 <= GridSize n m, 1 <= StackSize n m * GridSize n m)
 
 data PropagatorCmd
     = Propagate
@@ -144,6 +151,8 @@ data FooPhase (n :: Nat) (m :: Nat)
     | Propagating All Any (Index (3 * n * m))
     | WritingBack All Any (Index (3 * n * m)) (Maybe (Index (n * m)))
     | Guessing Bool (Index (GridSize n m))
+    | BacktrackingRead (Index (GridSize n m))
+    | BacktrackingWrite (Index (GridSize n m))
     | Committing Bool (Index (GridSize n m))
     | Answering
     deriving (Generic, NFDataX, Show)
@@ -151,6 +160,7 @@ data FooPhase (n :: Nat) (m :: Nat)
 data FooState n m = FooState
     { _phase :: FooPhase n m
     , _buffer :: Vec (n  * m) (Cell n m)
+    , _sp :: Index (StackSize n m * GridSize n m)
     }
     deriving (Generic, NFDataX, Show)
 makeLenses ''FooState
@@ -159,6 +169,7 @@ initState :: (Solvable n m) => FooState n m
 initState = FooState
     { _phase = Idling
     , _buffer = repeat conflicted
+    , _sp = 0
     }
 
 foo
@@ -187,13 +198,19 @@ foo cmd = result
             _ -> Nothing
 
     stack_rd :: Signal dom (Cell n m)
-    stack_rd = pure conflicted -- TODO
+    stack_rd = blockRamU NoClearOnReset (SNat @(StackSize n m * GridSize n m)) undefined stack_addr stack_wr
 
     stack_addr = do
         op <- stack_op
         pure $ case op of
             RamRead i -> i
             _ -> 0
+
+    stack_wr = do
+        op <- stack_op
+        pure $ case op of
+            RamWrite i x -> Just (i, x)
+            _ -> Nothing
 
     atlas = gridToRows row_atlas ++ gridToRows col_atlas ++ gridToRows box_atlas
       where
@@ -235,7 +252,8 @@ foo cmd = result
             -- traceShowM (buf, buffer')
             buffer .= buffer'
             if | getAny failed -> do
-                     -- TODO: backtrack
+                     traceM "Failed"
+                     goto $ BacktrackingRead maxBound
                      pure Busy
                | getAny changed -> do
                      goto $ Propagating all_solved (any_changed <> changed) i
@@ -258,7 +276,7 @@ foo cmd = result
                         Nothing ->
                             if | getAll all_solved -> do
                                      goto Idling
-                                     traceM "Solved!"
+                                     traceM "Solved"
                                      pure Solved_
                                | getAny any_changed -> do
                                      goto $ Loading mempty mempty 0 Nothing
@@ -275,12 +293,23 @@ foo cmd = result
             when can_guess do
                 scribe gridOp $ pure $ RamWrite i guess
             goto $ Committing (guessed || can_guess) i
-            -- scribe stackOp $ pure $ RamWrite i cont' -- TODO: push continuation
+
+            ptr <- use sp <* (sp %= countSucc)
+            scribe stackOp $ pure $ RamWrite ptr cont'
             pure Busy
         Committing guessed i -> do
             let i' = countSuccChecked i
             traverse_ (scribe gridOp . pure . RamRead) i'
             goto $ maybe (Loading mempty mempty 0 Nothing) (Guessing guessed) i'
+            pure Busy
+        BacktrackingRead i -> do
+            ptr <- (sp %= countPred) *> use sp
+            scribe stackOp $ pure $ RamRead ptr
+            goto $ BacktrackingWrite i
+            pure Busy
+        BacktrackingWrite i -> do
+            scribe gridOp $ pure $ RamWrite i stack_rd
+            goto $ maybe (Loading mempty mempty 0 Nothing) BacktrackingRead $ countPredChecked i
             pure Busy
 
     propagate :: Vec (n * m) (Cell n m) -> (All, Any, Any, Vec (n * m) (Cell n m))
