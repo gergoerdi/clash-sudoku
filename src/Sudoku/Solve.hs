@@ -29,9 +29,9 @@ neighboursMasks masks = (failed, combine <$> rows <*> columns <*> boxes)
     (.<>.) = liftA2 (<>)
 
     row_masks :: Vec (n * m) (Signal dom (Mask n m))
-    (row_failed, row_masks) = unzip $ rowmap combineRegion masks
-    (col_failed, col_masks) = unzip $ colmap combineRegion masks
-    (box_failed, box_masks) = unzip $ toRowMajorOrder $ boxmap combineRegion masks
+    (row_failed, row_masks) = unzip $ rowmap (unbundle . fmap combineRegion . bundle) masks
+    (col_failed, col_masks) = unzip $ colmap (unbundle . fmap combineRegion . bundle) masks
+    (box_failed, box_masks) = unzip $ toRowMajorOrder $ boxmap (unbundle . fmap combineRegion . bundle) masks
 
     rows = gridFromRows . fmap repeat $ row_masks
     columns = gridFromRows . repeat $ col_masks
@@ -45,12 +45,10 @@ neighboursMasks masks = (failed, combine <$> rows <*> columns <*> boxes)
     any_col_failed = fold @(n * m - 1) (.||.) col_failed
     any_box_failed = fold @(n * m - 1) (.||.) box_failed
 
-    combineRegion :: Vec (n * m) (Signal dom (Mask n m)) -> (Signal dom Bool, Signal dom (Mask n m))
-    combineRegion = foldr f (pure False, pure mempty)
-      where
-        f :: Signal dom (Mask n m) -> (Signal dom Bool, Signal dom (Mask n m)) -> (Signal dom Bool, Signal dom (Mask n m))
-        f mask (failed, mask_acc) = (failed .||. overlapping <$> mask <*> mask_acc, mask .<>. mask_acc)
-
+combineRegion :: (KnownNat n, KnownNat m, 1 <= m, 1 <= n, 2 <= n * m) => Vec (n * m) (Mask n m) -> (Bool, Mask n m)
+combineRegion = foldr f (False, mempty)
+  where
+    f mask (failed, mask_acc) = (failed || overlapping mask mask_acc, mask <> mask_acc)
 
 declareBareB [d|
   data CellUnit n m = CellUnit
