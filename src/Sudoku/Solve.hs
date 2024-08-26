@@ -45,10 +45,23 @@ neighboursMasks masks = (failed, combine <$> rows <*> columns <*> boxes)
     any_col_failed = fold @(n * m - 1) (.||.) col_failed
     any_box_failed = fold @(n * m - 1) (.||.) box_failed
 
-combineRegion :: (KnownNat n, KnownNat m, 1 <= m, 1 <= n, 2 <= n * m) => Vec (n * m) (Mask n m) -> (Bool, Mask n m)
-combineRegion = foldr f (False, mempty)
+combineRegion :: forall n m. (KnownNat n, KnownNat m, 1 <= n * m) => Vec (n * m) (Mask n m) -> (Bool, Mask n m)
+combineRegion masks = (failed, fold @(n * m - 1) (<>) masks)
   where
-    f mask (failed, mask_acc) = (failed || overlapping mask mask_acc, mask <> mask_acc)
+    mat = map (map toRegionBit) . transpose . map (bv2v . maskBits) $ masks
+    failed = bitToBool . reduceOr $ map (== Failed) $ fold @(n * m - 1) (<>) <$> mat
+
+data RegionBit =  Lo | Failed | Hi
+    deriving (Show, ShowX, Generic, NFDataX, Eq, Ord, BitPack)
+
+instance Semigroup RegionBit where
+    Hi <> a = a
+    a <> Hi = a
+    _ <> _ = Failed
+
+toRegionBit :: Bit -> RegionBit
+toRegionBit 0 = Lo
+toRegionBit 1 = Hi
 
 declareBareB [d|
   data CellUnit n m = CellUnit
