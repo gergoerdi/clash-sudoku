@@ -1,10 +1,12 @@
 {-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf, ApplicativeDo, NumericUnderscores, TupleSections #-}
-{-# LANGUAGE UndecidableInstances, ViewPatterns #-}
+{-# LANGUAGE UndecidableInstances, ViewPatterns, BangPatterns #-}
 {-# OPTIONS -fplugin=Protocols.Plugin #-}
 module Main where
 
 import Clash.Prelude hiding (lift)
 import Protocols.Internal (simulateCSE)
+import qualified Protocols.Df as Df
+import Protocols (Ack(..))
 
 import Data.Char (chr)
 import qualified Data.List as L
@@ -16,6 +18,7 @@ import Sudoku.Grid
 import Format
 import Sudoku
 import Sudoku.Solve (Solvable)
+import Text.Printf
 
 model_encodeSerial :: Int -> Word8 -> [Bit]
 model_encodeSerial stretch x = mconcat
@@ -183,22 +186,44 @@ Just hexodoku = readGrid . unlines $
     , ". 2 . . | 7 . . .  | . . . C  | . . F ."
     ]
 
-solve :: forall n m. (Solvable n m, Showable n m) => Sudoku n m -> Maybe (Sudoku n m)
-solve = consume . simulateCSE @System (exposeClockResetEnable $ controller @n @m) . (<> L.repeat wild) . toList . flattenGrid
+solve :: forall n m. (Solvable n m, Showable n m) => Sudoku n m -> (Int, Maybe (Sudoku n m))
+-- solve = consume . simulateCSE @System (exposeClockResetEnable $ controller @n @m) . (<> L.repeat wild) . toList . flattenGrid
+--   where
+--     consume = go []
+--       where
+--         go acc (x:xs)
+--             | x == conflicted
+--             = Nothing
+
+--             | Just cells <- V.fromList (L.reverse acc')
+--             = Just $ unflattenGrid cells
+
+--             | otherwise
+--             =  go acc' xs
+--           where
+--             acc' = x : acc
+solve =
+    consume .
+    simulateB @System (uncurry (controller' @n @m)) .
+    (<> L.repeat (Df.NoData, Ack True)) .
+    fmap (\x -> (Df.Data x, Ack True)) .
+    toList .
+    flattenGrid
   where
-    consume = go []
+    consume = go 0 []
+
+    go !n acc ((_, Df.NoData):xs) = go (n + 1) acc xs
+    go n acc ((_, Df.Data x):xs)
+        | x == conflicted
+        = (n, Nothing)
+
+        | Just cells <- V.fromList (L.reverse acc')
+        = (n, Just $ unflattenGrid cells)
+
+        | otherwise
+        =  go n acc' xs
       where
-        go acc (x:xs)
-            | x == conflicted
-            = Nothing
-
-            | Just cells <- V.fromList (L.reverse acc')
-            = Just $ unflattenGrid cells
-
-            | otherwise
-            =  go acc' xs
-          where
-            acc' = x : acc
+        acc' = x : acc
 
 checkSolved :: forall n m. (Solvable n m) => Sudoku n m -> Bool
 checkSolved grid = and
@@ -216,10 +241,11 @@ main = do
     test "hard" hard
     test "should be unsolvable" unsolvable
     test "hexodoku" hexodoku
+    -- test "impossible" impossible
   where
     test label grid = do
         putStrLn label
         case solve grid of
-            Nothing -> putStrLn "Unsolvable" >> putStrLn ""
-            Just grid' | checkSolved grid' -> print grid'
-                       | otherwise -> putStrLn "Invalid solution!" >> print grid'
+            (n, Nothing) -> printf "Unsolvable after %d cycles\n\n" n
+            (n, Just grid') | checkSolved grid' -> printf "Solved after %d cycles\n" n >> print grid'
+                            | otherwise -> printf "Invalid solution after %d cycles!\n" n >> print grid'
