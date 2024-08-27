@@ -12,6 +12,7 @@ import Data.Char (chr)
 import qualified Data.List as L
 import qualified Clash.Sized.Vector as V
 import Data.Word
+import Control.Arrow.Transformer.Automaton
 
 import Sudoku.Matrix
 import Sudoku.Grid
@@ -187,43 +188,32 @@ Just hexodoku = readGrid . unlines $
     ]
 
 solve :: forall n m. (Solvable n m, Showable n m) => Sudoku n m -> (Int, Maybe (Sudoku n m))
--- solve = consume . simulateCSE @System (exposeClockResetEnable $ controller @n @m) . (<> L.repeat wild) . toList . flattenGrid
---   where
---     consume = go []
---       where
---         go acc (x:xs)
---             | x == conflicted
---             = Nothing
-
---             | Just cells <- V.fromList (L.reverse acc')
---             = Just $ unflattenGrid cells
-
---             | otherwise
---             =  go acc' xs
---           where
---             acc' = x : acc
-solve =
-    consume .
-    simulateB @System (uncurry (controller' @n @m)) .
-    (<> L.repeat (Df.NoData, Ack True)) .
-    fmap (\x -> (Df.Data x, Ack True)) .
-    toList .
-    flattenGrid
+solve = start (signalAutomaton @System $ bundle . uncurry (controller' @n @m) . unbundle) . toList . flattenGrid
   where
-    consume = go 0 []
-
-    go !n acc ((_, Df.NoData):xs) = go (n + 1) acc xs
-    go n acc ((_, Df.Data x):xs)
-        | x == conflicted
-        = (n, Nothing)
-
-        | Just cells <- V.fromList (L.reverse acc')
-        = (n, Just $ unflattenGrid cells)
-
-        | otherwise
-        =  go n acc' xs
+    start (Automaton step) xs = load sim xs
       where
-        acc' = x : acc
+        (_, sim) = step (Df.NoData, Ack True)
+
+    load (Automaton step) xs@(x:xs') = load sim $ if ack then xs' else xs
+      where
+        ((Ack ack, _), sim) = step (Df.Data x, Ack True)
+    load sim [] = wait 0 sim
+
+    wait !n (Automaton step) = case output of
+        Df.Data{} -> consume n [] sim
+        Df.NoData -> wait (n + 1) sim
+      where
+        ((_, output), sim) = step (Df.NoData, Ack False)
+
+    consume n acc (Automaton step)
+        | Just cells <- V.fromList (L.reverse acc') = (n, Just $ unflattenGrid cells)
+        | otherwise = consume n acc' sim
+      where
+        ((_, output), sim) = step (Df.NoData, Ack True)
+
+        acc' = case output of
+            Df.Data x -> x : acc
+            Df.NoData -> acc
 
 checkSolved :: forall n m. (Solvable n m) => Sudoku n m -> Bool
 checkSolved grid = and
