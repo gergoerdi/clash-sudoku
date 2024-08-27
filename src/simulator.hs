@@ -226,12 +226,12 @@ checkSolved grid = and
 
 main :: IO ()
 main = do
-    test "grid1" grid1
-    test "grid2" grid2
-    test "hard" hard
-    test "should be unsolvable" unsolvable
-    test "hexodoku" hexodoku
-    -- test "impossible" impossible
+    -- test "grid1" grid1
+    -- test "grid2" grid2
+    -- test "hard" hard
+    -- test "should be unsolvable" unsolvable
+    -- test "hexodoku" hexodoku
+    test "impossible" impossible
   where
     test label grid = do
         putStrLn label
