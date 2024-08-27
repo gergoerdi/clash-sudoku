@@ -39,7 +39,7 @@ neighboursMasks masks = (failed, combine <$> rows <*> columns <*> boxes)
 
     combine m1 m2 m3 = m1 .<>. m2 .<>. m3
 
-    failed = (any_row_failed .||. any_col_failed .||. any_box_failed)
+    failed = any_row_failed .||. any_col_failed .||. any_box_failed
 
     any_row_failed = fold @(n * m - 1) (.||.) row_failed
     any_col_failed = fold @(n * m - 1) (.||.) col_failed
@@ -100,7 +100,7 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
     pops :: Grid n m (Signal dom (Maybe (Cell n m)))
     pops = unbundle . fmap sequenceA $ pop
 
-    (any_failed, neighbours_masks) = neighboursMasks masks
+    (overlapping_uniques, neighbours_masks) = neighboursMasks masks
 
     units :: Grid n m (Signals dom (CellUnit n m))
     units = pure unit <*> shift_ins <*> prev_guesses <*> pops <*> neighbours_masks
@@ -115,11 +115,12 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
     fresh = isJust <$> shift_in .||. isJust <$> pop
     all_unique = bitToBool . reduceAnd <$> bundle (is_unique <$> units)
     any_changed = bitToBool . reduceOr <$> bundle (changed <$> units)
+    any_failed = bitToBool . reduceOr <$> bundle ((.== conflicted) <$> cells)
     can_guess = not <$> all_unique
 
     result =
         mux fresh (pure Progress) $
-        mux any_failed (pure Failure) $
+        mux (overlapping_uniques .||. any_failed) (pure Failure) $
         mux all_unique (pure Solved) $
         mux any_changed (pure Progress) $
         mux can_guess (pure Guess) $
