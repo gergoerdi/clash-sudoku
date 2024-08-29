@@ -217,10 +217,10 @@ solve = start (signalAutomaton @System $ bundle . uncurry (controller' @n @m) . 
 
 checkSolved :: forall n m. (Solvable n m) => Sudoku n m -> Bool
 checkSolved grid = and
-  [ fold @(n * m - 1) (&&) (rowmap valid grid)
-  , fold @(n * m - 1) (&&) (colmap valid grid)
-  , fold @(n * m - 1) (&&) (toRowMajorOrder $ boxmap valid grid)
-  ]
+    [ fold @(n * m - 1) (&&) (rowmap valid grid)
+    , fold @(n * m - 1) (&&) (colmap valid grid)
+    , fold @(n * m - 1) (&&) (toRowMajorOrder $ boxmap valid grid)
+    ]
   where
     valid xs = L.sort (toList xs) == [ unique i | i <- [minBound..maxBound] ]
 
