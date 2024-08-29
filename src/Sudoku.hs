@@ -30,6 +30,7 @@ type Cnt n m = Index ((n * m) * (m * n))
 data St n m
     = ShiftIn (Cnt n m)
     | Busy (Index (StackSize n m))
+    | WaitPop (Index (StackSize n m))
     | WaitPush (Index (StackSize n m))
     | ShiftOut Bool (Cnt n m)
     deriving (Generic, NFDataX, Show, Eq)
@@ -67,7 +68,10 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
                 pure (shift_in, Nothing, Ack True, Nothing, Nothing)
             WaitPush top_sp -> do
                 put $ Busy top_sp
-                pure (Nothing, Nothing, Ack False, Just CommitGuess, Just $ Push ())
+                pure (Nothing, Nothing, Ack False, Just CommitGuess, Nothing)
+            WaitPop top_sp -> do
+                put $ Busy top_sp
+                pure (Nothing, Nothing, Ack False, Just Propagate, Nothing)
             Busy top_sp -> do
                 case result of
                     Guess -> do
@@ -75,9 +79,8 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
                         pure (Nothing, Nothing, Ack False, Just Propagate, Just $ Push ())
                     Failure -> do
                         let underflow = sp == top_sp
-                        when underflow do
-                            put $ ShiftOut False 0
-                        pure (Nothing, Nothing, Ack False, Just Propagate, Pop <$ guard (not underflow))
+                        put $ if underflow then ShiftOut False 0 else WaitPop top_sp
+                        pure (Nothing, Nothing, Ack False, Nothing, Pop <$ guard (not underflow))
                     Progress -> do
                         pure (Nothing, Nothing, Ack False, Just Propagate, Nothing)
                     Solved -> do
