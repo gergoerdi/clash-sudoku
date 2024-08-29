@@ -162,6 +162,38 @@ Just impossible = readGrid . unlines $
     , ". . . |. . . |. . . "
     ]
 
+-- | From https://www.sudokuwiki.org/Escargot
+escargot :: Sudoku 3 3
+Just escargot = readGrid . unlines $
+  [ "1 . . | . . 7 | . 9 ."
+  , ". 3 . | . 2 . | . . 8"
+  , ". . 9 | 6 . . | 5 . ."
+  , "------+-------+------"
+  , ". . 5 | 3 . . | 9 . ."
+  , ". 1 . | . 8 . | . . 2"
+  , "6 . . | . . 4 | . . ."
+  , "------+-------+------"
+  , "3 . . | . . . | . 1 ."
+  , ". 4 1 | . . . | . . 7"
+  , ". . 7 | . . . | 3 . ."
+  ]
+
+-- | From https://sudoku2.com/sudoku-tips/The-hardest-sudoku-in-the-world/
+inkala :: Sudoku 3 3
+Just inkala = readGrid . unlines $
+  [ "8 . . | . . . | . . ."
+  , ". . 3 | 6 . . | . . ."
+  , ". 7 . | . 9 . | 2 . ."
+  , "------+-------+------"
+  , ". 5 . | . . 7 | . . ."
+  , ". . . | . 4 5 | 7 . ."
+  , ". . . | 1 . . | . 3 ."
+  , "------+-------+------"
+  , ". . 1 | . . . | . 6 8"
+  , ". . 8 | 5 . . | . 1 ."
+  , ". 9 . | . . . | 4 . ."
+  ]
+
 instance (Showable n m) => ShowX (Cell n m)
 
 hexodoku :: Sudoku 4 4
@@ -231,6 +263,8 @@ main = do
     test "hard" hard
     test "should be unsolvable" unsolvable
     test "hexodoku" hexodoku
+    test "Escargot" escargot
+    test "Inkala" inkala
     -- test "impossible" impossible
   where
     test label grid = do
