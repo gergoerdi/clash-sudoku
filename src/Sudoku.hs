@@ -146,7 +146,8 @@ board
 board n m =
     Df.mapMaybe parseCell |>
     controller @n @m |>
-    Df.map showCell |> formatGrid n m
+    Df.map showCell |>
+    formatGrid n m
 
 formatGrid
     :: forall n m dom. (HiddenClockResetEnable dom, Readable n m, Showable n m, Solvable n m)

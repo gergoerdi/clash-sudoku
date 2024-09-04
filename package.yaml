@@ -6,6 +6,17 @@ license: MIT
 extra-source-files:
   - README.md
 
+custom-setup:
+  dependencies:
+    - base
+    - Cabal
+    - clashilator
+
+flags:
+  verilator:
+    manual: True
+    default: False
+
 dependencies:
   - base
   - clash-prelude
@@ -73,3 +84,17 @@ source-dirs:
 executables:
   sudoku:
     main: simulator.hs
+
+  sudoku-verilator:
+    main: simulator-verilator.hs
+    other-modules: []
+    verbatim:
+      x-clashilator-top-is: Sudoku
+      x-clashilator-clash-flags:
+        -fplugin=Protocols.Plugin
+        -fclash-spec-limit=100
+        -fclash-inline-limit=100000
+        -fconstraint-solver-iterations=10
+    # when:
+    # - condition: "!flag(verilator)"
+    #   buildable: false
