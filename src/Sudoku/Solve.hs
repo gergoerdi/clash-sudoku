@@ -41,9 +41,9 @@ neighboursMasks masks = (failed, combine <$> rows <*> columns <*> boxes)
 
     failed = any_row_failed .||. any_col_failed .||. any_box_failed
 
-    any_row_failed = fold @(n * m - 1) (.||.) row_failed
-    any_col_failed = fold @(n * m - 1) (.||.) col_failed
-    any_box_failed = fold @(n * m - 1) (.||.) box_failed
+    any_row_failed = bitToBool . reduceOr <$> bundle row_failed
+    any_col_failed = bitToBool . reduceOr <$> bundle col_failed
+    any_box_failed = bitToBool . reduceOr <$> bundle box_failed
 
 combineRegion :: forall n m. (KnownNat n, KnownNat m, 1 <= n * m) => Vec (n * m) (Mask n m) -> (Bool, Mask n m)
 combineRegion masks = (failed, fold @(n * m - 1) (<>) masks)
@@ -145,22 +145,21 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
 
         cell = register conflicted cell'
         mask = mux is_unique (cellMask <$> cell) (pure mempty)
-        propagated = act <$> neighbours_mask <*> cell
 
         cell' = do
+            current <- cell
             shift_in <- shift_in
             pop <- pop
             can_propagate <- enable_propagate .&&. not <$> is_unique
             use_guess <- enable_guess .&&. guess_this
             guess <- first_guess
-            propagated <- propagated
-            old <- cell
+            mask <- neighbours_mask
             pure if
                 | Just load <- shift_in -> load
                 | Just load <- pop      -> load
                 | use_guess             -> guess
-                | can_propagate         -> propagated
-                | otherwise             -> old
+                | can_propagate         -> act mask current
+                | otherwise             -> current
 
         changed = cell' ./=. cell
 
