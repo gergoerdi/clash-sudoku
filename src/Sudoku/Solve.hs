@@ -20,30 +20,27 @@ shiftInGridAtN grid x = (x', unflattenGrid grid')
     (grid', x' :> Nil) = shiftInAtN (flattenGrid grid) (x :> Nil)
 
 neighboursMasks
-    :: forall n m dom. (KnownNat n, KnownNat m, 1 <= m, 1 <= n, 2 <= n * m)
-    => (HiddenClockResetEnable dom)
-    => Grid n m (Signal dom (Mask n m))
-    -> (Signal dom Bool, Grid n m (Signal dom (Mask n m)))
-neighboursMasks masks = (failed, combine <$> rows <*> columns <*> boxes)
+    :: forall n m. (KnownNat n, KnownNat m, 1 <= m, 1 <= n, 2 <= n * m)
+    => Grid n m (Mask n m)
+    -> (Bool, Grid n m (Mask n m))
+neighboursMasks masks = (failed, rows .<>. columns .<>. boxes)
   where
     (.<>.) = liftA2 (<>)
 
-    row_masks :: Vec (n * m) (Signal dom (Mask n m))
-    (row_failed, row_masks) = unzip $ rowmap (unbundle . fmap combineRegion . bundle) masks
-    (col_failed, col_masks) = unzip $ colmap (unbundle . fmap combineRegion . bundle) masks
-    (box_failed, box_masks) = unzip $ toRowMajorOrder $ boxmap (unbundle . fmap combineRegion . bundle) masks
+    row_masks :: Vec (n * m) (Mask n m)
+    (row_failed, row_masks) = unzip $ rowmap combineRegion masks
+    (col_failed, col_masks) = unzip $ colmap combineRegion masks
+    (box_failed, box_masks) = unzip $ toRowMajorOrder $ boxmap combineRegion masks
 
     rows = gridFromRows . fmap repeat $ row_masks
     columns = gridFromRows . repeat $ col_masks
     boxes = fromBoxes . fmap repeat $ fromRowMajorOrder box_masks
 
-    combine m1 m2 m3 = m1 .<>. m2 .<>. m3
+    failed = any_row_failed || any_col_failed || any_box_failed
 
-    failed = any_row_failed .||. any_col_failed .||. any_box_failed
-
-    any_row_failed = bitToBool . reduceOr <$> bundle row_failed
-    any_col_failed = bitToBool . reduceOr <$> bundle col_failed
-    any_box_failed = bitToBool . reduceOr <$> bundle box_failed
+    any_row_failed = bitToBool . reduceOr $ row_failed
+    any_col_failed = bitToBool . reduceOr $ col_failed
+    any_box_failed = bitToBool . reduceOr $ box_failed
 
 combineRegion :: forall n m. (KnownNat n, KnownNat m, 1 <= n * m) => Vec (n * m) (Mask n m) -> (Bool, Mask n m)
 combineRegion masks = (failed, fold @(n * m - 1) (<>) masks)
@@ -100,7 +97,7 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
     pops :: Grid n m (Signal dom (Maybe (Cell n m)))
     pops = unbundle . fmap sequenceA $ pop
 
-    (overlapping_uniques, neighbours_masks) = neighboursMasks masks
+    (overlapping_uniques, unbundle -> neighbours_masks) = unbundle . fmap neighboursMasks . bundle $ masks
 
     units :: Grid n m (Signals dom (CellUnit n m))
     units = pure unit <*> shift_ins <*> prev_guesses <*> pops <*> neighbours_masks
