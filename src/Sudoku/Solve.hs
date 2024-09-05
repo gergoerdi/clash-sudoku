@@ -1,6 +1,7 @@
 {-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE TemplateHaskell #-} -- For declaring Barbie types
+{-# LANGUAGE RankNTypes #-} -- For smapGrid
 module Sudoku.Solve (Solvable, propagator, PropagatorCmd(..), PropagatorResult(..)) where
 
 import Clash.Prelude hiding (mapAccumR)
@@ -83,6 +84,12 @@ data PropagatorResult
     | Progress
     deriving (Generic, NFDataX, Eq, Show)
 
+smapGrid :: forall n m a b. (KnownNat n, KnownNat m) => (forall i j k l. (SNat i, SNat j, SNat k, SNat l) -> a -> b) -> Grid n m a -> Grid n m b
+smapGrid f = Grid . smapMatrix (\(i, j) -> smapMatrix (\(k, l) -> f (i, j, k, l))) . getGrid
+
+smapMatrix :: forall n m a b. (KnownNat n, KnownNat m) => (forall i j. (SNat i, SNat j) -> a -> b) -> Matrix n m a -> Matrix n m b
+smapMatrix f = FromRows . smap (\i -> smap (\j -> f (i, j))) . matrixRows
+
 propagator
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
     => Signal dom (Maybe PropagatorCmd)
@@ -100,7 +107,7 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
     (overlapping_uniques, unbundle -> neighbours_masks) = unbundle . fmap neighboursMasks . bundle $ masks
 
     units :: Grid n m (Signals dom (CellUnit n m))
-    units = pure unit <*> shift_ins <*> prev_guesses <*> pops <*> neighbours_masks
+    units = smapGrid (\i (shift_in, try_guess, pop, neighbour_masks) -> unit i shift_in try_guess pop neighbour_masks) $ pure (,,,) <*> shift_ins <*> prev_guesses <*> pops <*> neighbours_masks
 
     (_shift_out, shift_ins) = shiftInGridAtN (enable (isJust <$> shift_in) . cell <$> units) shift_in
     (_guessing_failed, prev_guesses) = shiftInGridAtN (keep_guessing <$> units) (pure True)
@@ -131,12 +138,13 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
             _ -> (False, False)
 
     unit
-        :: Signal dom (Maybe (Cell n m))
+        :: (SNat i, SNat j, SNat k, SNat l)
+        -> Signal dom (Maybe (Cell n m))
         -> Signal dom Bool
         -> Signal dom (Maybe (Cell n m))
         -> Signal dom (Mask n m)
         -> Signals dom (CellUnit n m)
-    unit shift_in try_guess pop neighbours_mask = CellUnit{..}
+    unit (SNat, SNat, SNat, SNat) shift_in try_guess pop neighbours_mask = CellUnit{..}
       where
         shift_out = enable (isJust <$> shift_in) cell
 
