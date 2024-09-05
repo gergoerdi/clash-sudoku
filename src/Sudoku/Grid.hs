@@ -111,7 +111,7 @@ instance (KnownNat n, KnownNat m) => Applicative (Grid n m) where
     pure = Grid . pure . pure
 
     -- {-# INLINE (<*>) #-}
-    bf <*> bx = Grid $ (<*>) <$> getGrid bf <*> getGrid bx
+    Grid gf <*> Grid gx = Grid $ liftA2 (<*>) gf gx
 
 instance (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Foldable (Grid n m) where
     foldMap f = foldMap (foldMap f) . getGrid
