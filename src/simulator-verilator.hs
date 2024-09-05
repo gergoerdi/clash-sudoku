@@ -44,7 +44,7 @@ main = withRunner $ \runCycle -> do
               }
             pure oTX
 
-    let rxs = encodeSerials stretch $ fmap ascii . showGrid $ grid1
+    let rxs = encodeSerials stretch $ fmap ascii . showGrid $ hexodoku
 
     let go (Automaton step) = \case
             [] -> pure ()

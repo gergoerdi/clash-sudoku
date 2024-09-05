@@ -26,7 +26,7 @@ main = shakeArgs shakeOptions{ shakeFiles = outDir } do
         [ "-Wno-partial-type-signatures"
         , "-fclash-intwidth=32" -- To play nicely with Spartan 3 and 6
         , "-fclash-spec-limit=100"
-        , "-fclash-inline-limit=10000"
+        , "-fclash-inline-limit=100000"
         , "-fconstraint-solver-iterations=10"
         -- , "-fclash-compile-ultra"
         , "-fplugin=Protocols.Plugin"
