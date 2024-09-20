@@ -62,30 +62,32 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
         let putWhenOutAck s' = modify $ case out_ack of
                 Ack True -> const s'
                 Ack False -> id
+            busy propagator_cmd = pure (Nothing, Nothing, Ack False, Just propagator_cmd, Nothing)
+            stack stack_cmd = pure (Nothing, Nothing, Ack False, Nothing, Just stack_cmd)
         get >>= \case
             ShiftIn i -> do
                 when (isJust shift_in) $ put $ maybe (Busy sp) ShiftIn $ countSuccChecked i
                 pure (shift_in, Nothing, Ack True, Nothing, Nothing)
             WaitPush top_sp -> do
                 put $ Busy top_sp
-                pure (Nothing, Nothing, Ack False, Just CommitGuess, Nothing)
+                busy CommitGuess
             WaitPop top_sp -> do
                 put $ Busy top_sp
-                pure (Nothing, Nothing, Ack False, Just Propagate, Nothing)
+                busy Propagate
             Busy top_sp -> do
                 case result of
                     Guess -> do
                         put $ WaitPush top_sp
-                        pure (Nothing, Nothing, Ack False, Just Propagate, Just $ Push ())
+                        stack $ Push ()
                     Failure -> do
                         let underflow = sp == top_sp
                         put $ if underflow then ShiftOut False 0 else WaitPop top_sp
-                        pure (Nothing, Nothing, Ack False, Nothing, Pop <$ guard (not underflow))
+                        stack Pop
                     Progress -> do
-                        pure (Nothing, Nothing, Ack False, Just Propagate, Nothing)
+                        busy Propagate
                     Solved -> do
                         put $ ShiftOut True 0
-                        pure (Nothing, Nothing, Ack False, Just Propagate, Nothing)
+                        busy Propagate
             ShiftOut solved i -> do
                 putWhenOutAck $ maybe (ShiftIn 0) (ShiftOut solved) $ countSuccChecked i
                 let shift_in = case out_ack of
@@ -146,7 +148,8 @@ board
 board n m =
     Df.mapMaybe parseCell |>
     controller @n @m |>
-    Df.map showCell |> formatGrid n m
+    Df.map showCell |>
+    formatGrid n m
 
 formatGrid
     :: forall n m dom. (HiddenClockResetEnable dom, Readable n m, Showable n m, Solvable n m)
