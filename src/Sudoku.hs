@@ -46,6 +46,12 @@ showGrid =
 instance (Showable n m) => Show (Sudoku n m) where
     show = showGrid
 
+data Control n m
+    = Consume (Maybe (Cell n m))
+    | Solve PropagatorCmd
+    | Stack (StackCmd ())
+    | Produce Bool (Cell n m)
+
 controller'
     :: forall n m dom k. (Solvable n m)
     => (HiddenClockResetEnable dom)
@@ -58,43 +64,42 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
   where
     (shift_in', shift_out, in_ack, propagator_cmd, stack_cmd) = mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Progress result, sp)
 
-    step (shift_in, out_ack, head_cell, result, sp) = do
-        let putWhenOutAck s' = modify $ case out_ack of
-                Ack True -> const s'
-                Ack False -> id
-            busy propagator_cmd = pure (Nothing, Nothing, Ack False, Just propagator_cmd, Nothing)
-            stack stack_cmd = pure (Nothing, Nothing, Ack False, Nothing, Just stack_cmd)
-        get >>= \case
-            ShiftIn i -> do
-                when (isJust shift_in) $ put $ maybe (Busy sp) ShiftIn $ countSuccChecked i
-                pure (shift_in, Nothing, Ack True, Nothing, Nothing)
-            WaitPush top_sp -> do
-                put $ Busy top_sp
-                busy CommitGuess
-            WaitPop top_sp -> do
-                put $ Busy top_sp
-                busy Propagate
-            Busy top_sp -> do
-                case result of
-                    Guess -> do
-                        put $ WaitPush top_sp
-                        stack $ Push ()
-                    Failure -> do
-                        let underflow = sp == top_sp
-                        put $ if underflow then ShiftOut False 0 else WaitPop top_sp
-                        stack Pop
-                    Progress -> do
-                        busy Propagate
-                    Solved -> do
-                        put $ ShiftOut True 0
-                        busy Propagate
-            ShiftOut solved i -> do
-                putWhenOutAck $ maybe (ShiftIn 0) (ShiftOut solved) $ countSuccChecked i
-                let shift_in = case out_ack of
-                        Ack True -> Just conflicted
-                        Ack False -> Nothing
-                    shift_out = Just $ if solved then head_cell else conflicted
-                pure (shift_in, shift_out, Ack False, Nothing, Nothing)
+    lines = \case
+        Consume shift_in -> (shift_in, Nothing, Ack True, Nothing, Nothing)
+        Solve cmd -> (Nothing, Nothing, Ack False, Just cmd, Nothing)
+        Stack cmd -> (Nothing, Nothing, Ack False, Nothing, Just cmd)
+        Produce proceed output -> (conflicted <$ guard proceed, Just output, Ack False, Nothing, Nothing)
+
+    step (shift_in, out_ack, head_cell, result, sp) = fmap lines $ get >>= \case
+        ShiftIn i -> do
+            when (isJust shift_in) $ put $ maybe (Busy sp) ShiftIn $ countSuccChecked i
+            pure $ Consume shift_in
+        WaitPush top_sp -> do
+            put $ Busy top_sp
+            pure $ Solve CommitGuess
+        WaitPop top_sp -> do
+            put $ Busy top_sp
+            pure $ Solve Propagate
+        Busy top_sp -> case result of
+            Guess -> do
+                put $ WaitPush top_sp
+                pure $ Stack $ Push ()
+            Failure -> do
+                let underflow = sp == top_sp
+                put $ if underflow then ShiftOut False 0 else WaitPop top_sp
+                pure $ Stack Pop
+            Progress -> do
+                pure $ Solve Propagate
+            Solved -> do
+                put $ ShiftOut True 0
+                pure $ Solve Propagate
+        ShiftOut solved i -> do
+            s <- get
+            let (proceed, s') = case out_ack of
+                    Ack True -> (True, maybe (ShiftIn 0) (ShiftOut solved) $ countSuccChecked i)
+                    Ack False -> (False, s)
+            put s'
+            pure $ Produce proceed $ if solved then head_cell else conflicted
 
     (head_cell, result, next_guesses) = propagator propagator_cmd shift_in' popped
     popped = stack_rd
