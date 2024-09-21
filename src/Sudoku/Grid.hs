@@ -1,5 +1,4 @@
 {-# LANGUAGE DerivingStrategies, DerivingVia, GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE UndecidableInstances, MultiParamTypeClasses #-}
 {-# OPTIONS -fconstraint-solver-iterations=5 #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -47,8 +46,6 @@ type Sudoku n m = Grid n m (Cell n m)
 emptySudoku :: (KnownNat n, KnownNat m) => Sudoku n m
 emptySudoku = pure conflicted
 
-type Coord n m = (Index n, Index m, Index m, Index n)
-
 others :: (1 <= n) => Vec n a -> Vec n (Vec (n - 1) a)
 others (Cons x Nil) = Nil :> Nil
 others (Cons x xs@(Cons _ _)) = xs :> map (x :>) (others xs)
@@ -72,13 +69,6 @@ rowmap
     -> Vec (n * m) b
 rowmap f = fmap f . gridToRows
 
-rowwise
-    :: (KnownNat n, KnownNat m, 1 <= n * m)
-    => (Vec (m * n) a -> Vec (m * n) b)
-    -> Grid n m a
-    -> Grid n m b
-rowwise f = gridFromRows . rowmap f
-
 transposeGrid
     :: (KnownNat n, KnownNat m)
     => Grid n m a
@@ -91,13 +81,6 @@ colmap
     -> Grid n m a
     -> Vec (n * m) b
 colmap f = rowmap f . transposeGrid
-
-columnwise
-    :: (KnownNat n, KnownNat m, 1 <= (n * m))
-    => (Vec (n * m) a -> Vec (n * m) b)
-    -> Grid n m a
-    -> Grid n m b
-columnwise f = transposeGrid . gridFromRows . colmap f
 
 toBoxes
     :: (KnownNat n, KnownNat m)
@@ -117,28 +100,3 @@ boxmap
     -> Grid n m a
     -> Matrix n m b
 boxmap f = fmap f . toBoxes
-
-boxwise
-    :: (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
-    => (Vec (n * m) a -> Vec (n * m) b)
-    -> Grid n m a
-    -> Grid n m b
-boxwise f = fromBoxes . boxmap f
-
-mapAccumGrid
-    :: forall n m a s b. (KnownNat n, KnownNat m)
-    => (s -> a -> (s, b))
-    -> s
-    -> Grid n m a
-    -> (s, Grid n m b)
-mapAccumGrid f s0 = fmap unflattenGrid . mapAccumL f s0 . flattenGrid
-
-mapAccumGridB
-    :: forall n m a s b dom. (KnownNat n, KnownNat m, Bundle b)
-    => (Signal dom s -> Signal dom a -> Signal dom (s, b))
-    -> Signal dom s
-    -> Grid n m (Signal dom a)
-    -> (Signal dom s, Grid n m (Unbundled dom b))
-mapAccumGridB f = mapAccumGrid f'
-  where
-    f' s x = fmap unbundle . unbundle $ f s x

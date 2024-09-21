@@ -20,8 +20,10 @@ shiftInGridAtN grid x = (x', unflattenGrid grid')
   where
     (grid', x' :> Nil) = shiftInAtN (flattenGrid grid) (x :> Nil)
 
+type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, 1 <= n * m * m * n)
+
 neighboursMasks
-    :: forall n m. (KnownNat n, KnownNat m, 1 <= m, 1 <= n, 2 <= n * m)
+    :: forall n m. (Solvable n m)
     => Grid n m (Mask n m)
     -> (Bool, Grid n m (Mask n m))
 neighboursMasks masks = (failed, rows .<>. columns .<>. boxes)
@@ -43,7 +45,7 @@ neighboursMasks masks = (failed, rows .<>. columns .<>. boxes)
     any_col_failed = bitToBool . reduceOr $ col_failed
     any_box_failed = bitToBool . reduceOr $ box_failed
 
-combineRegion :: forall n m. (KnownNat n, KnownNat m, 1 <= n * m) => Vec (n * m) (Mask n m) -> (Bool, Mask n m)
+combineRegion :: forall n m. (Solvable n m) => Vec (n * m) (Mask n m) -> (Bool, Mask n m)
 combineRegion masks = (failed, fold @(n * m - 1) (<>) masks)
   where
     mat = map (map toRegionBit) . transpose . map (bv2v . maskBits) $ masks
@@ -70,8 +72,6 @@ declareBareB [d|
     , cont :: Cell n m
     , keep_guessing :: Bool
     } |]
-
-type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, 1 <= n * m * m * n)
 
 data PropagatorCmd
     = Propagate

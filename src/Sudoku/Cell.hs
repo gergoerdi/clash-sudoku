@@ -1,5 +1,5 @@
 {-# LANGUAGE DerivingStrategies, DerivingVia, GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE UndecidableInstances, MultiParamTypeClasses #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# OPTIONS -fconstraint-solver-iterations=5 #-}
 module Sudoku.Cell where
 
@@ -12,12 +12,12 @@ import Data.Monoid.Action
 
 newtype Cell n m = Cell{ cellBits :: BitVector (n * m) }
     deriving stock (Generic)
-    deriving anyclass (NFDataX, BitPack)
+    deriving anyclass (NFDataX)
     deriving newtype (Eq, Show)
     deriving (Ord) via Down (BitVector (n * m)) -- So that the ordering makes it easy to check solutions
 
 wild :: (KnownNat n, KnownNat m) => Cell n m
-wild = Cell maxBound
+wild = Cell $ complement 0
 
 conflicted :: (KnownNat n, KnownNat m) => Cell n m
 conflicted = Cell 0
@@ -34,14 +34,6 @@ instance (KnownNat n, KnownNat m) => Action (Mask n m) (Cell n m) where
 cellMask :: (KnownNat n, KnownNat m) => Cell n m -> Mask n m
 cellMask = Mask . complement . cellBits
 
-decodeOneHot :: (KnownNat n, 1 <= n) => BitVector n -> Index n
-decodeOneHot = unpack . collapseBits . fmap pack . zipWith mask indicesI . bv2v
-  where
-    mask i en = if bitToBool en then i else 0
-
-    collapseBits :: (KnownNat n, KnownNat m) => Vec n (BitVector m) -> BitVector m
-    collapseBits = bitCoerce . fmap reduceOr . transpose . fmap bv2v
-
 lastBit :: (KnownNat n) => BitVector n -> BitVector n
 lastBit x = x `xor` (x .&. (x - 1))
 
@@ -51,10 +43,15 @@ splitCell (Cell c) = (Cell last, Cell rest)
     last = lastBit c
     rest = c .&. complement last
 
-overlapping :: (KnownNat n, KnownNat m) => Mask n m -> Mask n m -> Bool
-overlapping (Mask m1) (Mask m2) = bitToBool . reduceOr $ complement m1 .&. complement m2
-
 type Textual n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, n * m <= (9 + 26))
+
+decodeOneHot :: (KnownNat n, 1 <= n) => BitVector n -> Index n
+decodeOneHot = unpack . collapseBits . fmap pack . zipWith mask indicesI . bv2v
+  where
+    mask i en = if bitToBool en then i else 0
+
+    collapseBits :: (KnownNat n, KnownNat m) => Vec n (BitVector m) -> BitVector m
+    collapseBits = bitCoerce . fmap reduceOr . transpose . fmap bv2v
 
 showCell :: (Textual n m) => Cell n m -> Word8
 showCell x

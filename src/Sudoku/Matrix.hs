@@ -1,4 +1,3 @@
-{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DerivingStrategies, GeneralizedNewtypeDeriving, DerivingVia #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -32,12 +31,6 @@ instance (KnownNat n, KnownNat m) => Bundle (Matrix n m a) where
 
     bundle = fmap FromRows . bundle . fmap bundle . matrixRows
     unbundle = FromRows . fmap unbundle . unbundle . fmap matrixRows
-
-generateMatrix :: (KnownNat n, KnownNat m) => (Index n -> Index m -> a) -> Matrix n m a
-generateMatrix f = FromRows $
-    flip map indicesI \i ->
-    flip map indicesI \j ->
-    f i j
 
 toRowMajorOrder :: Matrix n m a -> Vec (n * m) a
 toRowMajorOrder = concat . matrixRows
