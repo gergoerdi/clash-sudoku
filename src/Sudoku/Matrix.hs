@@ -1,17 +1,17 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DerivingStrategies, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DerivingStrategies, GeneralizedNewtypeDeriving, DerivingVia #-}
 module Sudoku.Matrix where
 
 import Clash.Prelude
+import Data.Functor.Compose
 
 newtype Matrix n m a = FromRows{ matrixRows :: Vec n (Vec m a) }
     deriving stock (Generic)
     deriving newtype (NFDataX, BitPack)
-
-instance Functor (Matrix n m) where
-    {-# INLINE fmap #-}
-    fmap f = FromRows . fmap (fmap f) . matrixRows
+    deriving (Functor) via Compose (Vec n) (Vec m)
+    -- deriving (Applicative) via Compose (Vec n) (Vec m)
+    deriving (Foldable) via Compose (Vec n) (Vec m)
 
 instance (KnownNat n, KnownNat m) => Applicative (Matrix n m) where
     {-# INLINE pure #-}
@@ -19,9 +19,6 @@ instance (KnownNat n, KnownNat m) => Applicative (Matrix n m) where
 
     {-# INLINE (<*>) #-}
     mf <*> mx = FromRows $ zipWith (<*>) (matrixRows mf) (matrixRows mx)
-
-instance (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Foldable (Matrix n m) where
-    foldMap f = foldMap (foldMap f) . matrixRows
 
 instance (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Traversable (Matrix n m) where
     traverse f = fmap FromRows . traverse (traverse f) . matrixRows

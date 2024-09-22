@@ -12,6 +12,7 @@ import Data.Char (chr)
 import Data.Ord (Down(..))
 import Data.Word (Word8)
 import Data.Monoid.Action
+import Data.Functor.Compose
 
 newtype Cell n m = Cell{ cellBits :: BitVector (n * m) }
     deriving stock (Generic)
@@ -101,10 +102,9 @@ parseCell x
 newtype Grid n m a = Grid{ getGrid :: Matrix n m (Matrix m n a) }
     deriving stock (Generic)
     deriving newtype (NFDataX, BitPack)
-
-instance Functor (Grid n m) where
-    -- {-# INLINE fmap #-}
-    fmap f = Grid . fmap (fmap f) . getGrid
+    deriving (Functor) via Compose (Matrix n m) (Matrix m n)
+    -- deriving (Applicative) via Compose (Vec n) (Vec m)
+    deriving (Foldable) via Compose (Matrix n m) (Matrix m n)
 
 instance (KnownNat n, KnownNat m) => Applicative (Grid n m) where
     -- {-# INLINE pure #-}
@@ -112,9 +112,6 @@ instance (KnownNat n, KnownNat m) => Applicative (Grid n m) where
 
     -- {-# INLINE (<*>) #-}
     Grid gf <*> Grid gx = Grid $ liftA2 (<*>) gf gx
-
-instance (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Foldable (Grid n m) where
-    foldMap f = foldMap (foldMap f) . getGrid
 
 instance (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Traversable (Grid n m) where
     traverse f = fmap Grid . traverse (traverse f) . getGrid
