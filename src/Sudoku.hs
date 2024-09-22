@@ -10,19 +10,16 @@ import Clash.Annotations.TH
 import Data.Maybe
 import Control.Monad.State
 import Data.Proxy
-import Data.Char (chr)
 import Data.Word
 
 import Protocols
 import qualified Protocols.Df as Df
 import Clash.Cores.UART(uart, ValidBaud)
 
-import Sudoku.Grid
+import Sudoku.Cell
 import Sudoku.Solve
 import Sudoku.Stack
 import Format
-
--- import Debug.Trace
 
 type StackSize n m = ((n * m) * (m * n))
 type Cnt n m = Index ((n * m) * (m * n))
@@ -34,17 +31,6 @@ data St n m
     | WaitPush (Index (StackSize n m))
     | ShiftOut Bool (Cnt n m)
     deriving (Generic, NFDataX, Show, Eq)
-
-
-showGrid :: forall n m. (Showable n m) => Sudoku n m -> String
-showGrid =
-    fmap (chr . fromIntegral) .
-    formatModel (Proxy @(GridFormat n m)) .
-    fmap showCell .
-    toList . flattenGrid
-
-instance (Showable n m) => Show (Sudoku n m) where
-    show = showGrid
 
 data Control n m
     = Consume (Maybe (Cell n m))
@@ -146,7 +132,7 @@ type GridFormat n m =
     ((((Forward :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n
 
 board
-    :: forall n m dom. (HiddenClockResetEnable dom, Readable n m, Showable n m, Solvable n m)
+    :: forall n m dom. (HiddenClockResetEnable dom, Textual n m, Solvable n m)
     => SNat n
     -> SNat m
     -> Circuit (Df dom Word8) (Df dom Word8)
@@ -157,7 +143,7 @@ board n m =
     formatGrid n m
 
 formatGrid
-    :: forall n m dom. (HiddenClockResetEnable dom, Readable n m, Showable n m, Solvable n m)
+    :: forall n m dom. (HiddenClockResetEnable dom, Textual n m, Solvable n m)
     => SNat n
     -> SNat m
     -> Circuit (Df dom Word8) (Df dom Word8)

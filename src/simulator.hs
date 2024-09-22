@@ -13,15 +13,27 @@ import qualified Data.List as L
 import qualified Clash.Sized.Vector as V
 import Data.Word
 import Control.Arrow.Transformer.Automaton
+import Data.Proxy
 
 import Sudoku.Matrix
 import Sudoku.Grid
+import Sudoku.Cell
 import Format
 import Sudoku
 import Sudoku.Solve (Solvable)
 import Sudoku.Sim
 import Sudoku.Sim.Examples
 import Text.Printf
+
+showGrid :: forall n m. (Textual n m) => Sudoku n m -> String
+showGrid =
+    fmap (chr . fromIntegral) .
+    formatModel (Proxy @(GridFormat n m)) .
+    fmap showCell .
+    toList . flattenGrid
+
+instance (Textual n m) => Show (Sudoku n m) where
+    show = showGrid
 
 model_decodeSerial :: Int -> [Bit] -> [Word8]
 model_decodeSerial stretch = wait
@@ -44,7 +56,7 @@ model_decodeSerial stretch = wait
 
     end bs = wait bs
 
-sim_board :: forall n m. (Solvable n m, Showable n m) => Sudoku n m -> String
+sim_board :: forall n m. (Solvable n m, Textual n m) => Sudoku n m -> String
 sim_board =
     fmap (chr . fromIntegral) .
     simulateCSE @System (exposeClockResetEnable (board (SNat @n) (SNat @m))) .
@@ -56,7 +68,7 @@ sim_topEntity =
     simulate @System (hideClockResetEnable $ \clk rst _en -> topEntity clk rst) .
     encodeSerials 16 . fmap ascii . showGrid @3 @3
 
-solve :: forall n m. (Solvable n m, Showable n m) => Sudoku n m -> (Int, Maybe (Sudoku n m))
+solve :: forall n m. (Solvable n m, Textual n m) => Sudoku n m -> (Int, Maybe (Sudoku n m))
 solve = start (signalAutomaton @System $ bundle . uncurry (controller' @n @m) . unbundle) . toList . flattenGrid
   where
     start (Automaton step) xs = load sim xs

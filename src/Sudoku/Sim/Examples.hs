@@ -8,9 +8,10 @@ import qualified Clash.Sized.Vector as V
 
 import Sudoku.Matrix
 import Sudoku.Grid
+import Sudoku.Cell
 import Format (ascii)
 
-readGrid :: forall n m. (Readable n m) => String -> Maybe (Sudoku n m)
+readGrid :: forall n m. (Textual n m) => String -> Maybe (Sudoku n m)
 readGrid = go []
   where
     go xs cs
@@ -132,7 +133,7 @@ Just inkala = readGrid . unlines $
   , ". 9 . | . . . | 4 . ."
   ]
 
-instance (Showable n m) => ShowX (Cell n m)
+instance (Textual n m) => ShowX (Cell n m)
 
 hexodoku :: Sudoku 4 4
 Just hexodoku = readGrid . unlines $
