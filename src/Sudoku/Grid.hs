@@ -1,7 +1,8 @@
 {-# LANGUAGE StandaloneDeriving, DerivingStrategies, DerivingVia, GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE UndecidableInstances, MultiParamTypeClasses #-}
-{-# OPTIONS -fconstraint-solver-iterations=10 #-}
+{-# OPTIONS -fconstraint-solver-iterations=5 #-}
+{-# LANGUAGE InstanceSigs #-}
 module Sudoku.Grid where
 
 import Clash.Prelude
@@ -12,6 +13,8 @@ import Data.Char (chr)
 import Data.Ord (Down(..))
 import Data.Word (Word8)
 import Data.Monoid.Action
+import Data.Functor.Compose
+import Data.Coerce (coerce)
 
 newtype Cell n m = Cell{ cellBits :: BitVector (n * m) }
     deriving stock (Generic)
@@ -101,20 +104,17 @@ parseCell x
 newtype Grid n m a = Grid{ getGrid :: Matrix n m (Matrix m n a) }
     deriving stock (Generic)
     deriving newtype (NFDataX, BitPack)
-
-instance Functor (Grid n m) where
-    -- {-# INLINE fmap #-}
-    fmap f = Grid . fmap (fmap f) . getGrid
+    deriving (Functor) via Compose (Matrix n m) (Matrix m n)
+    -- deriving (Applicative) via Compose (Vec n) (Vec m)
+    deriving (Foldable) via Compose (Matrix n m) (Matrix m n)
 
 instance (KnownNat n, KnownNat m) => Applicative (Grid n m) where
-    -- {-# INLINE pure #-}
-    pure = Grid . pure . pure
+    {-# INLINE pure #-}
+    pure :: forall a. a -> Grid n m a
+    pure = coerce (pure @(Compose (Matrix n m) (Matrix m n)) @a)
 
     -- {-# INLINE (<*>) #-}
     Grid gf <*> Grid gx = Grid $ liftA2 (<*>) gf gx
-
-instance (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Foldable (Grid n m) where
-    foldMap f = foldMap (foldMap f) . getGrid
 
 instance (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Traversable (Grid n m) where
     traverse f = fmap Grid . traverse (traverse f) . getGrid
