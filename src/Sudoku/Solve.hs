@@ -7,8 +7,9 @@ import Clash.Prelude hiding (mapAccumR)
 import RetroClash.Utils hiding (changed)
 import RetroClash.Barbies
 
-import Sudoku.Grid
 import Sudoku.Matrix
+import Sudoku.Grid
+import Sudoku.Cell
 
 import Data.Maybe
 import Barbies.TH
