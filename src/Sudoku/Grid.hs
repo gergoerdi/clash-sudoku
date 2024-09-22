@@ -1,4 +1,4 @@
-{-# LANGUAGE StandaloneDeriving, DerivingStrategies, DerivingVia, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DerivingStrategies, DerivingVia, GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE UndecidableInstances, MultiParamTypeClasses #-}
 {-# OPTIONS -fconstraint-solver-iterations=5 #-}
@@ -18,10 +18,9 @@ import Data.Coerce (coerce)
 
 newtype Cell n m = Cell{ cellBits :: BitVector (n * m) }
     deriving stock (Generic)
-    deriving anyclass (NFDataX)
+    deriving anyclass (NFDataX, BitPack)
     deriving newtype (Eq, Show)
     deriving (Ord) via Down (BitVector (n * m)) -- So that the ordering makes it easy to check solutions
-deriving anyclass instance (KnownNat n, KnownNat m) => BitPack (Cell n m)
 
 wild :: (KnownNat n, KnownNat m) => Cell n m
 wild = Cell maxBound
@@ -33,12 +32,7 @@ unique :: (KnownNat n, KnownNat m) => Index (n * m) -> Cell n m
 unique n = Cell $ 1 `rotateR` 1 `rotateR` fromIntegral n
 
 newtype Mask n m = Mask{ maskBits :: BitVector (n * m) }
-
-instance (KnownNat n, KnownNat m) => Semigroup (Mask n m) where
-    Mask m1 <> Mask m2 = Mask (m1 .&. m2)
-
-instance (KnownNat n, KnownNat m) => Monoid (Mask n m) where
-    mempty = Mask maxBound
+    deriving (Semigroup, Monoid) via And (BitVector (n * m))
 
 instance (KnownNat n, KnownNat m) => Action (Mask n m) (Cell n m) where
     act (Mask m) (Cell c) = Cell (c .&. m)
