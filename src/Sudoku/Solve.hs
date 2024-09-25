@@ -103,8 +103,8 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
     units :: Grid n m (Signals dom (CellUnit n m))
     units = pure unit <*> shift_ins <*> prev_guesses <*> pops <*> neighbours_masks
 
-    (_shift_out, shift_ins) = shiftInGridAtN (enable (isJust <$> shift_in) . cell <$> units) shift_in
-    (_guessing_failed, prev_guesses) = shiftInGridAtN (keep_guessing <$> units) (pure True)
+    (_, shift_ins) = shiftInGridAtN (enable (isJust <$> shift_in) . cell <$> units) shift_in
+    (_, prev_guesses) = shiftInGridAtN (keep_guessing <$> units) (pure True)
 
     masks = mask <$> units
     cells = cell <$> units
@@ -114,15 +114,13 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
     all_unique = bitToBool . reduceAnd <$> bundle (is_unique <$> units)
     any_changed = bitToBool . reduceOr <$> bundle (changed <$> units)
     any_failed = bitToBool . reduceOr <$> bundle ((.== conflicted) <$> cells)
-    can_guess = not <$> all_unique
 
     result =
         mux fresh (pure Progress) $
         mux (overlapping_uniques .||. any_failed) (pure Failure) $
         mux all_unique (pure Solved) $
         mux any_changed (pure Progress) $
-        mux can_guess (pure Guess) $
-        pure Failure
+        pure Guess
 
     (enable_propagate, enable_guess) = unbundle do
         cmd <- cmd
