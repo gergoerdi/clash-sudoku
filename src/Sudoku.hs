@@ -67,7 +67,7 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
             put $ Busy top_sp
             pure $ Solve Propagate
         Busy top_sp -> case result of
-            Guess -> do
+            Stuck -> do
                 put $ WaitPush top_sp
                 pure $ Stack $ Push ()
             Failure -> do

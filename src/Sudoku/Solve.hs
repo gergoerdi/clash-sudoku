@@ -78,10 +78,10 @@ data PropagatorCmd
     | CommitGuess
 
 data PropagatorResult
-    = Solved
+    = Progress
+    | Solved
     | Failure
-    | Guess
-    | Progress
+    | Stuck
     deriving (Generic, NFDataX, Eq, Show)
 
 propagator
@@ -120,7 +120,7 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
         mux (overlapping_uniques .||. any_failed) (pure Failure) $
         mux all_unique (pure Solved) $
         mux any_changed (pure Progress) $
-        pure Guess
+        pure Stuck
 
     (enable_propagate, enable_guess) = unbundle do
         cmd <- cmd
