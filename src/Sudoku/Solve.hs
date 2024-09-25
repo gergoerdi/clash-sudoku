@@ -1,18 +1,15 @@
 {-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
 {-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE TemplateHaskell #-} -- For declaring Barbie types
 module Sudoku.Solve (Solvable, propagator, PropagatorCmd(..), PropagatorResult(..)) where
 
 import Clash.Prelude hiding (mapAccumR)
 import RetroClash.Utils hiding (changed)
-import RetroClash.Barbies
 
 import Sudoku.Matrix
 import Sudoku.Grid
 import Sudoku.Cell
 
 import Data.Maybe
-import Barbies.TH
 import Data.Monoid.Action
 
 shiftInGridAtN :: forall n m a. (KnownNat n, KnownNat m) => Grid n m a -> a -> (a, Grid n m a)
@@ -63,15 +60,14 @@ toRegionBit :: Bit -> RegionBit
 toRegionBit 0 = Lo
 toRegionBit 1 = Hi
 
-declareBareB [d|
-  data CellUnit n m = CellUnit
-    { cell :: Cell n m
-    , mask :: Mask n m
-    , is_unique :: Bool
-    , changed :: Bool
-    , cont :: Cell n m
-    , keep_guessing :: Bool
-    } |]
+data CellUnit dom n m = CellUnit
+    { cell :: Signal dom (Cell n m)
+    , mask :: Signal dom (Mask n m)
+    , is_unique :: Signal dom Bool
+    , changed :: Signal dom Bool
+    , cont :: Signal dom (Cell n m)
+    , keep_guessing :: Signal dom Bool
+    }
 
 data PropagatorCmd
     = Propagate
@@ -100,7 +96,7 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
 
     (overlapping_uniques, unbundle -> neighbours_masks) = unbundle . fmap neighboursMasks . bundle $ masks
 
-    units :: Grid n m (Signals dom (CellUnit n m))
+    units :: Grid n m (CellUnit dom n m)
     units = pure unit <*> shift_ins <*> prev_guesses <*> pops <*> neighbours_masks
 
     (_, shift_ins) = shiftInGridAtN (enable (isJust <$> shift_in) . cell <$> units) shift_in
@@ -134,7 +130,7 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
         -> Signal dom Bool
         -> Signal dom (Maybe (Cell n m))
         -> Signal dom (Mask n m)
-        -> Signals dom (CellUnit n m)
+        -> CellUnit dom n m
     unit shift_in try_guess pop neighbours_mask = CellUnit{..}
       where
         shift_out = enable (isJust <$> shift_in) cell
