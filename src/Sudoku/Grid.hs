@@ -41,6 +41,9 @@ flattenGrid = concat . toRowMajorOrder . fmap toRowMajorOrder . getGrid
 unflattenGrid :: (KnownNat n, KnownNat m) => Vec (n * m * m * n) a -> Grid n m a
 unflattenGrid = Grid . fmap fromRowMajorOrder . fromRowMajorOrder . unconcatI
 
+headGrid :: forall n m a. (KnownNat n, KnownNat m, 1 <= n * m * m * n) => Grid n m a -> a
+headGrid = head @(n * m * m * n - 1) . flattenGrid
+
 type Sudoku n m = Grid n m (Cell n m)
 
 emptySudoku :: (KnownNat n, KnownNat m) => Sudoku n m

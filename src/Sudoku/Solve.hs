@@ -27,7 +27,6 @@ neighboursMasks masks = (failed, rows .<>. columns .<>. boxes)
   where
     (.<>.) = liftA2 (<>)
 
-    row_masks :: Vec (n * m) (Mask n m)
     (row_failed, row_masks) = unzip $ rowmap combineRegion masks
     (col_failed, col_masks) = unzip $ colmap combineRegion masks
     (box_failed, box_masks) = unzip $ toRowMajorOrder $ boxmap combineRegion masks
@@ -64,6 +63,7 @@ data CellUnit dom n m = CellUnit
     { cell :: Signal dom (Cell n m)
     , mask :: Signal dom (Mask n m)
     , is_unique :: Signal dom Bool
+    , is_conflicted :: Signal dom Bool
     , changed :: Signal dom Bool
     , cont :: Signal dom (Cell n m)
     , keep_guessing :: Signal dom Bool
@@ -72,6 +72,7 @@ data CellUnit dom n m = CellUnit
 data PropagatorCmd
     = Propagate
     | CommitGuess
+    deriving (Generic, NFDataX, Eq, Show)
 
 data PropagatorResult
     = Progress
@@ -89,12 +90,12 @@ propagator
        , Signal dom PropagatorResult
        , Grid n m (Signal dom (Cell n m))
        )
-propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), result, conts)
+propagator cmd shift_in pop = (headGrid (cell <$> units), result, cont <$> units)
   where
     pops :: Grid n m (Signal dom (Maybe (Cell n m)))
     pops = unbundle . fmap sequenceA $ pop
 
-    (overlapping_uniques, unbundle -> neighbours_masks) = unbundle . fmap neighboursMasks . bundle $ masks
+    (overlapping_uniques, unbundle -> neighbours_masks) = unbundle . fmap neighboursMasks . bundle $ mask <$> units
 
     units :: Grid n m (CellUnit dom n m)
     units = pure unit <*> shift_ins <*> prev_guesses <*> pops <*> neighbours_masks
@@ -102,28 +103,18 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
     (_, shift_ins) = shiftInGridAtN (enable (isJust <$> shift_in) . cell <$> units) shift_in
     (_, prev_guesses) = shiftInGridAtN (keep_guessing <$> units) (pure True)
 
-    masks = mask <$> units
-    cells = cell <$> units
-    conts = cont <$> units
-
     fresh = isJust <$> shift_in .||. isJust <$> pop
     all_unique = bitToBool . reduceAnd <$> bundle (is_unique <$> units)
     any_changed = bitToBool . reduceOr <$> bundle (changed <$> units)
-    any_failed = bitToBool . reduceOr <$> bundle ((.== conflicted) <$> cells)
+    any_failed = bitToBool . reduceOr <$> bundle (is_conflicted <$> units)
 
     result =
-        mux fresh (pure Progress) $
-        mux (overlapping_uniques .||. any_failed) (pure Failure) $
-        mux all_unique (pure Solved) $
-        mux any_changed (pure Progress) $
+        mux fresh                (pure Progress) $
+        mux overlapping_uniques  (pure Failure) $
+        mux any_failed           (pure Failure) $
+        mux all_unique           (pure Solved) $
+        mux any_changed          (pure Progress) $
         pure Stuck
-
-    (enable_propagate, enable_guess) = unbundle do
-        cmd <- cmd
-        pure $ case cmd of
-            Just Propagate -> (True, False)
-            Just CommitGuess -> (False, True)
-            _ -> (False, False)
 
     unit
         :: Signal dom (Maybe (Cell n m))
@@ -142,21 +133,30 @@ propagator cmd shift_in pop = (head @(n * m * m * n - 1) (flattenGrid cells), re
             current <- cell
             shift_in <- shift_in
             pop <- pop
-            can_propagate <- enable_propagate .&&. not <$> is_unique
-            use_guess <- enable_guess .&&. guess_this
-            guess <- first_guess
-            mask <- neighbours_mask
+            cmd <- cmd
+            guess_this <- guess_this
+            is_unique <- is_unique
+            first_guess <- first_guess
+            neighbours_mask <- neighbours_mask
             pure if
-                | Just load <- shift_in -> load
-                | Just load <- pop      -> load
-                | use_guess             -> guess
-                | can_propagate         -> act mask current
-                | otherwise             -> current
+                | Just load <- shift_in                -> load
+                | Just load <- pop                     -> load
+                | Just Propagate <- cmd, not is_unique -> act neighbours_mask current
+                | Just CommitGuess <- cmd, guess_this  -> first_guess
+                | otherwise                            -> current
+
+        -- cell' =
+        --     shift_in .<|>.
+        --     pop .<|>.
+        --     enable (cmd .== Just Propagate .&&. not <$> is_unique) (act <$> neighbours_mask <*> cell) .<|>.
+        --     enable (cmd .== Just CommitGuess .&&. guess_this) first_guess .<|.
+        --     cell
 
         changed = cell' ./=. cell
 
         (first_guess, next_guess) = unbundle $ splitCell <$> cell
         is_unique = next_guess .== conflicted
+        is_conflicted = cell .== conflicted
 
         can_guess = not <$> is_unique
         guess_this = try_guess .&&. can_guess
