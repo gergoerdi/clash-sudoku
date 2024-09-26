@@ -103,13 +103,11 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, cont <$> units
     (_, shift_ins) = shiftInGridAtN (enable (isJust <$> shift_in) . cell <$> units) shift_in
     (_, prev_guesses) = shiftInGridAtN (keep_guessing <$> units) (pure True)
 
-    fresh = isJust <$> shift_in .||. isJust <$> pop
     all_unique = bitToBool . reduceAnd <$> bundle (is_unique <$> units)
     any_changed = bitToBool . reduceOr <$> bundle (changed <$> units)
     any_failed = bitToBool . reduceOr <$> bundle (is_conflicted <$> units)
 
     result =
-        mux fresh                (pure Progress) $
         mux overlapping_uniques  (pure Failure) $
         mux any_failed           (pure Failure) $
         mux all_unique           (pure Solved) $

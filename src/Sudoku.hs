@@ -26,6 +26,7 @@ type Cnt n m = Index ((n * m) * (m * n))
 
 data St n m
     = ShiftIn (Cnt n m)
+    | Settle (Index (StackSize n m))
     | Busy (Index (StackSize n m))
     | WaitPop (Index (StackSize n m))
     | WaitPush (Index (StackSize n m))
@@ -58,13 +59,16 @@ controller' shift_in out_ack = (in_ack, Df.maybeToData <$> shift_out)
 
     step (shift_in, out_ack, head_cell, result, sp) = fmap lines $ get >>= \case
         ShiftIn i -> do
-            when (isJust shift_in) $ put $ maybe (Busy sp) ShiftIn $ countSuccChecked i
+            when (isJust shift_in) $ put $ maybe (Settle sp) ShiftIn $ countSuccChecked i
             pure $ Consume shift_in
+        Settle top_sp -> do
+            put $ Busy top_sp
+            pure $ Solve Propagate
         WaitPush top_sp -> do
             put $ Busy top_sp
             pure $ Solve CommitGuess
         WaitPop top_sp -> do
-            put $ Busy top_sp
+            put $ Settle top_sp
             pure $ Solve Propagate
         Busy top_sp -> case result of
             Stuck -> do
