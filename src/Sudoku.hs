@@ -17,14 +17,13 @@ import Clash.Cores.UART(uart, ValidBaud)
 import Sudoku.Cell
 import Sudoku.Controller
 import Sudoku.Solve (Solvable)
-import Sudoku.Stack
 import Format
 
 controller
     :: forall n m dom. (Solvable n m)
     => (HiddenClockResetEnable dom)
     => Circuit (Df dom (Cell n m)) (Df dom (Cell n m))
-controller = Circuit $ uncurry controller'
+controller = Circuit controller'
 
 -- From git@github.com:bittide/bittide-hardware.git
 uartDf

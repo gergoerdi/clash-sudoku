@@ -88,9 +88,9 @@ propagator
     -> Signal dom (Maybe (Sudoku n m))
     -> ( Signal dom (Cell n m)
        , Signal dom PropagatorResult
-       , Grid n m (Signal dom (Cell n m))
+       , Signal dom (Sudoku n m)
        )
-propagator cmd shift_in pop = (headGrid (cell <$> units), result, cont <$> units)
+propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont <$> units)
   where
     pops :: Grid n m (Signal dom (Maybe (Cell n m)))
     pops = unbundle . fmap sequenceA $ pop
