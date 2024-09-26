@@ -20,6 +20,7 @@ import Sudoku.Grid
 import Sudoku.Cell
 import Format
 import Sudoku
+import Sudoku.Controller
 import Sudoku.Solve (Solvable)
 import Sudoku.Sim
 import Sudoku.Sim.Examples
