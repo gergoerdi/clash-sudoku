@@ -17,10 +17,10 @@ newtype Cell n m = Cell{ cellBits :: BitVector (n * m) }
     deriving (Ord) via Down (BitVector (n * m)) -- So that the ordering makes it easy to check solutions
 
 wild :: (KnownNat n, KnownNat m) => Cell n m
-wild = Cell $ complement 0
+wild = Cell oneBits
 
 conflicted :: (KnownNat n, KnownNat m) => Cell n m
-conflicted = Cell 0
+conflicted = Cell zeroBits
 
 unique :: (KnownNat n, KnownNat m) => Index (n * m) -> Cell n m
 unique n = Cell $ 1 `rotateR` 1 `rotateR` fromIntegral n
