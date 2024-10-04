@@ -23,41 +23,24 @@ neighboursMasks
     :: forall n m. (Solvable n m)
     => Grid n m (Mask n m)
     -> (Bool, Grid n m (Mask n m))
-neighboursMasks masks = (failed, rows .<>. columns .<>. boxes)
+neighboursMasks masks = (failed, propagated_masks)
   where
-    (.<>.) = liftA2 (<>)
+    propagated_masks = neighbourhoodwise (fold @(n * m - 1) (<>)) masks
+    failed = bitToBool . reduceOr . fmap getIor $ neighbourhoodwise (Ior . reduceOr . conflicts) masks
+    -- failed = getIor . foldMap id $ neighbourhoodwise (Ior . bitToBool . reduceOr . conflicts) masks
 
-    (row_failed, row_masks) = unzip $ rowmap combineRegion masks
-    (col_failed, col_masks) = unzip $ colmap combineRegion masks
-    (box_failed, box_masks) = unzip $ toRowMajorOrder $ boxmap combineRegion masks
-
-    rows = gridFromRows . fmap repeat $ row_masks
-    columns = gridFromRows . repeat $ col_masks
-    boxes = fromBoxes . fmap repeat $ fromRowMajorOrder box_masks
-
-    failed = any_row_failed || any_col_failed || any_box_failed
-
-    any_row_failed = bitToBool . reduceOr $ row_failed
-    any_col_failed = bitToBool . reduceOr $ col_failed
-    any_box_failed = bitToBool . reduceOr $ box_failed
-
-combineRegion :: forall n m. (Solvable n m) => Vec (n * m) (Mask n m) -> (Bool, Mask n m)
-combineRegion masks = (failed, fold @(n * m - 1) (<>) masks)
+conflicts :: forall n m k. (KnownNat n, KnownNat m, 1 <= k) => Vec k (Mask n m) -> BitVector (n * m)
+conflicts =
+    v2bv . map (boolToBit . isNothing) .
+    map (fold @(k - 1) combine . map Just) .
+    transpose .
+    map (bv2v . maskBits)
   where
-    mat = map (map toRegionBit) . transpose . map (bv2v . maskBits) $ masks
-    failed = bitToBool . reduceOr $ map (== Failed) $ fold @(n * m - 1) (<>) <$> mat
-
-data RegionBit =  Lo | Failed | Hi
-    deriving (Show, ShowX, Generic, NFDataX, Eq, Ord, BitPack)
-
-instance Semigroup RegionBit where
-    Hi <> a = a
-    a <> Hi = a
-    _ <> _ = Failed
-
-toRegionBit :: Bit -> RegionBit
-toRegionBit 0 = Lo
-toRegionBit 1 = Hi
+    combine :: Maybe Bit -> Maybe Bit -> Maybe Bit
+    combine (Just 1) b        = b
+    combine (Just 0) (Just 1) = Just 0
+    combine (Just 0) _        = Nothing
+    combine Nothing  _        = Nothing
 
 data CellUnit dom n m = CellUnit
     { cell :: Signal dom (Cell n m)

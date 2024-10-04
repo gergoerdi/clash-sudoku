@@ -3,7 +3,7 @@
 {-# OPTIONS -fplugin=Protocols.Plugin #-}
 module Main where
 
-import Clash.Prelude hiding (lift)
+import Clash.Prelude hiding (lift, fold)
 import Protocols.Internal (simulateCSE)
 import qualified Protocols.Df as Df
 import Protocols (Ack(..))
@@ -14,6 +14,7 @@ import qualified Clash.Sized.Vector as V
 import Data.Word
 import Control.Arrow.Transformer.Automaton
 import Data.Proxy
+import Data.Foldable (fold)
 
 import Sudoku.Matrix
 import Sudoku.Grid
@@ -98,11 +99,7 @@ solve = start (signalAutomaton @System $ bundle . controller' @n @m . unbundle) 
             Df.NoData -> acc
 
 checkSolved :: forall n m. (Solvable n m) => Sudoku n m -> Bool
-checkSolved grid = and
-    [ fold @(n * m - 1) (&&) (rowmap valid grid)
-    , fold @(n * m - 1) (&&) (colmap valid grid)
-    , fold @(n * m - 1) (&&) (toRowMajorOrder $ boxmap valid grid)
-    ]
+checkSolved = bitToBool . reduceAnd . fmap getAnd . neighbourhoodwise (And . valid)
   where
     valid xs = L.sort (toList xs) == [ unique i | i <- [minBound..maxBound] ]
 
