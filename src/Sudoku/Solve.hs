@@ -78,7 +78,9 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont 
     pops :: Grid n m (Signal dom (Maybe (Cell n m)))
     pops = unbundle . fmap sequenceA $ pop
 
-    (overlapping_uniques, unbundle -> neighbours_masks) = unbundle . fmap neighboursMasks . bundle $ mask <$> units
+    masks = bundle $ mask <$> units
+
+    (overlapping_uniques, unbundle -> neighbours_masks) = unbundle . fmap neighboursMasks $ masks
 
     units :: Grid n m (CellUnit dom n m)
     units = pure unit <*> shift_ins <*> prev_guesses <*> pops <*> neighbours_masks
