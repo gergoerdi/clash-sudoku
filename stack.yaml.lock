@@ -5,30 +5,30 @@
 
 packages:
 - completed:
-    hackage: clash-prelude-1.8.1@sha256:c0db58c2de0eae8d4921585062d28334b30a723ee7509e2bffef104b5359b44b,18134
+    hackage: clash-prelude-1.8.1@sha256:066c641321e0c3036edbfef801c8d31aee52566e28674a15b7cbe3c2192c6f06,18134
     pantry-tree:
-      sha256: ea90a0581033a71dd2ca5fec1403a6abb64206e645b3a22d2d68e150e3360bf6
+      sha256: d426fbb09930f89cc0b547ba31aad8ebf49d9e57e469e8f80b0dafeeebb7274d
       size: 13511
   original:
     hackage: clash-prelude-1.8.1
 - completed:
-    hackage: clash-lib-1.8.1@sha256:311f9a7ae29b23de94a7ba3e9aaccac94755d817ff6e7927a2fff5a8bb3c3e0a,16148
+    hackage: clash-lib-1.8.1@sha256:2e1ee92587985da6b1e348778591ebe9f720a6b836fa54a0ffe8b9a090c79272,16148
     pantry-tree:
-      sha256: 062c056e52db0da3261867165a88b2e9783688dfc82c9c1521837b92cd867421
+      sha256: 03ec2cb411fe7ac811914edffea21995ffd0d5c5b6898264fc548c766d146ecb
       size: 23320
   original:
     hackage: clash-lib-1.8.1
 - completed:
-    hackage: clash-ghc-1.8.1@sha256:e0c9dc8be0d1fda31ee8c3007d7dce3fb3467e5eabe586fb570bdd2fafb3f3a6,10022
+    hackage: clash-ghc-1.8.1@sha256:9d5bd773f13fba9f9b895e296b61bcd23096f6d6c2436a55f2cdccfde37f5055,10022
     pantry-tree:
-      sha256: 275ec37ff07f9762cc45e6bfa9be9940e74c6b994b87e1eafdac786e40af0da0
+      sha256: 767533e7a8abc02f66edc1b9a2a85f72cb4b806be634aac2b0e77f24dbedbcce
       size: 5656
   original:
     hackage: clash-ghc-1.8.1
 - completed:
-    hackage: prettyprinter-interp-0.2.0.0@sha256:69c339a95b265dab9b3478ca19ec96952b6b472bd0ff6e2127112a9562362c1d,2086
+    hackage: prettyprinter-interp-0.2.0.0@sha256:324eb1b24535faccb89d3b8e88cd102974c9a15cc7f606280cc681630c376815,2086
     pantry-tree:
-      sha256: 72ec39fe4a40e437e7c0d3efba1f97c4e4e860a7b5503f31d185cef389c9c6e1
+      sha256: ebc100173eb7959218d1cd21a3d9bf6521945607221b1dba562178b044fcc685
       size: 300
   original:
     hackage: prettyprinter-interp-0.2.0.0

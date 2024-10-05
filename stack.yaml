@@ -1,8 +1,10 @@
 resolver: clash-1.8.1.yaml
 
 packages:
-    - '.'
-    - clash-protocols
+  - '.'
+
+  - clash-protocols/clash-protocols-base
+  - clash-protocols/clash-protocols
 
 extra-deps:
   - clash-shake-0.3.2
