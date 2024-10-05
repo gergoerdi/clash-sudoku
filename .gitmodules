@@ -1,3 +1,9 @@
 [submodule "clash-protocols"]
 	path = clash-protocols
 	url = https://github.com/clash-lang/clash-protocols
+[submodule "circuit-notation"]
+	path = circuit-notation
+	url = https://github.com/cchalmers/circuit-notation.git
+[submodule "clash-compiler"]
+	path = clash-compiler
+	url = https://github.com/clash-lang/clash-compiler.git

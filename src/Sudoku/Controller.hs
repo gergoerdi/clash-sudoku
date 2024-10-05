@@ -5,6 +5,7 @@ module Sudoku.Controller where
 import Clash.Prelude
 
 import Data.Maybe
+import Control.Monad
 import Control.Monad.State
 
 import Protocols

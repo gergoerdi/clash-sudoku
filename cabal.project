@@ -1,4 +1,4 @@
-with-compiler: ghc-9.4.7
+with-compiler: ghc-9.10.1
 
 packages:
         clash-protocols/*/*.cabal
@@ -7,7 +7,7 @@ packages:
 source-repository-package
         type: git
         location: https://github.com/cchalmers/circuit-notation.git
-        tag: 19b386c4aa3ff690758ae089c7754303f3500cc9
+        tag: 47f2460ab57415ad8379c3c5591147540a11bc12
 
 source-repository-package
         type: git
@@ -19,3 +19,18 @@ source-repository-package
           clash-ghc
           clash-prelude-hedgehog
           clash-cores
+
+allow-newer:
+        clash-prelude-1.8.1:template-haskell,
+        clash-lib-1.8.1:ghc,
+        clash-lib-1.8.1:template-haskell,
+        clash-ghc-1.8.1:ghc,
+        clash-ghc-1.8.1:ghc-boot,
+        clash-ghc-1.8.1:ghci,
+        clash-ghc-1.8.1:template-haskell,
+        clash-cores-1.8.1:containers,
+        hint:ghc,
+        circuit-notation:ghc,
+        stache:filepath,
+        clash-protocols-base:ghc,
+        clash-protocols:ghc,
