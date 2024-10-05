@@ -3,7 +3,6 @@
 module Sudoku.Controller where
 
 import Clash.Prelude
-import RetroClash.Utils (enable, packWrite)
 
 import Data.Maybe
 import Control.Monad.State
@@ -11,6 +10,7 @@ import Control.Monad.State
 import Protocols
 import qualified Protocols.Df as Df
 
+import Sudoku.Utils
 import Sudoku.Grid
 import Sudoku.Cell
 import Sudoku.Solve

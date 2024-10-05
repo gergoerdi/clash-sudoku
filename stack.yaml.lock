@@ -40,40 +40,12 @@ packages:
   original:
     hackage: concurrent-supply-0.1.8
 - completed:
-    hackage: retroclash-lib-0.1.2.2@sha256:4ddf6efb9c8d8da98333ecebdd9d0aee0d99c40767721c16879e80f377175438,3303
-    pantry-tree:
-      sha256: 18599fffb446ddf4703149874e67782cd055a35645ebefdd5b2beb8f4c8d988c
-      size: 1274
-  original:
-    hackage: retroclash-lib-0.1.2.2
-- completed:
-    hackage: retroclash-sim-0.1.1@sha256:cd0079dc90fdf50d69bad2ac415745222838280b1615a7149ffe8c38e4b94183,2433
-    pantry-tree:
-      sha256: 39e7b05e3de9cc7a7ad05e15092a8f7bfb6cb371de7cbf7f80542a8796673466
-      size: 377
-  original:
-    hackage: retroclash-sim-0.1.1
-- completed:
-    hackage: clashilator-0.1.4@sha256:fc7109a1f7f5ce63a8e03bbf2481bcca3995675a05f5e64fea3d6cd5f1a20d86,2046
-    pantry-tree:
-      sha256: cee8993e5c6176f147e98905120399574604057cbd527fdfe428c7742686c774
-      size: 749
-  original:
-    hackage: clashilator-0.1.4
-- completed:
     hackage: clash-shake-0.3.2@sha256:f4b1951b8cba3b9a3febf095acc5e9162a03625dc524ad42680ee686bd571fbf,1822
     pantry-tree:
       sha256: 2b941c98520a9dff98c23dd76e9259cacfecd3d1b4bcff1014fffc0d70b82098
       size: 852
   original:
     hackage: clash-shake-0.3.2
-- completed:
-    hackage: barbies-th-0.1.11@sha256:df9648ae23b2a97f7766fae2ca923b7554b53775925ba15fbcb062cc837e1040,1660
-    pantry-tree:
-      sha256: 34c01c9fb405d5e10849a73c82d2a8706156d5ba5120d9f28747b8b92a2e825b
-      size: 657
-  original:
-    hackage: barbies-th-0.1.11
 - completed:
     commit: 19b386c4aa3ff690758ae089c7754303f3500cc9
     git: https://github.com/cchalmers/circuit-notation.git

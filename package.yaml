@@ -16,11 +16,8 @@ dependencies:
   - ghc-typelits-extra
   - ghc-typelits-knownnat
 
-  - retroclash-lib ^>= 0.1.2
-
   - clash-shake >= 0.3.0 && < 0.5.0
 
-  - lens
   - mtl
   - arrows
   - monoid-extras
@@ -28,7 +25,6 @@ dependencies:
   - clash-cores
 
   - hedgehog
-  - deepseq
 
 # Anything that Clash uses by default should go here
 default-extensions:

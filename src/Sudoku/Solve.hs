@@ -1,11 +1,15 @@
 {-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
 {-# LANGUAGE ApplicativeDo #-}
-module Sudoku.Solve (Solvable, propagator, PropagatorCmd(..), PropagatorResult(..)) where
+module Sudoku.Solve
+    ( Solvable
+    , propagator
+    , PropagatorCmd(..)
+    , PropagatorResult(..)
+    ) where
 
 import Clash.Prelude hiding (mapAccumR)
-import RetroClash.Utils hiding (changed)
 
-import Sudoku.Matrix
+import Sudoku.Utils
 import Sudoku.Grid
 import Sudoku.Cell
 
@@ -128,18 +132,11 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont 
                 | Just CommitGuess <- cmd, guess_this  -> first_guess
                 | otherwise                            -> current
 
-        -- cell' =
-        --     shift_in .<|>.
-        --     pop .<|>.
-        --     enable (cmd .== Just Propagate .&&. not <$> is_unique) (act <$> neighbours_mask <*> cell) .<|>.
-        --     enable (cmd .== Just CommitGuess .&&. guess_this) first_guess .<|.
-        --     cell
-
         changed = cell' ./=. cell
 
         (first_guess, next_guess) = unbundle $ splitCell <$> cell
-        is_unique = next_guess .== conflicted
-        is_conflicted = cell .== conflicted
+        is_unique = next_guess .==. pure conflicted
+        is_conflicted = cell .==. pure conflicted
 
         can_guess = not <$> is_unique
         guess_this = try_guess .&&. can_guess
