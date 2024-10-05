@@ -11,10 +11,3 @@ extra-deps:
 
   - git: https://github.com/cchalmers/circuit-notation.git
     commit: 19b386c4aa3ff690758ae089c7754303f3500cc9
-
-  - clash-prelude-hedgehog-1.8.1
-
-  - git: https://github.com/clash-lang/clash-compiler.git
-    commit: 3f5dc67c0e526e43a4dd88eb3902e39ed512c166
-    subdirs:
-      - clash-cores

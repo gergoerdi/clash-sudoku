@@ -1,17 +1,16 @@
-name: clash-1.8.1
+name: clash-1.HEAD
 resolver: lts-21.21
 
 packages:
-  - clash-prelude-1.8.1
-  - clash-lib-1.8.1
-  - clash-ghc-1.8.1
-  - clash-prelude-hedgehog-1.8.1
-
   - git: https://github.com/clash-lang/clash-compiler.git
-    commit: 3f5dc67c0e526e43a4dd88eb3902e39ed512c166
+    commit: 3b755b900810c727833875b1a15222d69d37029e
     subdirs:
+      - clash-prelude
+      - clash-lib
+      - clash-ghc
+      - clash-prelude-hedgehog
       - clash-cores
-  
+
   - prettyprinter-interp-0.2.0.0
   - concurrent-supply-0.1.8
 
