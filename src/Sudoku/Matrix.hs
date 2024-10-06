@@ -11,9 +11,6 @@ newtype Matrix n m a = FromRows{ matrixRows :: Vec n (Vec m a) }
     deriving newtype (NFDataX, BitPack)
     deriving (Functor, Applicative, Foldable) via Compose (Vec n) (Vec m)
 
-instance (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Traversable (Matrix n m) where
-    traverse f = fmap FromRows . traverse (traverse f) . matrixRows
-
 instance (KnownNat n, KnownNat m) => Bundle (Matrix n m a) where
     type Unbundled dom (Matrix n m a) = Matrix n m (Signal dom a)
 

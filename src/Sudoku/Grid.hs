@@ -15,9 +15,6 @@ newtype Grid n m a = Grid{ getGrid :: Matrix n m (Matrix m n a) }
     deriving newtype (NFDataX, BitPack)
     deriving (Functor, Applicative, Foldable) via Compose (Matrix n m) (Matrix m n)
 
-instance (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Traversable (Grid n m) where
-    traverse f = fmap Grid . traverse (traverse f) . getGrid
-
 instance (KnownNat n, KnownNat m) => Bundle (Grid n m a) where
     type Unbundled dom (Grid n m a) = Grid n m (Signal dom a)
 
