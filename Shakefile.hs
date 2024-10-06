@@ -1,4 +1,6 @@
 {-# LANGUAGE RecordWildCards, BlockArguments #-}
+import Prelude
+
 import Clash.Shake
 import Clash.Shake.Xilinx as Xilinx
 import Clash.Shake.Intel as Intel

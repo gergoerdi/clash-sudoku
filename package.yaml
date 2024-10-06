@@ -16,8 +16,6 @@ dependencies:
   - ghc-typelits-extra
   - ghc-typelits-knownnat
 
-  - clash-shake >= 0.3.0 && < 0.5.0
-
   - mtl
   - arrows
   - monoid-extras
@@ -61,9 +59,16 @@ ghc-options:
   -fplugin GHC.TypeLits.Extra.Solver
   -Wunused-imports
 
-source-dirs:
-  - src
-
 executables:
   sudoku:
+    source-dirs:
+      - src
     main: simulator.hs
+
+  sudoku-shake:
+    source-dirs:
+      - .
+    main: Shakefile.hs
+    dependencies:
+      - shake
+      - clash-shake >= 0.3.0 && < 0.5.0
