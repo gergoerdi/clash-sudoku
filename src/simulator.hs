@@ -3,7 +3,7 @@
 {-# OPTIONS -fplugin=Protocols.Plugin #-}
 module Main where
 
-import Clash.Prelude hiding (lift, fold)
+import Clash.Prelude hiding (lift)
 import Protocols.Internal (simulateCSE)
 import qualified Protocols.Df as Df
 import Protocols (Ack(..))
@@ -14,9 +14,7 @@ import qualified Clash.Sized.Vector as V
 import Data.Word
 import Control.Arrow.Transformer.Automaton
 import Data.Proxy
-import Data.Foldable (fold)
 
-import Sudoku.Matrix
 import Sudoku.Grid
 import Sudoku.Cell
 import Format

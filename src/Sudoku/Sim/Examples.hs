@@ -6,7 +6,6 @@ module Sudoku.Sim.Examples where
 import Clash.Prelude hiding (lift)
 import qualified Clash.Sized.Vector as V
 
-import Sudoku.Matrix
 import Sudoku.Grid
 import Sudoku.Cell
 import Format (ascii)
