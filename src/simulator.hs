@@ -101,7 +101,7 @@ solve = start (signalAutomaton @System $ bundle . controller' @n @m . unbundle) 
 checkSolved :: forall n m. (Solvable n m) => Sudoku n m -> Bool
 checkSolved = bitToBool . reduceAnd . fmap getAnd . neighbourhoodwise (And . valid)
   where
-    valid xs = L.sort (toList xs) == [ unique i | i <- [minBound..maxBound] ]
+    valid xs = L.sort (toList xs) == L.sort [ unique i | i <- [minBound..maxBound] ]
 
 main :: IO ()
 main = do

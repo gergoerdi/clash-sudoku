@@ -6,15 +6,13 @@ module Sudoku.Cell where
 import Clash.Prelude
 import Format (ascii)
 
-import Data.Ord (Down(..))
 import Data.Word (Word8)
 import Data.Monoid.Action
 
 newtype Cell n m = Cell{ cellBits :: BitVector (n * m) }
     deriving stock (Generic)
     deriving anyclass (NFDataX)
-    deriving newtype (Eq, Show)
-    deriving (Ord) via Down (BitVector (n * m)) -- So that the ordering makes it easy to check solutions
+    deriving newtype (Eq, Show, Ord)
 
 wild :: (KnownNat n, KnownNat m) => Cell n m
 wild = Cell oneBits
