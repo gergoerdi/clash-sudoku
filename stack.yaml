@@ -3,11 +3,14 @@ resolver: clash-1.8.1.yaml
 packages:
   - '.'
 
-  - clash-protocols/clash-protocols-base
-  - clash-protocols/clash-protocols
-
 extra-deps:
   - clash-shake-0.3.2
 
   - git: https://github.com/cchalmers/circuit-notation.git
     commit: 19b386c4aa3ff690758ae089c7754303f3500cc9
+    
+  - git: https://github.com/clash-lang/clash-protocols.git
+    commit: d3fc7f46229d05a935c993145ae26c36b435cae5
+    subdirs:
+      - clash-protocols-base
+      - clash-protocols
