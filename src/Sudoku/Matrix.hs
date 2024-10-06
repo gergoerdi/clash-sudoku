@@ -5,23 +5,11 @@ module Sudoku.Matrix where
 
 import Clash.Prelude
 import Data.Functor.Compose
-import Data.Coerce (coerce)
 
 newtype Matrix n m a = FromRows{ matrixRows :: Vec n (Vec m a) }
     deriving stock (Generic)
     deriving newtype (NFDataX, BitPack)
-    deriving (Functor) via Compose (Vec n) (Vec m)
-    -- deriving (Applicative) via Compose (Vec n) (Vec m)
-    deriving (Foldable) via Compose (Vec n) (Vec m)
-
-instance (KnownNat n, KnownNat m) => Applicative (Matrix n m) where
-    {-# INLINE pure #-}
-    pure :: forall a. a -> Matrix n m a
-    pure = coerce (pure @(Compose (Vec n) (Vec m)) @a)
-
-    {-# INLINE (<*>) #-}
-    (<*>) :: forall a b. Matrix n m (a -> b) -> Matrix n m a -> Matrix n m b
-    mf <*> mx = FromRows $ zipWith (<*>) (matrixRows mf) (matrixRows mx)
+    deriving (Functor, Applicative, Foldable) via Compose (Vec n) (Vec m)
 
 instance (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Traversable (Matrix n m) where
     traverse f = fmap FromRows . traverse (traverse f) . matrixRows

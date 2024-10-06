@@ -6,7 +6,6 @@ module Sudoku.Grid where
 
 import Clash.Prelude
 import Data.Functor.Compose
-import Data.Coerce (coerce)
 
 import Sudoku.Matrix
 import Sudoku.Cell
@@ -14,17 +13,7 @@ import Sudoku.Cell
 newtype Grid n m a = Grid{ getGrid :: Matrix n m (Matrix m n a) }
     deriving stock (Generic)
     deriving newtype (NFDataX, BitPack)
-    deriving (Functor) via Compose (Matrix n m) (Matrix m n)
-    -- deriving (Applicative) via Compose (Vec n) (Vec m)
-    deriving (Foldable) via Compose (Matrix n m) (Matrix m n)
-
-instance (KnownNat n, KnownNat m) => Applicative (Grid n m) where
-    {-# INLINE pure #-}
-    pure :: forall a. a -> Grid n m a
-    pure = coerce (pure @(Compose (Matrix n m) (Matrix m n)) @a)
-
-    -- {-# INLINE (<*>) #-}
-    Grid gf <*> Grid gx = Grid $ liftA2 (<*>) gf gx
+    deriving (Functor, Applicative, Foldable) via Compose (Matrix n m) (Matrix m n)
 
 instance (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Traversable (Grid n m) where
     traverse f = fmap Grid . traverse (traverse f) . getGrid
