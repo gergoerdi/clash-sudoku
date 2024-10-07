@@ -22,8 +22,6 @@ dependencies:
   - clash-protocols
   - clash-cores
 
-  - hedgehog
-
 # Anything that Clash uses by default should go here
 default-extensions:
   - BinaryLiterals
@@ -59,12 +57,16 @@ ghc-options:
   -fplugin GHC.TypeLits.Extra.Solver
   -Wunused-imports
 
-executables:
+tests:
   sudoku:
     source-dirs:
       - src
+      - test
     main: simulator.hs
+    dependencies:
+      - hedgehog
 
+executables:
   sudoku-shake:
     source-dirs:
       - .
