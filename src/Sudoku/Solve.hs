@@ -34,20 +34,23 @@ neighboursMasks
 neighboursMasks masks = (failed, propagated_masks)
   where
     propagated_masks = neighbourhoodwise (fold @(n * m - 1) (<>)) masks
-    Any failed = reduceAny $ neighbourhoodwise (reduceAny . conflicts) masks
+    Any failed = reduceAny $ neighbourhoodwise conflictingMasks masks
 
-conflicts :: forall n m k. (KnownNat n, KnownNat m, 1 <= k) => Vec k (Mask n m) -> BitVector (n * m)
-conflicts =
-    v2bv . map (boolToBit . isNothing) .
-    map (fold @(k - 1) combine . map Just) .
+conflictingMasks :: forall n m k. (KnownNat n, KnownNat m, 1 <= k) => Vec k (Mask n m) -> Any
+conflictingMasks = reduceAny . overlappingBits . fmap (complement . maskBits)
+
+overlappingBits :: forall n k. (KnownNat n, 1 <= k) => Vec k (BitVector n) -> BitVector n
+overlappingBits =
+    v2bv .
+    map (boolToBit . isNothing . fold @(k - 1) combine . map Just) .
     transpose .
-    map (bv2v . maskBits)
+    map bv2v
   where
     combine :: Maybe Bit -> Maybe Bit -> Maybe Bit
-    combine (Just 1) b        = b
-    combine (Just 0) (Just 1) = Just 0
-    combine (Just 0) _        = Nothing
-    combine Nothing  _        = Nothing
+    combine mb_x mb_y = do
+        x <- mb_x
+        y <- mb_y
+        if x == 1 && y == 1 then Nothing else Just (x + y)
 
 data CellUnit dom n m = CellUnit
     { cell :: Signal dom (Cell n m)
