@@ -1,14 +1,12 @@
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DerivingStrategies, DerivingVia, GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE UndecidableInstances, MultiParamTypeClasses #-}
 {-# OPTIONS -fconstraint-solver-iterations=5 #-}
-{-# LANGUAGE InstanceSigs #-}
 module Sudoku.Grid where
 
 import Clash.Prelude
 import Data.Functor.Compose
 
 import Sudoku.Matrix
-import Sudoku.Cell
 
 newtype Grid n m a = Grid{ getGrid :: Matrix n m (Matrix m n a) }
     deriving stock (Generic)
@@ -29,15 +27,6 @@ unflattenGrid = Grid . fmap fromRowMajorOrder . fromRowMajorOrder . unconcatI
 
 headGrid :: forall n m a. (KnownNat n, KnownNat m, 1 <= n * m * m * n) => Grid n m a -> a
 headGrid = head @(n * m * m * n - 1) . flattenGrid
-
-type Sudoku n m = Grid n m (Cell n m)
-
-emptySudoku :: (KnownNat n, KnownNat m) => Sudoku n m
-emptySudoku = pure conflicted
-
-others :: (1 <= n) => Vec n a -> Vec n (Vec (n - 1) a)
-others (Cons x Nil) = Nil :> Nil
-others (Cons x xs@(Cons _ _)) = xs :> map (x :>) (others xs)
 
 gridToRows
     :: (KnownNat n, KnownNat m)

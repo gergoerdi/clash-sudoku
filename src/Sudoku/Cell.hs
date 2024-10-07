@@ -1,6 +1,5 @@
 {-# LANGUAGE DerivingStrategies, DerivingVia, GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# OPTIONS -fconstraint-solver-iterations=5 #-}
 module Sudoku.Cell where
 
 import Clash.Prelude
@@ -21,16 +20,7 @@ conflicted :: (KnownNat n, KnownNat m) => Cell n m
 conflicted = Cell zeroBits
 
 unique :: (KnownNat n, KnownNat m) => Index (n * m) -> Cell n m
-unique n = Cell $ 1 `rotateR` 1 `rotateR` fromIntegral n
-
-newtype Mask n m = Mask{ maskBits :: BitVector (n * m) }
-    deriving (Semigroup, Monoid) via And (BitVector (n * m))
-
-instance (KnownNat n, KnownNat m) => Action (Mask n m) (Cell n m) where
-    act (Mask m) (Cell c) = Cell (c .&. m)
-
-cellMask :: (KnownNat n, KnownNat m) => Cell n m -> Mask n m
-cellMask = Mask . complement . cellBits
+unique n = Cell (1 `rotateR` (1 + fromIntegral n))
 
 lastBit :: (KnownNat n) => BitVector n -> BitVector n
 lastBit x = x `xor` (x .&. (x - 1))
@@ -81,3 +71,12 @@ parseCell x
 
     | otherwise
     = Nothing
+
+newtype Mask n m = Mask{ maskBits :: BitVector (n * m) }
+    deriving (Semigroup, Monoid) via And (BitVector (n * m))
+
+instance (KnownNat n, KnownNat m) => Action (Mask n m) (Cell n m) where
+    act (Mask m) (Cell c) = Cell (c .&. m)
+
+cellMask :: (KnownNat n, KnownNat m) => Cell n m -> Mask n m
+cellMask = Mask . complement . cellBits

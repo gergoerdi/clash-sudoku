@@ -1,6 +1,5 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DerivingStrategies, GeneralizedNewtypeDeriving, DerivingVia #-}
-{-# LANGUAGE InstanceSigs #-}
 module Sudoku.Matrix where
 
 import Clash.Prelude

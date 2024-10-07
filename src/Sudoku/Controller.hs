@@ -12,7 +12,6 @@ import Protocols
 import qualified Protocols.Df as Df
 
 import Sudoku.Utils
-import Sudoku.Grid
 import Sudoku.Cell
 import Sudoku.Solve
 import Format

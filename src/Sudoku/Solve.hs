@@ -1,7 +1,9 @@
 {-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
 {-# LANGUAGE ApplicativeDo #-}
 module Sudoku.Solve
-    ( Solvable
+    ( Sudoku
+    , Solvable
+
     , propagator
     , PropagatorCmd(..)
     , PropagatorResult(..)
@@ -21,6 +23,7 @@ shiftInGridAtN grid x = (x', unflattenGrid grid')
   where
     (grid', x' :> Nil) = shiftInAtN (flattenGrid grid) (x :> Nil)
 
+type Sudoku n m = Grid n m (Cell n m)
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, 1 <= n * m * m * n)
 
 neighboursMasks

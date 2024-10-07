@@ -21,7 +21,7 @@ import Format (ascii)
 import Format.Model
 import Sudoku
 import Sudoku.Controller
-import Sudoku.Solve (Solvable)
+import Sudoku.Solve (Sudoku, Solvable)
 import Sudoku.Sim.Serial
 import Sudoku.Sim.Examples
 import Text.Printf

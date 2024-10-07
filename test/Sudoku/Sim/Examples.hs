@@ -7,6 +7,7 @@ import Clash.Prelude hiding (lift)
 import qualified Clash.Sized.Vector as V
 
 import Sudoku.Grid
+import Sudoku.Solve (Sudoku)
 import Sudoku.Cell
 import Format (ascii)
 
