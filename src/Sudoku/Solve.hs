@@ -7,7 +7,7 @@ module Sudoku.Solve
     , PropagatorResult(..)
     ) where
 
-import Clash.Prelude hiding (mapAccumR)
+import Clash.Prelude
 
 import Sudoku.Utils
 import Sudoku.Grid
