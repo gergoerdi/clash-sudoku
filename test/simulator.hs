@@ -17,11 +17,12 @@ import Data.Proxy
 
 import Sudoku.Grid
 import Sudoku.Cell
-import Format
+import Format (ascii)
+import Format.Model
 import Sudoku
 import Sudoku.Controller
 import Sudoku.Solve (Solvable)
-import Sudoku.Sim
+import Sudoku.Sim.Serial
 import Sudoku.Sim.Examples
 import Text.Printf
 

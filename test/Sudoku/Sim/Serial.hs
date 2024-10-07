@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards, OverloadedStrings, NumericUnderscores #-}
 {-# LANGUAGE MultiWayIf, BlockArguments, LambdaCase #-}
-module Sudoku.Sim where
+module Sudoku.Sim.Serial where
 
 import Clash.Prelude
 

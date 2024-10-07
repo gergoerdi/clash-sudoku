@@ -2,7 +2,9 @@
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, PolyKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 module Format
-    ( ascii
+    ( Format
+    , format
+
     , Forward
     , Drop
     , Wait
@@ -10,14 +12,16 @@ module Format
     , (:++)
     , Until
     , Loop
-    , format
-    , formatModel
+
+    , ascii
     , countSuccChecked
     ) where
 
+import Clash.Prelude
+
+import Format.Internal
 import Format.SymbolAt
 
-import Clash.Prelude
 import Clash.Class.Counter
 import Clash.Class.Counter.Internal
 import Protocols
@@ -25,15 +29,8 @@ import qualified Protocols.Df as Df
 import Data.Proxy
 import Data.Char (ord)
 import Data.Word
-import qualified Data.List as L
 import Control.Monad (guard)
 import Data.Maybe
-import Data.Bifunctor
-
-import qualified Protocols.Hedgehog as H
-import qualified Hedgehog as H
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
 
 ascii :: Char -> Word8
 ascii c
@@ -42,34 +39,10 @@ ascii c
   where
     code = ord c
 
--- | A @b@ value that potentially depends on an @a@ parameter
-data Dep a b
-    = Static b
-    | Dynamic (a -> b)
-    deriving (Functor)
-
--- | A transition to a new state @s@, potentially consuming the input and potentially producing output @b@
-data Transition s b = Transition Bool (Maybe b) s
-    deriving (Functor)
-
-instance Bifunctor Transition where
-    bimap f g (Transition consume output next) = Transition consume (g <$> output) (f next)
-
-type Format1 a s b = Dep a (Transition (Maybe s) b)
-
-mapState :: (Maybe s -> Maybe s') -> Format1 a s b -> Format1 a s' b
-mapState = fmap . first
-
 countSuccChecked :: Counter a => a -> Maybe a
 countSuccChecked x = x' <$ guard (not overflow)
   where
     (overflow, x') = countSuccOverflow x
-
-class (NFDataX (State fmt)) => Format (fmt :: k) where
-    type State fmt
-
-    start :: proxy fmt -> State fmt
-    format1 :: proxy fmt -> State fmt -> Format1 Word8 (State fmt) Word8
 
 -- | Consume one token of input and forward it to the output
 data Forward
@@ -180,29 +153,3 @@ format fmt = Df.compander (begin, True) \(s, ready) x ->
         Dynamic step -> produce (step x)
   where
     begin = start fmt
-
-formatModel :: forall fmt a. (Format fmt) => Proxy fmt -> [Word8] -> [Word8]
-formatModel fmt = go begin
-  where
-    begin = start fmt
-
-    go s cs = case format1 fmt s of
-        Static step -> produce step
-        Dynamic step
-            | (c:_) <- cs -> produce (step c)
-            | otherwise -> []
-      where
-        next = fromMaybe begin
-        output = maybe id (:)
-        produce (Transition consume mb_y s') = output mb_y $ go (next s') $ if consume then L.tail cs else cs
-
-prop_format :: (Format fmt) => Proxy fmt -> H.Property
-prop_format fmt =
-    H.idWithModelSingleDomain
-      H.defExpectOptions
-      gen_input
-      (\_ _ _ -> formatModel fmt)
-      (exposeClockResetEnable @System $ format fmt)
-  where
-    gen_input :: H.Gen [Word8]
-    gen_input = Gen.list (Range.linear 0 100) (ascii <$> Gen.alpha)
