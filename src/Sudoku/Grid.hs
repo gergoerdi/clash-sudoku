@@ -79,7 +79,11 @@ boxwise
     -> Grid n m b
 boxwise f = fromBoxes . fmap (repeat . f) . toBoxes
 
-neighbourhoodwise :: (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, Semigroup b) => (Vec (n * m) a -> b) -> Grid n m a -> Grid n m b
+neighbourhoodwise
+    :: (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, Semigroup b)
+    => (Vec (n * m) a -> b)
+    -> Grid n m a
+    -> Grid n m b
 neighbourhoodwise f g = rowwise f g .<>. colwise f g .<>. boxwise f g
   where
     (.<>.) :: forall f m. (Applicative f, Semigroup m) => f m -> f m -> f m
