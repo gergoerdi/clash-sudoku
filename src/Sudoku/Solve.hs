@@ -9,7 +9,7 @@ module Sudoku.Solve
     , PropagatorResult(..)
     ) where
 
-import Clash.Prelude
+import Clash.Prelude hiding (fold)
 import Clash.Num.Overflowing
 
 import Sudoku.Utils
@@ -19,6 +19,7 @@ import Sudoku.Cell
 import Data.Maybe
 import Data.Monoid (Any(..), All(..))
 import Data.Monoid.Action
+import Data.Foldable (fold)
 
 shiftInGridAtN :: forall n m a. (KnownNat n, KnownNat m) => Grid n m a -> a -> (a, Grid n m a)
 shiftInGridAtN grid x = (x', unflattenGrid grid')
@@ -34,16 +35,16 @@ neighboursMasks
     -> (Bool, Grid n m (Mask n m))
 neighboursMasks masks = (failed, propagated_masks)
   where
-    propagated_masks = neighbourhoodwise (fold @(n * m - 1) (<>)) masks
+    propagated_masks = neighbourhoodwise fold masks
     Any failed = reduceAny $ neighbourhoodwise conflictingMasks masks
 
-conflictingMasks :: forall n m k. (KnownNat n, KnownNat m, 1 <= k) => Vec k (Mask n m) -> Any
+conflictingMasks :: forall n m k. (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Any
 conflictingMasks = reduceAny . overlappingBits . fmap (complement . maskBits)
 
-overlappingBits :: forall n k. (KnownNat n, 1 <= k) => Vec k (BitVector n) -> BitVector n
+overlappingBits :: forall n k. (KnownNat n, KnownNat k) => Vec k (BitVector n) -> BitVector n
 overlappingBits =
     v2bv . map boolToBit .
-    map (hasOverflowed . fold @(k - 1) (+) . map toOverflowing) .
+    map (hasOverflowed . sum . map toOverflowing) .
     transpose . map bv2v
 
 data CellUnit dom n m = CellUnit
