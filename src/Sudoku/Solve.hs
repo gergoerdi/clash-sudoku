@@ -10,6 +10,7 @@ module Sudoku.Solve
     ) where
 
 import Clash.Prelude
+import Clash.Num.Overflowing
 
 import Sudoku.Utils
 import Sudoku.Grid
@@ -41,16 +42,9 @@ conflictingMasks = reduceAny . overlappingBits . fmap (complement . maskBits)
 
 overlappingBits :: forall n k. (KnownNat n, 1 <= k) => Vec k (BitVector n) -> BitVector n
 overlappingBits =
-    v2bv .
-    map (boolToBit . isNothing . fold @(k - 1) combine . map Just) .
-    transpose .
-    map bv2v
-  where
-    combine :: Maybe Bit -> Maybe Bit -> Maybe Bit
-    combine mb_x mb_y = do
-        x <- mb_x
-        y <- mb_y
-        if x == 1 && y == 1 then Nothing else Just (x + y)
+    v2bv . map boolToBit .
+    map (hasOverflowed . fold @(k - 1) (+) . map toOverflowing) .
+    transpose . map bv2v
 
 data CellUnit dom n m = CellUnit
     { cell :: Signal dom (Cell n m)
