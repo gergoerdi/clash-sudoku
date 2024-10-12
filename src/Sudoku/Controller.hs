@@ -6,6 +6,7 @@ import Clash.Prelude
 import Data.Maybe
 import Control.Monad
 import Control.Monad.State
+import Data.Word
 
 import Protocols
 import qualified Protocols.Df as Df
@@ -39,16 +40,17 @@ data Control n m
     = Consume (Maybe (Cell n m))
     | Solve PropagatorCmd
     | Stack (MemCmd (StackDepth n m) (Sudoku n m))
-    | Produce Bool (Cell n m)
+    | Produce Bool (Either Word8 (Cell n m))
 
 controller'
     :: forall n m dom k. (Solvable n m)
     => (HiddenClockResetEnable dom)
     => (Signal dom (Df.Data (Cell n m)), Signal dom Ack)
-    -> (Signal dom Ack, Signal dom (Df.Data (Cell n m)))
+    -> (Signal dom Ack, Signal dom (Df.Data (Either Word8 (Cell n m))))
 controller' (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
   where
-    (shift_in', shift_out, in_ack, propagator_cmd, stack_cmd) = mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, next_guesses, register Progress result)
+    (shift_in', shift_out, in_ack, propagator_cmd, stack_cmd) =
+        mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, next_guesses, register Progress result)
 
     lines = \case
         Consume shift_in -> (shift_in, Nothing, Ack True, Nothing, Nothing)
@@ -89,10 +91,10 @@ controller' (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
                     pure $ Stack $ Read sp'
         s@ShiftOutFailed -> do
             wait out_ack $ ShiftIn 0
-            pure $ Produce False conflicted
+            pure $ Produce False $ Right conflicted
         s@(ShiftOutSolved i) -> do
             proceed <- wait out_ack $ maybe (ShiftIn 0) ShiftOutSolved $ countSuccChecked i
-            pure $ Produce proceed head_cell
+            pure $ Produce proceed $ Right head_cell
 
     wait ack s' = do
         s <- get

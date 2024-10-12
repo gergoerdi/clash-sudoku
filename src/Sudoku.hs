@@ -21,7 +21,7 @@ import Format
 controller
     :: forall n m dom. (Solvable n m)
     => (HiddenClockResetEnable dom)
-    => Circuit (Df dom (Cell n m)) (Df dom (Cell n m))
+    => Circuit (Df dom (Cell n m)) (Df dom (Either Word8 (Cell n m)))
 controller = Circuit controller'
 
 -- From git@github.com:bittide/bittide-hardware.git
@@ -69,7 +69,7 @@ board
 board n m =
     Df.mapMaybe parseCell |>
     controller @n @m |>
-    Df.map showCell |>
+    Df.map (either id showCell) |>
     formatGrid n m
 
 formatGrid

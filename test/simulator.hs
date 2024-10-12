@@ -91,7 +91,7 @@ solve = start (signalAutomaton @System $ bundle . controller' @n @m . unbundle) 
         | Just cells <- V.fromList (L.reverse acc)
         = Just $ unflattenGrid cells
 
-        | Df.Data x <- output
+        | Df.Data (Right x) <- output
         = guard (x /= conflicted) *> consume (x : acc) sim
 
         | otherwise
