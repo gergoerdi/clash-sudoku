@@ -51,7 +51,9 @@ controller' (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
         Consume shift_in -> (shift_in, Nothing, Ack True, Nothing, Nothing)
         Solve cmd -> (Nothing, Nothing, Ack False, Just cmd, Nothing)
         Stack cmd -> (Nothing, Nothing, Ack False, Nothing, Just cmd)
-        Produce proceed output -> (conflicted <$ guard proceed, Just output, Ack False, Nothing, Nothing)
+        Produce proceed output -> (shift_in, Just output, Ack False, Nothing, Nothing)
+          where
+            shift_in = if proceed then Just conflicted else Nothing
 
     step (shift_in, out_ack, head_cell, next_guesses, result) = fmap lines $ get >>= \case
         ShiftIn i -> do
@@ -67,22 +69,24 @@ controller' (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
             put $ Settle sp
             pure $ Solve Propagate
         Busy sp -> case result of
-            Stuck -> do
-                put $ WaitPush (sp + 1)
-                pure $ Stack $ Write sp next_guesses
-            Failure -> do
-                let underflow = sp == 0
-                    sp' = sp - 1
-                put $ if underflow then ShiftOutFailed else WaitPop sp'
-                pure $ Stack $ Read sp'
             Progress -> do
                 pure $ Solve Propagate
             Solved -> do
                 put $ ShiftOutSolved 0
                 pure $ Solve Propagate
+            Stuck -> do
+                put $ WaitPush (sp + 1)
+                pure $ Stack $ Write sp next_guesses
+            Failure -> case countPredChecked sp of
+                Nothing -> do
+                    put ShiftOutFailed
+                    pure $ Solve Propagate
+                Just sp'-> do
+                    put $ WaitPop $ sp'
+                    pure $ Stack $ Read sp'
         s@ShiftOutFailed -> do
-            proceed <- wait out_ack $ ShiftIn 0
-            pure $ Produce proceed conflicted
+            wait out_ack $ ShiftIn 0
+            pure $ Produce False conflicted
         s@(ShiftOutSolved i) -> do
             proceed <- wait out_ack $ maybe (ShiftIn 0) ShiftOutSolved $ countSuccChecked i
             pure $ Produce proceed head_cell
