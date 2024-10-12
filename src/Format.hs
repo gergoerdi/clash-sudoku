@@ -1,6 +1,5 @@
-{-# LANGUAGE BlockArguments, LambdaCase, TupleSections #-}
+{-# LANGUAGE BlockArguments, TupleSections #-}
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, PolyKinds #-}
-{-# LANGUAGE DeriveFunctor #-}
 module Format
     ( Format
     , format

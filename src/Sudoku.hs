@@ -1,6 +1,5 @@
 {-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf, ViewPatterns, NumericUnderscores, TupleSections #-}
 {-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS -fplugin=Protocols.Plugin #-}
 module Sudoku where
 

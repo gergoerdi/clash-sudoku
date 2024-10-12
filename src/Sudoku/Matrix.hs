@@ -1,5 +1,4 @@
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DerivingStrategies, GeneralizedNewtypeDeriving, DerivingVia #-}
+{-# LANGUAGE DerivingStrategies, DerivingVia #-}
 module Sudoku.Matrix where
 
 import Clash.Prelude
@@ -7,7 +6,7 @@ import Data.Functor.Compose
 
 newtype Matrix n m a = FromRows{ matrixRows :: Vec n (Vec m a) }
     deriving stock (Generic)
-    deriving newtype (NFDataX, BitPack)
+    deriving anyclass (NFDataX, BitPack)
     deriving (Functor, Applicative, Foldable) via Compose (Vec n) (Vec m)
 
 instance (KnownNat n, KnownNat m) => Bundle (Matrix n m a) where

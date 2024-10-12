@@ -1,6 +1,3 @@
-{-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf, ApplicativeDo, NumericUnderscores, TupleSections #-}
-{-# LANGUAGE UndecidableInstances, ViewPatterns, BangPatterns #-}
-{-# OPTIONS -fplugin=Protocols.Plugin #-}
 module Sudoku.Sim.Examples where
 
 import Clash.Prelude hiding (lift)
@@ -132,8 +129,6 @@ Just inkala = readGrid . unlines $
   , ". . 8 | 5 . . | . 1 ."
   , ". 9 . | . . . | 4 . ."
   ]
-
-instance (Textual n m) => ShowX (Cell n m)
 
 hexodoku :: Sudoku 4 4
 Just hexodoku = readGrid . unlines $

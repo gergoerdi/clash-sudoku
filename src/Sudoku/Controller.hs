@@ -1,5 +1,4 @@
-{-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf, ViewPatterns, NumericUnderscores, TupleSections #-}
-{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE LambdaCase, MultiWayIf, ApplicativeDo #-}
 module Sudoku.Controller where
 
 import Clash.Prelude

@@ -1,6 +1,5 @@
-{-# LANGUAGE BlockArguments, LambdaCase, MultiWayIf, ApplicativeDo, NumericUnderscores, TupleSections #-}
-{-# LANGUAGE UndecidableInstances, ViewPatterns, BangPatterns #-}
-{-# OPTIONS -fplugin=Protocols.Plugin #-}
+{-# LANGUAGE BlockArguments, LambdaCase, ViewPatterns, BangPatterns #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Main where
 
 import Clash.Prelude hiding (lift)

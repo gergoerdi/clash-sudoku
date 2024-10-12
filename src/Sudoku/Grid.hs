@@ -1,5 +1,4 @@
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DerivingStrategies, DerivingVia, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DerivingStrategies, DerivingVia #-}
 {-# OPTIONS -fconstraint-solver-iterations=5 #-}
 module Sudoku.Grid where
 
@@ -10,7 +9,7 @@ import Sudoku.Matrix
 
 newtype Grid n m a = Grid{ getGrid :: Matrix n m (Matrix m n a) }
     deriving stock (Generic)
-    deriving newtype (NFDataX, BitPack)
+    deriving anyclass (NFDataX, BitPack)
     deriving (Functor, Applicative, Foldable) via Compose (Matrix n m) (Matrix m n)
 
 instance (KnownNat n, KnownNat m) => Bundle (Grid n m a) where

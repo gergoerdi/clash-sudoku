@@ -1,6 +1,5 @@
-{-# LANGUAGE TupleSections, LambdaCase #-}
-{-# LANGUAGE StandaloneDeriving, DerivingVia #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE StandaloneDeriving, DerivingStrategies #-}
 module Sudoku.Utils where
 
 import Clash.Prelude
@@ -20,8 +19,8 @@ reduceAll = All . bitToBool . reduceAnd
 reduceAny :: (BitPack a) => a -> Any
 reduceAny = Any . bitToBool . reduceOr
 
-deriving via Bool instance BitPack All
-deriving via Bool instance BitPack Any
+deriving anyclass instance BitPack All
+deriving anyclass instance BitPack Any
 
 instance SaturatingNum Bit where
     satAdd mode = unpack .: satAdd mode `on` pack
