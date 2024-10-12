@@ -54,12 +54,11 @@ serialize baud par_circuit = circuit \rx -> do
     out_byte <- Df.map pack <| par_circuit <| Df.map unpack <| buffer -< in_byte
     idC -< tx
 
-type GridFormat n m =
-    If '!' "Unsolvable"
-      (((((Forward :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n)
-
+type GridFormat n m = ((((Forward :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n
+type SolutionFormat n m = If '!' "Unsolvable" (GridFormat n m)
 type OutputFormat n m =
-    Until '@' Forward :++ ("\r\n" :++ GridFormat n m :++ "\r\n")
+    Wait :++ "Cycles: " :++ Until '@' Forward :++ "\r\n" :++
+    SolutionFormat n m :++ "\r\n"
 
 board
     :: forall n m dom. (HiddenClockResetEnable dom, Textual n m, Solvable n m)
@@ -77,7 +76,7 @@ formatGrid
     => SNat n
     -> SNat m
     -> Circuit (Df dom Word8) (Df dom Word8)
-formatGrid n m = format (Proxy @(GridFormat n m))
+formatGrid n m = format (Proxy @(OutputFormat n m))
 
 topEntity
     :: "CLK_100MHZ" ::: Clock System
