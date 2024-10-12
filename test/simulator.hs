@@ -12,6 +12,7 @@ import qualified Data.List as L
 import qualified Clash.Sized.Vector as V
 import Data.Word
 import Control.Arrow.Transformer.Automaton
+import Control.Monad (guard)
 import Data.Proxy
 
 import Sudoku.Grid
@@ -81,20 +82,22 @@ solve = start (signalAutomaton @System $ bundle . controller' @n @m . unbundle) 
     load sim [] = wait 0 sim
 
     wait !n (Automaton step) = case output of
-        Df.Data{} -> consume n [] sim
+        Df.Data{} -> (n, consume [] sim)
         Df.NoData -> wait (n + 1) sim
       where
         ((_, output), sim) = step (Df.NoData, Ack False)
 
-    consume n acc (Automaton step)
-        | Just cells <- V.fromList (L.reverse acc') = (n, Just $ unflattenGrid cells)
-        | otherwise = consume n acc' sim
+    consume acc (Automaton step)
+        | Just cells <- V.fromList (L.reverse acc)
+        = Just $ unflattenGrid cells
+
+        | Df.Data x <- output
+        = guard (x /= conflicted) *> consume (x : acc) sim
+
+        | otherwise
+        = consume acc sim
       where
         ((_, output), sim) = step (Df.NoData, Ack True)
-
-        acc' = case output of
-            Df.Data x -> x : acc
-            Df.NoData -> acc
 
 checkSolved :: forall n m. (Solvable n m) => Sudoku n m -> Bool
 checkSolved = bitToBool . reduceAnd . fmap getAnd . neighbourhoodwise (And . valid)
