@@ -27,7 +27,7 @@ shiftInGridAtN grid x = (x', unflattenGrid grid')
     (grid', x' :> Nil) = shiftInAtN (flattenGrid grid) (x :> Nil)
 
 type Sudoku n m = Grid n m (Cell n m)
-type Solvable n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 2 <= n * m, 1 <= n * m * m * n)
+type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
 
 neighboursMasks
     :: forall n m. (Solvable n m)

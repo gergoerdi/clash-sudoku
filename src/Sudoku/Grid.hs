@@ -27,10 +27,7 @@ unflattenGrid = Grid . fmap fromRowMajorOrder . fromRowMajorOrder . unconcatI
 headGrid :: forall n m a. (KnownNat n, KnownNat m, 1 <= n * m * m * n) => Grid n m a -> a
 headGrid = head @(n * m * m * n - 1) . flattenGrid
 
-gridToRows
-    :: (KnownNat n, KnownNat m)
-    => Grid n m a
-    -> Vec (n * m) (Vec (m * n) a)
+gridToRows :: Grid n m a -> Vec (n * m) (Vec (m * n) a)
 gridToRows = concatMap (fmap toRowMajorOrder) . matrixRows . getGrid
 
 gridFromRows
@@ -40,7 +37,7 @@ gridFromRows
 gridFromRows = Grid . FromRows . unconcatI . fmap (FromRows . unconcatI)
 
 rowwise
-    :: (KnownNat n, KnownNat m, 1 <= (n * m))
+    :: (KnownNat n, KnownNat m)
     => (Vec (n * m) a -> b)
     -> Grid n m a
     -> Grid n m b
@@ -53,7 +50,7 @@ transposeGrid
 transposeGrid = gridFromRows . transpose . gridToRows
 
 colwise
-    :: (KnownNat n, KnownNat m, 1 <= (n * m))
+    :: (KnownNat n, KnownNat m)
     => (Vec (n * m) a -> b)
     -> Grid n m a
     -> Grid n m b
@@ -72,18 +69,19 @@ fromBoxes
 fromBoxes = Grid . FromRows . fmap (fmap FromRows . transpose . fmap unconcatI) . matrixRows
 
 boxwise
-    :: (KnownNat n, KnownNat m, 1 <= n, 1 <= m)
+    :: (KnownNat n, KnownNat m)
     => (Vec (n * m) a -> b)
     -> Grid n m a
     -> Grid n m b
 boxwise f = fromBoxes . fmap (repeat . f) . toBoxes
 
 neighbourhoodwise
-    :: (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, Semigroup b)
+    :: (KnownNat n, KnownNat m, Semigroup b)
     => (Vec (n * m) a -> b)
     -> Grid n m a
     -> Grid n m b
 neighbourhoodwise f g = rowwise f g .<>. colwise f g .<>. boxwise f g
   where
+    infixr 6 .<>.
     (.<>.) :: forall f m. (Applicative f, Semigroup m) => f m -> f m -> f m
     (.<>.) = liftA2 (<>)
