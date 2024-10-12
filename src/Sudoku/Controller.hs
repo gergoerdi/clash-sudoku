@@ -28,7 +28,8 @@ data St n m
     | Busy (Index (StackDepth n m))
     | WaitPop (Index (StackDepth n m))
     | WaitPush (Index (StackDepth n m))
-    | ShiftOut Bool (Cnt n m)
+    | ShiftOutSolved (Cnt n m)
+    | ShiftOutFailed
     deriving (Generic, NFDataX, Show, Eq)
 
 data Control n m
@@ -72,16 +73,19 @@ controller' (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
             Failure -> do
                 let underflow = sp == 0
                     sp' = sp - 1
-                put $ if underflow then ShiftOut False 0 else WaitPop sp'
+                put $ if underflow then ShiftOutFailed else WaitPop sp'
                 pure $ Stack $ Read sp'
             Progress -> do
                 pure $ Solve Propagate
             Solved -> do
-                put $ ShiftOut True 0
+                put $ ShiftOutSolved 0
                 pure $ Solve Propagate
-        s@(ShiftOut solved i) -> do
-            proceed <- wait out_ack $ maybe (ShiftIn 0) (ShiftOut solved) $ countSuccChecked i
-            pure $ Produce proceed $ if solved then head_cell else conflicted
+        s@ShiftOutFailed -> do
+            proceed <- wait out_ack $ ShiftIn 0
+            pure $ Produce proceed conflicted
+        s@(ShiftOutSolved i) -> do
+            proceed <- wait out_ack $ maybe (ShiftIn 0) ShiftOutSolved $ countSuccChecked i
+            pure $ Produce proceed head_cell
 
     wait ack s' = do
         s <- get

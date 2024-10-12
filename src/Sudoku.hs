@@ -55,7 +55,9 @@ serialize baud par_circuit = circuit \rx -> do
     idC -< tx
 
 type GridFormat n m =
-    ((((Forward :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n
+    (If '!' "Unsolvable"
+       (((((Forward :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n))
+    :++ "\r\n"
 
 board
     :: forall n m dom. (HiddenClockResetEnable dom, Textual n m, Solvable n m)
