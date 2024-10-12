@@ -22,6 +22,14 @@ conflicted = Cell zeroBits
 unique :: (KnownNat n, KnownNat m) => Index (n * m) -> Cell n m
 unique n = Cell (1 `rotateR` (1 + fromIntegral n))
 
+uniqueFromIntegral :: forall a n m. (KnownNat n, KnownNat m, Integral a) => a -> Maybe (Cell n m)
+uniqueFromIntegral x
+    | x <= fromIntegral (maxBound :: Index (n * m))
+    = Just $ unique . fromIntegral $ x
+
+    | otherwise
+    = Nothing
+
 lastBit :: (KnownNat n) => BitVector n -> BitVector n
 lastBit x = x `xor` (x .&. (x - 1))
 
@@ -52,7 +60,7 @@ showCell x
     v = fromIntegral $ decodeOneHot (cellBits x')
     v' = if v < 9 then ascii '1' + v else ascii 'A' + v - 9
 
-parseCell :: (Textual n m) => Word8 -> Maybe (Cell n m)
+parseCell :: forall n m. (Textual n m) => Word8 -> Maybe (Cell n m)
 parseCell x
     | x `elem` [ascii '0', ascii '_', ascii '.']
     = Just wild
@@ -61,13 +69,13 @@ parseCell x
     = Just conflicted
 
     | ascii '1' <= x && x <= ascii '9'
-    = Just $ unique $ fromIntegral $ (x - ascii '1') + 0
+    = uniqueFromIntegral $ x - ascii '1' + 0
 
     | ascii 'a' <= x && x <= ascii 'z'
-    = Just $ unique $ fromIntegral $ (x - ascii 'a') + 9
+    = uniqueFromIntegral $ x - ascii 'a' + 9
 
     | ascii 'A' <= x && x <= ascii 'Z'
-    = Just $ unique $ fromIntegral $ (x - ascii 'A') + 9
+    = uniqueFromIntegral $ x - ascii 'A' + 9
 
     | otherwise
     = Nothing
