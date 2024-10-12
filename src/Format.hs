@@ -9,6 +9,7 @@ module Format
     , Wait
     , (:*)
     , (:++)
+    , If
     , Until
     , Loop
 
@@ -114,6 +115,32 @@ instance (Format fmt) => Format (Loop fmt) where
 
     start _ = start (Proxy @fmt)
     format1 _ = mapState (Just . fromMaybe (start (Proxy @fmt))) . format1 (Proxy @fmt)
+
+-- | Branch
+data If (ch :: Char) thn els
+
+data IfState thn els
+    = Decide
+    | Then thn
+    | Else els
+    deriving (Generic, NFDataX, Show)
+
+instance (KnownChar ch, Format thn, Format els) => Format (If ch thn els) where
+    type State (If ch thn els) = IfState (State thn) (State els)
+
+    start _ = Decide
+
+    format1 _ Decide = Dynamic \x ->
+        if x == ascii ch then
+            Transition True Nothing (Just thn)
+        else
+            Transition False Nothing (Just els)
+      where
+        ch = charVal (Proxy @ch)
+        thn = Then $ start (Proxy @thn)
+        els = Else $ start (Proxy @els)
+    format1 _ (Then s) = mapState (Then <$>) $ format1 (Proxy @thn) s
+    format1 _ (Else s) = mapState (Else <$>) $ format1 (Proxy @els) s
 
 -- | Branch
 data Until (ch :: Char) fmt
