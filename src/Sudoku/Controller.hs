@@ -15,6 +15,9 @@ import Sudoku.Cell
 import Sudoku.Solve
 import Format
 
+type Digit = Index 10
+type BCD n = Vec n Digit
+
 type StackDepth n m = ((n * m) * (m * n))
 type Cnt n m = Index ((n * m) * (m * n))
 
