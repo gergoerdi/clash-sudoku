@@ -80,11 +80,16 @@ controller' (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
                 put $ ShiftOut True 0
                 pure $ Solve Propagate
         s@(ShiftOut solved i) -> do
-            let (proceed, s') = case out_ack of
-                    Ack True -> (True, maybe (ShiftIn 0) (ShiftOut solved) $ countSuccChecked i)
-                    Ack False -> (False, s)
-            put s'
+            proceed <- wait out_ack $ maybe (ShiftIn 0) (ShiftOut solved) $ countSuccChecked i
             pure $ Produce proceed $ if solved then head_cell else conflicted
+
+    wait ack s' = do
+        s <- get
+        let (proceed, s'') = case ack of
+                Ack True -> (True, s')
+                Ack False -> (False, s)
+        put s''
+        pure proceed
 
     (head_cell, result, next_guesses) = propagator propagator_cmd shift_in' popped
 
