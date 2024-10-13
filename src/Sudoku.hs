@@ -16,12 +16,6 @@ import Sudoku.Solve (Solvable)
 import Sudoku.Serial
 import Format
 
-controllerDf
-    :: forall n m dom. (Solvable n m)
-    => (HiddenClockResetEnable dom)
-    => Circuit (Df dom (Cell n m)) (Df dom (Either Word8 (Cell n m)))
-controllerDf = Circuit controller
-
 type GridFormat n m = ((((Forward :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n
 type SolutionFormat n m = (If '!' "Unsolvable" (GridFormat n m)) :++ "\r\n"
 type WithTiming fmt = Wait :++ "Cycles: " :++ Until '@' Forward :++ "\r\n" :++ fmt
@@ -33,15 +27,9 @@ board
     => Circuit (Df dom Word8) (Df dom Word8)
 board n m =
     Df.mapMaybe parseCell |>
-    controllerDf @n @m |>
+    Circuit (controller @n @m) |>
     Df.map (either id showCell) |>
-    formatGrid n m
-
-formatGrid
-    :: forall dom. forall n m
-    -> (HiddenClockResetEnable dom, Textual n m, Solvable n m)
-    => Circuit (Df dom Word8) (Df dom Word8)
-formatGrid n m = format (OutputFormat n m)
+    format (OutputFormat n m)
 
 topEntity
     :: "CLK_100MHZ" ::: Clock System
