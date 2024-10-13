@@ -1,5 +1,6 @@
-{-# LANGUAGE BlockArguments, TupleSections #-}
+{-# LANGUAGE BlockArguments, TupleSections, LambdaCase #-}
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, PolyKinds #-}
+{-# LANGUAGE RequiredTypeArguments #-}
 module Format
     ( Format
     , format
@@ -50,9 +51,9 @@ data Forward
 instance Format Forward where
     type State Forward = ()
 
-    start _ = ()
+    start_ _ = ()
 
-    format1 _ _ = Dynamic \x -> Transition True (Just x) Nothing
+    format1_ _ _ = Dynamic \x -> Transition True (Just x) Nothing
 
 -- | Consume one token of input without producing any output
 data Drop
@@ -60,8 +61,8 @@ data Drop
 instance Format Drop where
     type State Drop = ()
 
-    start _ = ()
-    format1 _ _ = Dynamic \x -> Transition True Nothing Nothing
+    start_ _ = ()
+    format1_ _ _ = Dynamic \x -> Transition True Nothing Nothing
 
 -- | Wait until new input is available, without consuming it
 data Wait
@@ -69,8 +70,8 @@ data Wait
 instance Format Wait where
     type State Wait = ()
 
-    start _ = ()
-    format1 _ _ = Dynamic \x -> Transition False Nothing Nothing
+    start_ _ = ()
+    format1_ _ _ = Dynamic \x -> Transition False Nothing Nothing
 
 -- | Repetition
 data a :* (rep :: Nat)
@@ -78,12 +79,12 @@ data a :* (rep :: Nat)
 instance (Format fmt, KnownNat rep, 1 <= rep) => Format (fmt :* rep) where
     type State (fmt :* rep) = (Index rep, State fmt)
 
-    start _ = (countMin, start (Proxy @fmt))
+    start_ _ = (countMin, start fmt)
 
-    format1 _ (i, s) = mapState (maybe repeat continue) $ format1 (Proxy @fmt) s
+    format1_ _ (i, s) = mapState (maybe repeat continue) $ format1 fmt s
       where
         continue s' = Just (i, s')
-        repeat = (, start (Proxy @fmt)) <$> countSuccChecked i
+        repeat = (, start fmt) <$> countSuccChecked i
 
 -- | Concatenation
 data a :++ b
@@ -91,21 +92,21 @@ data a :++ b
 instance (Format a, Format b) => Format (a :++ b) where
     type State (a :++ b) = Either (State a) (State b)
 
-    start _ = Left (start (Proxy @a))
+    start_ _ = Left (start a)
 
-    format1 _ = either
-      (mapState (maybe (Just . Right $ start (Proxy @b)) (Just . Left)) . format1 (Proxy @a))
-      (mapState (maybe Nothing (Just . Right)) . format1 (Proxy @b))
+    format1_ _ = either
+      (mapState (maybe (Just . Right $ start b) (Just . Left)) . format1 a)
+      (mapState (maybe Nothing (Just . Right)) . format1 b)
 
 -- | Literal
 instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Format sep where
     type State sep = Index (SymbolLength sep)
 
-    start _ = countMin
+    start_ _ = countMin
 
-    format1 _ i = Static $ Transition False (Just char) (countSuccChecked i)
+    format1_ _ i = Static $ Transition False (Just char) (countSuccChecked i)
       where
-        char = ascii $ noDeDup $ symbolAt (Proxy @sep) i
+        char = ascii $ noDeDup $ symbolAt sep i
 
 -- | Loop
 data Loop fmt
@@ -113,8 +114,8 @@ data Loop fmt
 instance (Format fmt) => Format (Loop fmt) where
     type State (Loop fmt) = State fmt
 
-    start _ = start (Proxy @fmt)
-    format1 _ = mapState (Just . fromMaybe (start (Proxy @fmt))) . format1 (Proxy @fmt)
+    start_ _ = start fmt
+    format1_ _ = mapState (Just . fromMaybe (start fmt)) . format1 fmt
 
 -- | Branch
 data If (ch :: Char) thn els
@@ -128,19 +129,18 @@ data IfState thn els
 instance (KnownChar ch, Format thn, Format els) => Format (If ch thn els) where
     type State (If ch thn els) = IfState (State thn) (State els)
 
-    start _ = Decide
+    start_ _ = Decide
 
-    format1 _ Decide = Dynamic \x ->
-        if x == ascii ch then
-            Transition True Nothing (Just thn)
-        else
-            Transition False Nothing (Just els)
+    format1_ _ = \case
+        Decide -> Dynamic \x ->
+            if x == ascii ch then
+                Transition True Nothing (Just $ Then $ start thn)
+            else
+                Transition False Nothing (Just $ Else $ start els)
+        Then s -> mapState (Then <$>) $ format1 thn s
+        Else s -> mapState (Else <$>) $ format1 els s
       where
         ch = charVal (Proxy @ch)
-        thn = Then $ start (Proxy @thn)
-        els = Else $ start (Proxy @els)
-    format1 _ (Then s) = mapState (Then <$>) $ format1 (Proxy @thn) s
-    format1 _ (Else s) = mapState (Else <$>) $ format1 (Proxy @els) s
 
 -- | Branch
 data Until (ch :: Char) fmt
@@ -153,23 +153,24 @@ data UntilState fmt
 instance (KnownChar ch, Format fmt) => Format (Until ch fmt) where
     type State (Until ch fmt) = UntilState (State fmt)
 
-    start _ = Checking
+    start_ _ = Checking
 
-    format1 _ Checking = Dynamic \x ->
-        if x == ascii ch then
-            Transition True Nothing Nothing
-        else
-            Transition False Nothing (Just enter)
+    format1_ _ = \case
+        Checking -> Dynamic \x ->
+            if x == ascii ch then
+                Transition True Nothing Nothing
+            else
+                Transition False Nothing (Just $ Looping $ start fmt)
+        Looping s ->
+            mapState (Just . maybe Checking Looping) $ format1 fmt s
       where
-        enter = Looping $ start (Proxy @fmt)
         ch = charVal (Proxy @ch)
-    format1 _ (Looping s) = mapState (Just . maybe Checking Looping) $ format1 (Proxy @fmt) s
 
 {-# INLINE format #-}
 format
-    :: forall dom fmt. (HiddenClockResetEnable dom, Format fmt)
-    => Proxy fmt
-    -> Circuit (Df dom Word8) (Df dom Word8)
+    :: forall dom. (HiddenClockResetEnable dom)
+    => forall fmt -> (Format fmt)
+    => Circuit (Df dom Word8) (Df dom Word8)
 format fmt = Df.compander (begin, True) \(s, ready) x ->
     let next_input = ((s, True), Nothing, True)
         produce (Transition consume y s') = ((fromMaybe begin s', ready && not consume), y, False)

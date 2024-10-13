@@ -13,7 +13,6 @@ import qualified Clash.Sized.Vector as V
 import Data.Word
 import Control.Arrow.Transformer.Automaton
 import Control.Monad (guard)
-import Data.Proxy
 
 import Sudoku.Grid
 import Sudoku.Cell
@@ -29,7 +28,7 @@ import Text.Printf
 showGrid :: forall n m. (Textual n m) => Sudoku n m -> String
 showGrid =
     fmap (chr . fromIntegral) .
-    formatModel (Proxy @(GridFormat n m)) .
+    formatModel (GridFormat n m) .
     fmap showCell .
     toList . flattenGrid
 
@@ -60,7 +59,7 @@ model_decodeSerial stretch = wait
 sim_board :: forall n m. (Solvable n m, Textual n m) => Sudoku n m -> String
 sim_board =
     fmap (chr . fromIntegral) .
-    simulateCSE @System (exposeClockResetEnable (board (SNat @n) (SNat @m))) .
+    simulateCSE @System (exposeClockResetEnable (board n m)) .
     fmap ascii . showGrid
 
 sim_topEntity :: Sudoku 3 3 -> String

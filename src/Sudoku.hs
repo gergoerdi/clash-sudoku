@@ -1,10 +1,10 @@
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE RequiredTypeArguments #-}
 module Sudoku where
 
 import Clash.Prelude hiding (lift)
 import Clash.Annotations.TH
 
-import Data.Proxy
 import Data.Word
 
 import Protocols
@@ -28,10 +28,9 @@ type WithTiming fmt = Wait :++ "Cycles: " :++ Until '@' Forward :++ "\r\n" :++ f
 type OutputFormat n m = WithTiming (SolutionFormat n m)
 
 board
-    :: forall n m dom. (HiddenClockResetEnable dom, Textual n m, Solvable n m)
-    => SNat n
-    -> SNat m
-    -> Circuit (Df dom Word8) (Df dom Word8)
+    :: forall dom. (HiddenClockResetEnable dom)
+    => forall n m -> (Solvable n m, Textual n m)
+    => Circuit (Df dom Word8) (Df dom Word8)
 board n m =
     Df.mapMaybe parseCell |>
     controllerDf @n @m |>
@@ -39,11 +38,10 @@ board n m =
     formatGrid n m
 
 formatGrid
-    :: forall n m dom. (HiddenClockResetEnable dom, Textual n m, Solvable n m)
-    => SNat n
-    -> SNat m
-    -> Circuit (Df dom Word8) (Df dom Word8)
-formatGrid n m = format (Proxy @(OutputFormat n m))
+    :: forall dom. forall n m
+    -> (HiddenClockResetEnable dom, Textual n m, Solvable n m)
+    => Circuit (Df dom Word8) (Df dom Word8)
+formatGrid n m = format (OutputFormat n m)
 
 topEntity
     :: "CLK_100MHZ" ::: Clock System
@@ -51,6 +49,6 @@ topEntity
     -> "RX"         ::: Signal System Bit
     -> "TX"         ::: Signal System Bit
 topEntity clk rst = withClockResetEnable clk rst enableGen $
-    snd . toSignals (serialize (SNat @9600) (board (SNat @3) (SNat @3))) . (, pure ())
+    snd . toSignals (serialize (SNat @9600) (board 3 3)) . (, pure ())
 
 makeTopEntity 'topEntity

@@ -1,12 +1,14 @@
 {-# LANGUAGE BlockArguments, LambdaCase, TupleSections #-}
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, PolyKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE RequiredTypeArguments #-}
 module Format.Internal where
 
 import Clash.Prelude
 
 import Data.Word
 import Data.Bifunctor
+import Data.Proxy
 
 -- | A @b@ value that potentially depends on an @a@ parameter
 data Dep a b
@@ -29,5 +31,11 @@ mapState = fmap . first
 class (NFDataX (State fmt)) => Format (fmt :: k) where
     type State fmt
 
-    start :: proxy fmt -> State fmt
-    format1 :: proxy fmt -> State fmt -> Format1 Word8 (State fmt) Word8
+    start_ :: proxy fmt -> State fmt
+    format1_ :: proxy fmt -> State fmt -> Format1 Word8 (State fmt) Word8
+
+start :: forall fmt -> (Format fmt) => State fmt
+start fmt = start_ (Proxy @fmt)
+
+format1 :: forall fmt -> (Format fmt) => State fmt -> Format1 Word8 (State fmt) Word8
+format1 fmt = format1_ (Proxy @fmt)

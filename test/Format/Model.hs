@@ -1,3 +1,4 @@
+{-# LANGUAGE RequiredTypeArguments #-}
 module Format.Model where
 
 import Clash.Prelude
@@ -5,7 +6,6 @@ import Clash.Prelude
 import Format
 import Format.Internal
 
-import Data.Proxy
 import Data.Word
 import Data.Maybe
 
@@ -14,7 +14,7 @@ import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
-formatModel :: forall fmt a. (Format fmt) => Proxy fmt -> [Word8] -> [Word8]
+formatModel :: forall fmt -> (Format fmt) => [Word8] -> [Word8]
 formatModel fmt = go begin
   where
     begin = start fmt
@@ -29,7 +29,7 @@ formatModel fmt = go begin
         output = maybe id (:)
         produce (Transition consume mb_y s') cs' = output mb_y $ go (next s') (if consume then cs' else cs)
 
-prop_format :: (Format fmt) => Proxy fmt -> H.Property
+prop_format :: forall fmt -> (Format fmt) => H.Property
 prop_format fmt =
     H.idWithModelSingleDomain
       H.defExpectOptions
