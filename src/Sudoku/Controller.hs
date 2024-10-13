@@ -51,12 +51,12 @@ data Control n m
     | Stack (MemCmd (StackDepth n m) (Sudoku n m))
     | Produce Bool (Either Word8 (Cell n m))
 
-controller'
+controller
     :: forall n m dom k. (Solvable n m)
     => (HiddenClockResetEnable dom)
     => (Signal dom (Df.Data (Cell n m)), Signal dom Ack)
     -> (Signal dom Ack, Signal dom (Df.Data (Either Word8 (Cell n m))))
-controller' (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
+controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
   where
     (shift_in', shift_out, in_ack, propagator_cmd, stack_cmd) =
         mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, next_guesses, register Progress result)

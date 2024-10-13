@@ -18,11 +18,11 @@ import Sudoku.Controller
 import Sudoku.Solve (Solvable)
 import Format
 
-controller
+controllerDf
     :: forall n m dom. (Solvable n m)
     => (HiddenClockResetEnable dom)
     => Circuit (Df dom (Cell n m)) (Df dom (Either Word8 (Cell n m)))
-controller = Circuit controller'
+controllerDf = Circuit controller
 
 -- From git@github.com:bittide/bittide-hardware.git
 uartDf
@@ -55,10 +55,9 @@ serialize baud par_circuit = circuit \rx -> do
     idC -< tx
 
 type GridFormat n m = ((((Forward :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n
-type SolutionFormat n m = If '!' "Unsolvable" (GridFormat n m)
-type OutputFormat n m =
-    Wait :++ "Cycles: " :++ Until '@' Forward :++ "\r\n" :++
-    SolutionFormat n m :++ "\r\n"
+type SolutionFormat n m = (If '!' "Unsolvable" (GridFormat n m)) :++ "\r\n"
+type WithTiming fmt = Wait :++ "Cycles: " :++ Until '@' Forward :++ "\r\n" :++ fmt
+type OutputFormat n m = WithTiming (SolutionFormat n m)
 
 board
     :: forall n m dom. (HiddenClockResetEnable dom, Textual n m, Solvable n m)
@@ -67,7 +66,7 @@ board
     -> Circuit (Df dom Word8) (Df dom Word8)
 board n m =
     Df.mapMaybe parseCell |>
-    controller @n @m |>
+    controllerDf @n @m |>
     Df.map (either id showCell) |>
     formatGrid n m
 

@@ -70,7 +70,7 @@ sim_topEntity =
     encodeSerials 16 . fmap ascii . showGrid @3 @3
 
 solve :: forall n m. (Solvable n m, Textual n m) => Sudoku n m -> (Int, Maybe (Sudoku n m))
-solve = start (signalAutomaton @System $ bundle . controller' @n @m . unbundle) . toList . flattenGrid
+solve = start (signalAutomaton @System $ bundle . controller @n @m . unbundle) . toList . flattenGrid
   where
     start (Automaton step) xs = load sim xs
       where
