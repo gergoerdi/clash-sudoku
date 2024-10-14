@@ -4,6 +4,9 @@ module Sudoku.Solve
     ( Sudoku
     , Solvable
 
+    , shiftInGridAtN
+    , neighbourhoodMasks
+
     , propagator
     , PropagatorCmd(..)
     , PropagatorResult(..)
@@ -29,17 +32,14 @@ shiftInGridAtN grid x = (x', unflattenGrid grid')
 type Sudoku n m = Grid n m (Cell n m)
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
 
-neighboursMasks
-    :: forall n m. (Solvable n m)
-    => Grid n m (Mask n m)
-    -> (Bool, Grid n m (Mask n m))
-neighboursMasks masks = (failed, propagated_masks)
+neighbourhoodMasks :: forall n m. (Solvable n m) => Grid n m (Mask n m) -> (Bool, Grid n m (Mask n m))
+neighbourhoodMasks masks = (overlap, masks')
   where
-    propagated_masks = neighbourhoodwise fold masks
-    Any failed = reduceAny $ neighbourhoodwise conflictingMasks masks
+    masks' = neighbourhoodwise fold masks
+    Any overlap = reduceAny $ neighbourhoodwise overlappingMasks masks
 
-conflictingMasks :: forall n m k. (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Any
-conflictingMasks = reduceAny . overlappingBits . fmap (complement . maskBits)
+overlappingMasks :: forall n m k. (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Any
+overlappingMasks = reduceAny . overlappingBits . fmap (complement . maskBits)
 
 overlappingBits :: forall n k. (KnownNat n, KnownNat k) => Vec k (BitVector n) -> BitVector n
 overlappingBits =
@@ -85,7 +85,7 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont 
 
     masks = bundle $ mask <$> units
 
-    (overlapping_uniques, unbundle -> neighbours_masks) = unbundle . fmap neighboursMasks $ masks
+    (overlapping_uniques, unbundle -> neighbours_masks) = unbundle . fmap neighbourhoodMasks $ masks
 
     units :: Grid n m (CellUnit dom n m)
     units = pure unit <*> shift_ins <*> prev_guesses <*> pops <*> neighbours_masks

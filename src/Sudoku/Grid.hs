@@ -1,15 +1,17 @@
-{-# LANGUAGE DerivingStrategies, DerivingVia #-}
+{-# LANGUAGE DerivingStrategies, DerivingVia, GeneralizedNewtypeDeriving #-}
 {-# OPTIONS -fconstraint-solver-iterations=5 #-}
 module Sudoku.Grid where
 
 import Clash.Prelude
 import Data.Functor.Compose
+import Data.Coerce
 
 import Sudoku.Matrix
 
 newtype Grid n m a = Grid{ getGrid :: Matrix n m (Matrix m n a) }
     deriving stock (Generic)
     deriving anyclass (NFDataX, BitPack)
+    deriving newtype (Eq)
     deriving (Functor, Applicative, Foldable) via Compose (Matrix n m) (Matrix m n)
 
 instance (KnownNat n, KnownNat m) => Bundle (Grid n m a) where
@@ -17,6 +19,9 @@ instance (KnownNat n, KnownNat m) => Bundle (Grid n m a) where
 
     bundle = fmap Grid . bundle . fmap bundle . getGrid
     unbundle = Grid . fmap unbundle . unbundle . fmap getGrid
+
+instance (KnownNat n, KnownNat m) => Traversable (Grid n m) where
+    traverse f = fmap coerce . traverse @(Compose (Matrix n m) (Matrix m n)) f . coerce
 
 flattenGrid :: Grid n m a -> Vec (n * m * m * n) a
 flattenGrid = concat . toRowMajorOrder . fmap toRowMajorOrder . getGrid
@@ -38,10 +43,10 @@ gridFromRows = Grid . FromRows . unconcatI . fmap (FromRows . unconcatI)
 
 rowwise
     :: (KnownNat n, KnownNat m)
-    => (Vec (n * m) a -> b)
+    => (Vec (n * m) a -> Vec (n * m) b)
     -> Grid n m a
     -> Grid n m b
-rowwise f = gridFromRows . fmap (repeat . f) . gridToRows
+rowwise f = gridFromRows . fmap f . gridToRows
 
 transposeGrid
     :: (KnownNat n, KnownNat m)
@@ -49,12 +54,12 @@ transposeGrid
     -> Grid m n a
 transposeGrid = gridFromRows . transpose . gridToRows
 
-colwise
+columnwise
     :: (KnownNat n, KnownNat m)
-    => (Vec (n * m) a -> b)
+    => (Vec (n * m) a -> Vec (n * m) b)
     -> Grid n m a
     -> Grid n m b
-colwise f = transposeGrid . rowwise f . transposeGrid
+columnwise f = transposeGrid . rowwise f . transposeGrid
 
 toBoxes
     :: (KnownNat n, KnownNat m)
@@ -70,17 +75,17 @@ fromBoxes = Grid . FromRows . fmap (fmap FromRows . transpose . fmap unconcatI) 
 
 boxwise
     :: (KnownNat n, KnownNat m)
-    => (Vec (n * m) a -> b)
+    => (Vec (n * m) a -> Vec (n * m) b)
     -> Grid n m a
     -> Grid n m b
-boxwise f = fromBoxes . fmap (repeat . f) . toBoxes
+boxwise f = fromBoxes . fmap f . toBoxes
 
 neighbourhoodwise
     :: (KnownNat n, KnownNat m, Semigroup b)
     => (Vec (n * m) a -> b)
     -> Grid n m a
     -> Grid n m b
-neighbourhoodwise f g = rowwise f g .<>. colwise f g .<>. boxwise f g
+neighbourhoodwise f g = rowwise (repeat . f) g .<>. columnwise (repeat . f) g .<>. boxwise (repeat . f) g
   where
     infixr 6 .<>.
     (.<>.) :: forall f m. (Applicative f, Semigroup m) => f m -> f m -> f m

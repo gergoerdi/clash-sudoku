@@ -1,12 +1,14 @@
-{-# LANGUAGE DerivingStrategies, DerivingVia #-}
+{-# LANGUAGE DerivingStrategies, DerivingVia, GeneralizedNewtypeDeriving #-}
 module Sudoku.Matrix where
 
 import Clash.Prelude
 import Data.Functor.Compose
+import Data.Coerce
 
 newtype Matrix n m a = FromRows{ matrixRows :: Vec n (Vec m a) }
     deriving stock (Generic)
     deriving anyclass (NFDataX, BitPack)
+    deriving newtype (Eq)
     deriving (Functor, Applicative, Foldable) via Compose (Vec n) (Vec m)
 
 instance (KnownNat n, KnownNat m) => Bundle (Matrix n m a) where
@@ -14,6 +16,9 @@ instance (KnownNat n, KnownNat m) => Bundle (Matrix n m a) where
 
     bundle = fmap FromRows . bundle . fmap bundle . matrixRows
     unbundle = FromRows . fmap unbundle . unbundle . fmap matrixRows
+
+instance (KnownNat n, KnownNat m) => Traversable (Matrix n m) where
+    traverse f = fmap coerce . traverse @(Compose (Vec n) (Vec m)) f . coerce
 
 toRowMajorOrder :: Matrix n m a -> Vec (n * m) a
 toRowMajorOrder = concat . matrixRows

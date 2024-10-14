@@ -21,6 +21,21 @@ readGrid = go []
         | [] <- cs
         = Nothing
 
+grid0 :: Sudoku 3 3
+Just grid0 = readGrid . unlines $
+    [ "_ 2 3  4 5 6  7 8 _"
+    , "4 5 6  7 8 9  1 2 3"
+    , "7 8 9  1 2 3  4 5 6"
+    , ""
+    , "2 _ _  _ _ _  _ _ _"
+    , "5 _ _  _ _ _  _ _ _"
+    , "8 _ _  _ _ _  _ _ _"
+    , ""
+    , "3 _ _  _ _ _  _ _ _"
+    , "6 _ _  _ _ _  _ _ _"
+    , "9 _ _  _ _ _  _ _ _"
+    ]
+
 grid1 :: Sudoku 3 3
 Just grid1 = readGrid . unlines $
     [ "0 2 0  9 0 8  0 0 0"
