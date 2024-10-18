@@ -23,6 +23,7 @@ import Data.Maybe
 import Data.Monoid (Any(..), All(..))
 import Data.Monoid.Action
 import Data.Foldable (fold)
+import Control.Monad (guard)
 
 shiftInGridAtN :: forall n m a. (KnownNat n, KnownNat m) => Grid n m a -> a -> (a, Grid n m a)
 shiftInGridAtN grid x = (x', unflattenGrid grid')
@@ -32,8 +33,10 @@ shiftInGridAtN grid x = (x', unflattenGrid grid')
 type Sudoku n m = Grid n m (Cell n m)
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
 
-neighbourhoodMasks :: forall n m. (Solvable n m) => Grid n m (Mask n m) -> (Bool, Grid n m (Mask n m))
-neighbourhoodMasks masks = (overlap, masks')
+neighbourhoodMasks :: forall n m. (Solvable n m) => Grid n m (Mask n m) -> Maybe (Grid n m (Mask n m))
+neighbourhoodMasks masks = do
+    guard $ not overlap
+    pure masks'
   where
     masks' = neighbourhoodwise fold masks
     Any overlap = reduceAny $ neighbourhoodwise overlappingMasks masks
@@ -80,15 +83,16 @@ propagator
        )
 propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont <$> units)
   where
-    pops :: Grid n m (Signal dom (Maybe (Cell n m)))
     pops = unbundle . fmap sequenceA $ pop
 
     masks = bundle $ mask <$> units
 
-    (overlapping_uniques, unbundle -> neighbours_masks) = unbundle . fmap neighbourhoodMasks $ masks
+    mb_neighbourhood_masks = neighbourhoodMasks <$> masks
+    neighbourhood_masks = unbundle . fmap sequenceA $ mb_neighbourhood_masks
+    overlapping_uniques = isNothing <$> mb_neighbourhood_masks
 
     units :: Grid n m (CellUnit dom n m)
-    units = pure unit <*> shift_ins <*> prev_guesses <*> pops <*> neighbours_masks
+    units = pure unit <*> shift_ins <*> prev_guesses <*> pops <*> neighbourhood_masks
 
     (_, shift_ins) = shiftInGridAtN (enable (isJust <$> shift_in) . cell <$> units) shift_in
     (_, prev_guesses) = shiftInGridAtN (keep_guessing <$> units) (pure True)
@@ -108,12 +112,10 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont 
         :: Signal dom (Maybe (Cell n m))
         -> Signal dom Bool
         -> Signal dom (Maybe (Cell n m))
-        -> Signal dom (Mask n m)
+        -> Signal dom (Maybe (Mask n m))
         -> CellUnit dom n m
-    unit shift_in try_guess pop neighbours_mask = CellUnit{..}
+    unit shift_in try_guess pop neighbourhood_mask = CellUnit{..}
       where
-        shift_out = enable (isJust <$> shift_in) cell
-
         cell = register conflicted cell'
         mask = mux is_unique (cellMask <$> cell) (pure mempty)
 
@@ -125,13 +127,13 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont 
             guess_this <- guess_this
             is_unique <- is_unique
             first_guess <- first_guess
-            neighbours_mask <- neighbours_mask
+            neighbourhood_mask <- neighbourhood_mask
             pure if
-                | Just load <- shift_in                -> load
-                | Just load <- pop                     -> load
-                | Just Propagate <- cmd, not is_unique -> act neighbours_mask current
-                | Just CommitGuess <- cmd, guess_this  -> first_guess
-                | otherwise                            -> current
+                | Just load <- shift_in                                                  -> load
+                | Just load <- pop                                                       -> load
+                | Just Propagate <- cmd, not is_unique, Just mask <- neighbourhood_mask  -> act mask current
+                | Just CommitGuess <- cmd, guess_this                                    -> first_guess
+                | otherwise                                                              -> current
 
         changed = cell' ./=. cell
 

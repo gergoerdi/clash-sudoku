@@ -16,22 +16,22 @@ import Data.Monoid.Action
 import Control.Monad (guard)
 
 propagate1 :: forall n m. (Solvable n m) => Sudoku n m -> Maybe (Sudoku n m)
-propagate1 cells = do
-    guard $ not (failed cells)
-    guard $ not overlap
-    pure cells'
+propagate1 grid = do
+    masks' <- neighbourhoodMasks masks
+    pure $ apply <$> uniques <*> masks' <*> grid
   where
-    isUnique cell = cell == fst (splitCell cell)
-    uniques = isUnique <$> cells
+    uniques = isUnique <$> grid
+    masks = maskOf <$> uniques <*> grid
 
-    masks = (\cell is_unique -> if is_unique then cellMask cell else mempty) <$> cells <*> uniques
-    (overlap, masks') = neighbourhoodMasks masks
-    cells' = (\ is_unique mask -> if is_unique then id else act mask) <$> uniques <*> masks' <*> cells
+    isUnique cell = cell == fst (splitCell cell)
+    maskOf is_unique cell = if is_unique then cellMask cell else mempty
+    apply is_unique mask = if is_unique then id else act mask
 
 propagate :: forall n m. (Solvable n m) => Sudoku n m -> Maybe (Sudoku n m)
-propagate cells = do
-    cells' <- propagate1 cells
-    if cells' == cells then pure cells else propagate cells'
+propagate grid = do
+    grid' <- propagate1 grid
+    let changed = grid' /= grid
+    if changed then propagate grid' else pure grid
 
 possibilities :: (Solvable n m) => Cell n m -> [Cell n m]
 possibilities cell =
@@ -71,5 +71,6 @@ failed = getAny . reduceAny . fmap (== conflicted)
 
 search :: forall n m. (Solvable n m) => Sudoku n m -> [Sudoku n m]
 search grid = do
+    guard $ not (failed grid)
     grid <- maybeToList $ propagate grid
     if correct grid then pure grid else search =<< guess grid
