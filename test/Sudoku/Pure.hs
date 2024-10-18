@@ -2,8 +2,7 @@
 {-# LANGUAGE ApplicativeDo #-}
 module Sudoku.Pure where
 
-import Clash.Prelude hiding (fold)
-import qualified Data.List as L
+import Clash.Prelude
 
 import Sudoku.Solve
 import Sudoku.Utils
@@ -35,9 +34,11 @@ propagate grid = do
 
 possibilities :: (Solvable n m) => Cell n m -> [Cell n m]
 possibilities cell =
-    L.filter (\cell' -> cellBits cell .&. cellBits cell' /= 0) .
-    L.map unique $
-    [minBound..maxBound]
+    [ cell'
+    | i <- [minBound..maxBound]
+    , let cell' = unique i
+    , cellBits cell .&. cellBits cell' /= 0
+    ]
 
 guess :: forall n m. (Solvable n m) => Sudoku n m -> [Sudoku n m]
 guess cells = do
