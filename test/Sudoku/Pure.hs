@@ -56,11 +56,11 @@ possibilities1 cell
 guess :: forall n m. (Solvable n m) => Sudoku n m -> [Sudoku n m]
 guess cells = do
     guard guessed
-    traverse snd units
+    traverse snd xs
   where
-    units = f <$> cells <*> prev_guesses
+    xs = f <$> cells <*> prev_guesses
 
-    (not -> guessed, prev_guesses) = shiftInGridAtN (fst <$> units) True
+    (not -> guessed, prev_guesses) = shiftInGridAtN (fst <$> xs) True
 
     f :: Cell n m -> Bool -> (Bool, [Cell n m])
     f cell keep_guessing
