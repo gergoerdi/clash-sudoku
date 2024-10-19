@@ -4,7 +4,6 @@ module Sudoku.Solve
     ( Sudoku
     , Solvable
 
-    , shiftInGridAtN
     , neighbourhoodMasks
 
     , propagator
@@ -24,11 +23,7 @@ import Data.Monoid (Any(..))
 import Data.Monoid.Action
 import Data.Foldable (fold)
 import Control.Monad (guard)
-
-shiftInGridAtN :: forall n m a. (KnownNat n, KnownNat m) => Grid n m a -> a -> (a, Grid n m a)
-shiftInGridAtN grid x = (x', unflattenGrid grid')
-  where
-    (grid', x' :> Nil) = shiftInAtN (flattenGrid grid) (x :> Nil)
+import Control.Monad.State.Strict
 
 type Sudoku n m = Grid n m (Cell n m)
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
@@ -57,7 +52,6 @@ data CellUnit dom n m = CellUnit
     , is_conflicted :: Signal dom Bool
     , changed :: Signal dom Bool
     , cont :: Signal dom (Cell n m)
-    , keep_guessing :: Signal dom Bool
     }
 
 data PropagatorCmd
@@ -81,7 +75,7 @@ propagator
        , Signal dom PropagatorResult
        , Signal dom (Sudoku n m)
        )
-propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont <$> units)
+propagator cmd shift_in pop = (lastGrid (cell <$> units), result, bundle $ cont <$> units)
   where
     pops = unbundle . fmap sequenceA $ pop
 
@@ -92,10 +86,7 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont 
     overlapping_uniques = isNothing <$> mb_neighbourhood_masks
 
     units :: Grid n m (CellUnit dom n m)
-    units = pure unit <*> pops <*> neighbourhood_masks <*> shift_ins <*> prev_guesses
-
-    (_, shift_ins) = shiftInGridAtN (enable (isJust <$> shift_in) . cell <$> units) shift_in
-    (_, prev_guesses) = shiftInGridAtN (keep_guessing <$> units) (pure True)
+    units = evalState (traverse (state . uncurry unit) ((,) <$> pops <*> neighbourhood_masks)) (shift_in, pure True)
 
     all_unique  = and <$> bundle (is_unique <$> units)
     any_changed = or <$> bundle (changed <$> units)
@@ -111,10 +102,9 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont 
     unit
         :: Signal dom (Maybe (Cell n m))
         -> Signal dom (Maybe (Mask n m))
-        -> Signal dom (Maybe (Cell n m))
-        -> Signal dom Bool
-        -> CellUnit dom n m
-    unit pop neighbourhood_mask shift_in try_guess = CellUnit{..}
+        -> (Signal dom (Maybe (Cell n m)), Signal dom Bool)
+        -> (CellUnit dom n m, (Signal dom (Maybe (Cell n m)), Signal dom Bool))
+    unit pop neighbourhood_mask (shift_in, try_guess) = (CellUnit{..}, (shift_out, keep_guessing))
       where
         cell = register conflicted cell'
 

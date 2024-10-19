@@ -12,6 +12,7 @@ import Sudoku.Cell
 import Data.Maybe
 import Data.Monoid.Action
 import Control.Monad (guard)
+import Control.Monad.State.Strict
 
 data CellUnit n m = CellUnit
     { cell :: Cell n m
@@ -50,21 +51,18 @@ propagate grid = do
 
 guess :: forall n m. (Solvable n m) => Grid n m (CellUnit n m) -> [Sudoku n m]
 guess units = do
-    guard guessed
-    traverse snd xs
+    let (cells', keep_guessing) = runState (traverse (state . guess1) units) True
+    guard $ not keep_guessing
+    sequenceA cells'
   where
-    xs = f <$> units <*> prev_guesses
-
-    (not -> guessed, prev_guesses) = shiftInGridAtN (fst <$> xs) True
-
-    f :: CellUnit n m -> Bool -> (Bool, [Cell n m])
-    f unit keep_guessing
+    guess1 :: CellUnit n m -> Bool -> ([Cell n m], Bool)
+    guess1 unit keep_guessing
         | keep_guessing
         , cells@(_:_:_) <- possibilities unit
-        = (False, cells)
+        = (cells, False)
 
         | otherwise
-        = (keep_guessing, [cell unit])
+        = ([cell unit], keep_guessing)
 
 search :: forall n m. (Solvable n m) => Sudoku n m -> [Sudoku n m]
 search grid = do

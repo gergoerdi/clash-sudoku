@@ -13,6 +13,7 @@ import Data.Monoid (All(..))
 import Data.Monoid.Action
 import Data.Foldable (fold)
 import Control.Monad (guard)
+import Control.Monad.State.Strict
 
 isUnique :: (Solvable n m) => Cell n m -> Bool
 isUnique cell = popCount (cellBits cell) == 1
@@ -55,21 +56,18 @@ possibilities1 cell
 
 guess :: forall n m. (Solvable n m) => Sudoku n m -> [Sudoku n m]
 guess cells = do
-    guard guessed
-    traverse snd xs
+    let (cells', keep_guessing) = runState (traverse (state . guess1) cells) True
+    guard $ not keep_guessing
+    sequenceA cells'
   where
-    xs = f <$> cells <*> prev_guesses
-
-    (not -> guessed, prev_guesses) = shiftInGridAtN (fst <$> xs) True
-
-    f :: Cell n m -> Bool -> (Bool, [Cell n m])
-    f cell keep_guessing
+    guess1 :: Cell n m -> Bool -> ([Cell n m], Bool)
+    guess1 cell keep_guessing
         | keep_guessing
         , cells@(_:_:_) <- possibilities1 cell
-        = (False, cells)
+        = (cells, False)
 
         | otherwise
-        = (keep_guessing, [cell])
+        = ([cell], keep_guessing)
 
 choices :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
 choices = traverse possibilities

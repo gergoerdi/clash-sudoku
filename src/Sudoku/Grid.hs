@@ -33,8 +33,8 @@ flattenGrid = concat . toRowMajorOrder . fmap toRowMajorOrder . getGrid
 unflattenGrid :: (KnownNat n, KnownNat m) => Vec (n * m * m * n) a -> Grid n m a
 unflattenGrid = Grid . fmap fromRowMajorOrder . fromRowMajorOrder . unconcatI
 
-headGrid :: forall n m a. (KnownNat n, KnownNat m, 1 <= n * m * m * n) => Grid n m a -> a
-headGrid = head @(n * m * m * n - 1) . flattenGrid
+lastGrid :: forall n m a. (KnownNat n, KnownNat m, 1 <= n * m * m * n) => Grid n m a -> a
+lastGrid = last @(n * m * m * n - 1) . flattenGrid
 
 gridToRows :: Grid n m a -> Vec (n * m) (Vec (m * n) a)
 gridToRows = concatMap (fmap toRowMajorOrder) . matrixRows . getGrid
