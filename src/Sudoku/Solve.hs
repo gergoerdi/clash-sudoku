@@ -86,7 +86,7 @@ propagator cmd shift_in pop = (lastGrid (cell <$> units), result, bundle $ cont 
     overlapping_uniques = isNothing <$> mb_neighbourhood_masks
 
     units :: Grid n m (CellUnit dom n m)
-    units = evalState (traverse (state . uncurry unit) ((,) <$> pops <*> neighbourhood_masks)) (shift_in, pure True)
+    units = evalState (traverse (state . uncurry unit) ((,) <$> pops <*> neighbourhood_masks)) (shift_in, pure False)
 
     all_unique  = and <$> bundle (is_unique <$> units)
     any_changed = or <$> bundle (changed <$> units)
@@ -104,7 +104,7 @@ propagator cmd shift_in pop = (lastGrid (cell <$> units), result, bundle $ cont 
         -> Signal dom (Maybe (Mask n m))
         -> (Signal dom (Maybe (Cell n m)), Signal dom Bool)
         -> (CellUnit dom n m, (Signal dom (Maybe (Cell n m)), Signal dom Bool))
-    unit pop neighbourhood_mask (shift_in, try_guess) = (CellUnit{..}, (shift_out, keep_guessing))
+    unit pop neighbourhood_mask (shift_in, guessed_before) = (CellUnit{..}, (shift_out, guessed))
       where
         cell = register conflicted cell'
 
@@ -116,10 +116,10 @@ propagator cmd shift_in pop = (lastGrid (cell <$> units), result, bundle $ cont 
 
         mask = mux is_unique (cellMask <$> cell) (pure mempty)
 
-        can_guess = not <$> is_unique
-        guess_this = try_guess .&&. can_guess
+        can_guess_this = not <$> is_unique
+        guess_this = can_guess_this .&&. not <$> guessed_before
         cont = mux guess_this next_guess cell
-        keep_guessing = try_guess .&&. is_unique
+        guessed = guessed_before .||. can_guess_this
 
         cell' = do
             current <- cell

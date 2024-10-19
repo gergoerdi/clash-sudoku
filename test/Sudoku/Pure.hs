@@ -47,27 +47,29 @@ possibilities cell =
 possibilities1 :: (Solvable n m) => Cell n m -> [Cell n m]
 possibilities1 cell
     | cont == conflicted
-    = []
+    = [guess]
 
     | otherwise
     = [guess, cont]
   where
     (guess, cont) = splitCell cell
 
-guess :: forall n m. (Solvable n m) => Sudoku n m -> [Sudoku n m]
-guess cells = do
-    let (cells', keep_guessing) = runState (traverse (state . guess1) cells) True
-    guard $ not keep_guessing
-    sequenceA cells'
+guessFirst :: (Traversable f) => (a -> [a]) -> f a -> [f a]
+guessFirst possibilities struct = do
+    let (structs, guessed) = runState (traverse (state . guess1) struct) False
+    guard guessed
+    sequenceA structs
   where
-    guess1 :: Cell n m -> Bool -> ([Cell n m], Bool)
-    guess1 cell keep_guessing
-        | keep_guessing
-        , cells@(_:_:_) <- possibilities1 cell
-        = (cells, False)
+    guess1 x guessed_before
+        | not guessed_before
+        , xs@(_:_:_) <- possibilities x
+        = (xs, True)
 
         | otherwise
-        = ([cell], keep_guessing)
+        = ([x], guessed_before)
+
+guess :: forall n m. (Solvable n m) => Sudoku n m -> [Sudoku n m]
+guess = guessFirst possibilities1
 
 choices :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
 choices = traverse possibilities
