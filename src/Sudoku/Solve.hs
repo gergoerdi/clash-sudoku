@@ -117,7 +117,19 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont 
     unit pop neighbourhood_mask shift_in try_guess = CellUnit{..}
       where
         cell = register conflicted cell'
+
+        shift_out = enable (isJust <$> shift_in) cell
+
+        (first_guess, next_guess) = unbundle $ splitCell <$> cell
+        is_unique = next_guess .==. pure conflicted
+        is_conflicted = cell .==. pure conflicted
+
         mask = mux is_unique (cellMask <$> cell) (pure mempty)
+
+        can_guess = not <$> is_unique
+        guess_this = try_guess .&&. can_guess
+        cont = mux guess_this next_guess cell
+        keep_guessing = try_guess .&&. is_unique
 
         cell' = do
             current <- cell
@@ -136,12 +148,3 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont 
                 | otherwise                                                              -> current
 
         changed = cell' ./=. cell
-
-        (first_guess, next_guess) = unbundle $ splitCell <$> cell
-        is_unique = next_guess .==. pure conflicted
-        is_conflicted = cell .==. pure conflicted
-
-        can_guess = not <$> is_unique
-        guess_this = try_guess .&&. can_guess
-        cont = mux guess_this next_guess cell
-        keep_guessing = try_guess .&&. is_unique
