@@ -92,7 +92,7 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont 
     overlapping_uniques = isNothing <$> mb_neighbourhood_masks
 
     units :: Grid n m (CellUnit dom n m)
-    units = pure unit <*> shift_ins <*> prev_guesses <*> pops <*> neighbourhood_masks
+    units = pure unit <*> pops <*> neighbourhood_masks <*> shift_ins <*> prev_guesses
 
     (_, shift_ins) = shiftInGridAtN (enable (isJust <$> shift_in) . cell <$> units) shift_in
     (_, prev_guesses) = shiftInGridAtN (keep_guessing <$> units) (pure True)
@@ -110,11 +110,11 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont 
 
     unit
         :: Signal dom (Maybe (Cell n m))
-        -> Signal dom Bool
-        -> Signal dom (Maybe (Cell n m))
         -> Signal dom (Maybe (Mask n m))
+        -> Signal dom (Maybe (Cell n m))
+        -> Signal dom Bool
         -> CellUnit dom n m
-    unit shift_in try_guess pop neighbourhood_mask = CellUnit{..}
+    unit pop neighbourhood_mask shift_in try_guess = CellUnit{..}
       where
         cell = register conflicted cell'
         mask = mux is_unique (cellMask <$> cell) (pure mempty)
