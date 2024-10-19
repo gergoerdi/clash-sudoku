@@ -20,7 +20,7 @@ import Sudoku.Grid
 import Sudoku.Cell
 
 import Data.Maybe
-import Data.Monoid (Any(..), All(..))
+import Data.Monoid (Any(..))
 import Data.Monoid.Action
 import Data.Foldable (fold)
 import Control.Monad (guard)
@@ -39,10 +39,10 @@ neighbourhoodMasks masks = do
     pure masks'
   where
     masks' = neighbourhoodwise fold masks
-    Any overlap = reduceAny $ neighbourhoodwise overlappingMasks masks
+    overlap = getAny . fold $ neighbourhoodwise (Any . masksOverlap) masks
 
-overlappingMasks :: forall n m k. (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Any
-overlappingMasks = reduceAny . overlappingBits . fmap (complement . maskBits)
+masksOverlap :: forall n m k. (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Bool
+masksOverlap = (/= 0) . overlappingBits . fmap (complement . maskBits)
 
 overlappingBits :: forall n k. (KnownNat n, KnownNat k) => Vec k (BitVector n) -> BitVector n
 overlappingBits =
@@ -97,9 +97,9 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont 
     (_, shift_ins) = shiftInGridAtN (enable (isJust <$> shift_in) . cell <$> units) shift_in
     (_, prev_guesses) = shiftInGridAtN (keep_guessing <$> units) (pure True)
 
-    all_unique  = getAll . reduceAll <$> bundle (is_unique <$> units)
-    any_changed = getAny . reduceAny <$> bundle (changed <$> units)
-    any_failed  = getAny . reduceAny <$> bundle (is_conflicted <$> units)
+    all_unique  = and <$> bundle (is_unique <$> units)
+    any_changed = or <$> bundle (changed <$> units)
+    any_failed  = or <$> bundle (is_conflicted <$> units)
 
     result =
         mux overlapping_uniques  (pure Failure) $
