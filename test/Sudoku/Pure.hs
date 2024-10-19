@@ -2,16 +2,16 @@
 {-# LANGUAGE ApplicativeDo #-}
 module Sudoku.Pure where
 
-import Clash.Prelude
+import Clash.Prelude hiding (fold)
 
 import Sudoku.Solve
-import Sudoku.Utils
 import Sudoku.Grid
 import Sudoku.Cell
 
 import Data.Maybe
-import Data.Monoid (Any(..), All(..))
+import Data.Monoid (All(..))
 import Data.Monoid.Action
+import Data.Foldable (fold)
 import Control.Monad (guard)
 
 isUnique :: (Solvable n m) => Cell n m -> Bool
@@ -75,13 +75,16 @@ choices :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
 choices = traverse possibilities
 
 correct :: forall n m. (Solvable n m) => Sudoku n m -> Bool
-correct = getAll . reduceAll . neighbourhoodwise noDups
+correct = getAll . fold . neighbourhoodwise noDups
   where
     noDups :: Vec (n * m) (Cell n m) -> All
     noDups xs = All $ all (`elem` xs) (unique <$> [minBound..maxBound])
 
+correct' :: forall n m. (Solvable n m) => Sudoku n m -> Bool
+correct' = all isUnique
+
 failed :: forall n m. (Solvable n m) => Sudoku n m -> Bool
-failed = getAny . reduceAny . fmap (== conflicted)
+failed = any (== conflicted)
 
 search :: forall n m. (Solvable n m) => Sudoku n m -> [Sudoku n m]
 search grid = do
