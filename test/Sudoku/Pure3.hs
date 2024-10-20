@@ -44,16 +44,17 @@ expand possibilities grid = sequenceA $ evalState (traverse (state . guess1) gri
         | otherwise
         = ([x], guessed_before)
 
+complete :: (Solvable n m) => Sudoku n m -> Bool
+complete = all isUnique
+
+blocked :: (Solvable n m) => Sudoku n m -> Bool
+blocked = any (== conflicted)
+
 search :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
 search grid
-    | any (== conflicted) grid
-    = []
-
-    | any isUnique grid
-    = [grid]
-
-    | otherwise
-    = sudoku =<< expand possibilities grid
+    | blocked grid  = empty
+    | complete grid = pure grid
+    | otherwise     = sudoku =<< expand possibilities grid
 
 prune :: (Solvable n m) => Sudoku n m -> Maybe (Sudoku n m)
 prune grid = do

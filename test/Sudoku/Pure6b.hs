@@ -2,7 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ApplicativeDo #-}
 {-# OPTIONS -Wunused-binds #-}
-module Sudoku.Pure6 (nice, solve4) where
+module Sudoku.Pure6b (nice, solve4) where
 
 import Prelude
 import Data.List
@@ -15,6 +15,7 @@ import Sudoku.Cell
 import Data.Char (chr, ord)
 import Data.Functor.Compose
 import Data.Maybe
+import Control.Monad.State.Strict
 
 fromGrid :: (KnownNat n, KnownNat m) => Grid.Grid n m a -> Matrix a
 fromGrid = V.toList . fmap V.toList . Grid.gridToRows
@@ -57,14 +58,25 @@ single = \case
 rows :: Matrix a -> [Row a]
 rows = id
 
+rowwise, colwise, boxwise :: (Row a -> Row b) -> Matrix a -> Matrix b
+
+rowwise f = map f
+colwise f = transpose . map f . transpose
+boxwise f = boxs . fmap f . boxs
+
 cols :: Matrix a -> [Row a]
 cols = rows . transpose
 
 boxs :: Matrix a -> [Row a]
 boxs = unpack . map cols . pack
   where
+    pack :: [Row a] -> [[[Row a]]]
     pack = split . map split
+
+    split :: Row a -> [Row a]
     split  = chop boxsize
+
+    unpack :: [[[Row a]]] -> [Row a]
     unpack = map concat . concat
 
 chop :: Int -> [a] -> [[a]]
@@ -84,9 +96,7 @@ choices = getCompose . fmap choice . Compose
     choice v = if empty v then values else [v]
 
 prune :: Matrix Choices -> Matrix Choices
-prune = pruneBy boxs . pruneBy cols . pruneBy rows
-  where
-    pruneBy f = f . map reduce . f
+prune = boxwise reduce . colwise reduce . rowwise reduce
 
 reduce :: Row Choices -> Row Choices
 reduce xss =  [xs `minus` singles | xs <- xss]
@@ -125,10 +135,15 @@ search m
     | otherwise            =  (search . prune) =<< expand m
 
 expand :: Matrix Choices -> [Matrix Choices]
-expand m = [rows1 ++ [row1 ++ [c] : row2] ++ rows2 | c <- cs]
+expand m = fmap getCompose . sequenceA $ evalState (traverse (state . guess1) $ Compose m) False
   where
-    (rows1,row:rows2) = break (any (not . single)) (rows m)
-    (row1,cs:row2)    = break (not . single) row
+    guess1 cs guessed_before
+        | not guessed_before
+        , cs@(_:_:_) <- cs
+        = ([[c] | c <- cs], True)
+
+        | otherwise
+        = ([cs], guessed_before)
 
 nice :: (Board -> [Board]) -> Grid.Grid 3 3 (Cell 3 3) -> [Grid.Grid 3 3 (Cell 3 3)]
 nice f = fmap toGrid' . f . fromGrid'
