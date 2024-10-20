@@ -50,15 +50,16 @@ search units
     | any is_conflicted units
     = []
 
-    | all is_unique units
-    = [cell <$> units]
+    | all isUnique cells
+    = [cells]
 
     | otherwise
     = search <=< maybeToList . prune <=< expand $ units
+  where
+    cells = cell <$> units
 
 data CellUnit n m = CellUnit
     { cell :: Cell n m
-    , is_unique :: Bool
     , is_conflicted :: Bool
     , guesses :: [Cell n m]
     }
