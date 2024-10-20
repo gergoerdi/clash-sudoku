@@ -19,7 +19,7 @@ import Sudoku.Grid
 import Sudoku.Cell
 
 import Data.Maybe
-import Data.Monoid (Any(..))
+import Data.Monoid (All(..))
 import Data.Monoid.Action
 import Data.Foldable (fold)
 import Control.Monad (guard)
@@ -30,16 +30,16 @@ type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
 
 neighbourhoodMasks :: forall n m. (Solvable n m) => Grid n m (Mask n m) -> Maybe (Grid n m (Mask n m))
 neighbourhoodMasks masks = do
-    guard $ not overlap
+    guard safe
     pure masks'
   where
     masks' = neighbourhoodwise fold masks
-    overlap = getAny . fold $ neighbourhoodwise (Any . masksOverlap) masks
+    safe = getAll . fold $ neighbourhoodwise (All . safeMasks) masks
 
-masksOverlap :: forall n m k. (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Bool
-masksOverlap = (/= 0) . overlappingBits . fmap (complement . maskBits)
+safeMasks :: (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Bool
+safeMasks = (== 0) . overlappingBits . fmap (complement . maskBits)
 
-overlappingBits :: forall n k. (KnownNat n, KnownNat k) => Vec k (BitVector n) -> BitVector n
+overlappingBits :: (KnownNat n, KnownNat k) => Vec k (BitVector n) -> BitVector n
 overlappingBits =
     v2bv . map boolToBit .
     map (hasOverflowed . sum . map toOverflowing) .
