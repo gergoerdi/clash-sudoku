@@ -2,7 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ApplicativeDo #-}
 {-# OPTIONS -Wunused-binds #-}
-module Sudoku.Pure6b (nice, solve4) where
+module Sudoku.Pure6b {-(nice, solve4)-} where
 
 import Prelude
 import Data.List
@@ -18,27 +18,26 @@ import Data.Maybe
 import Control.Monad.State.Strict
 
 fromGrid :: (KnownNat n, KnownNat m) => Grid.Grid n m a -> Matrix a
-fromGrid = V.toList . fmap V.toList . Grid.gridToRows
+fromGrid = Compose . V.toList . fmap V.toList . Grid.gridToRows
 
 fromGrid' :: Grid.Grid 3 3 (Cell 3 3) -> Board
-fromGrid' = (getCompose . fmap fromCell . Compose) . fromGrid
+fromGrid' = fmap fromCell . fromGrid
   where
     fromCell = chr . fromIntegral . showCell
 
 toGrid :: Matrix a -> Grid.Grid 3 3 a
-toGrid = Grid.gridFromRows . V.unsafeFromList . fmap V.unsafeFromList
+toGrid = Grid.gridFromRows . V.unsafeFromList . fmap V.unsafeFromList . getCompose
 
 toGrid' :: Board -> Grid.Grid 3 3 (Cell 3 3)
-toGrid' = toGrid . getCompose . fmap toCell . Compose
+toGrid' = fmap toCell . toGrid
   where
     toCell = fromMaybe (error "toCell") . parseCell . fromIntegral . ord
 
 type Grid  = Matrix Value
 type Board = Grid
 
-type Matrix a = [Row a]
-
-type Row a = [a]
+type Matrix = Compose [] Row
+type Row = []
 
 type Value = Char
 boxsize :: Int
@@ -55,28 +54,37 @@ single = \case
     [_] -> True
     _ -> False
 
+transposeMatrix :: Matrix a -> Matrix a
+transposeMatrix = Compose . transpose . getCompose
+
+maprow, mapcol, mapbox :: (Row a -> Row b) -> Matrix a -> Matrix b
+maprow f = Compose . map f . getCompose
+mapcol f = Compose . transpose . map f . transpose . getCompose
+mapbox f = Compose . boxes . map f . boxes . getCompose
+  where
+    boxes :: [Row a] -> [Row a]
+    boxes = unpack . pack
+
+    pack = map transpose . split . map split
+    split = chop boxsize
+    unpack = map concat . concat
+
 rows :: Matrix a -> [Row a]
-rows = id
-
-rowwise, colwise, boxwise :: (Row a -> Row b) -> Matrix a -> Matrix b
-
-rowwise f = map f
-colwise f = transpose . map f . transpose
-boxwise f = boxs . fmap f . boxs
+rows = getCompose
 
 cols :: Matrix a -> [Row a]
-cols = rows . transpose
+cols = rows . transposeMatrix
 
 boxs :: Matrix a -> [Row a]
 boxs = unpack . map cols . pack
   where
-    pack :: [Row a] -> [[[Row a]]]
-    pack = split . map split
+    pack :: Matrix a -> [Matrix [a]]
+    pack = map Compose . split . map split . rows
 
-    split :: Row a -> [Row a]
+    split :: [a] -> [[a]]
     split  = chop boxsize
 
-    unpack :: [[[Row a]]] -> [Row a]
+    unpack :: [[[[a]]]] -> [[a]]
     unpack = map concat . concat
 
 chop :: Int -> [a] -> [[a]]
@@ -91,12 +99,12 @@ nodups = \case
 type Choices = [Value]
 
 choices :: Grid -> Matrix Choices
-choices = getCompose . fmap choice . Compose
+choices = fmap choice
   where
     choice v = if empty v then values else [v]
 
 prune :: Matrix Choices -> Matrix Choices
-prune = boxwise reduce . colwise reduce . rowwise reduce
+prune = mapbox reduce . mapcol reduce . maprow reduce
 
 reduce :: Row Choices -> Row Choices
 reduce xss =  [xs `minus` singles | xs <- xss]
@@ -107,10 +115,12 @@ minus :: Choices -> Choices -> Choices
 xs `minus` ys =  if single xs then xs else xs \\ ys
 
 complete :: Matrix Choices -> Maybe (Matrix Char)
-complete = fmap getCompose . traverse (\xs -> do [x] <- pure xs; pure x) . Compose
+complete = traverse \case
+    [x] -> Just x
+    _ -> Nothing
 
 void :: Matrix Choices -> Bool
-void =  any (any null)
+void =  any null
 
 safe :: Matrix Choices -> Bool
 safe cm = and
@@ -134,16 +144,19 @@ search m
     | Just m' <- complete m = pure m'
     | otherwise            =  (search . prune) =<< expand m
 
-expand :: Matrix Choices -> [Matrix Choices]
-expand m = fmap getCompose . sequenceA $ evalState (traverse (state . guess1) $ Compose m) False
+replaceFirst :: (Traversable f) => f (a, Maybe a) -> (f a, Bool)
+replaceFirst xs = runState (traverse (state . replace1) xs) False
   where
-    guess1 cs guessed_before
+    replace1 (x, mb_x') guessed_before
         | not guessed_before
-        , cs@(_:_:_) <- cs
-        = ([[c] | c <- cs], True)
+        , Just x' <- mb_x'
+        = (x', True)
 
         | otherwise
-        = ([cs], guessed_before)
+        = (x, guessed_before)
+
+expand :: Matrix Choices -> [Matrix Choices]
+expand = sequenceA . fst . replaceFirst . fmap (\cs -> ([cs], if single cs then Nothing else Just [[c] | c <- cs]))
 
 nice :: (Board -> [Board]) -> Grid.Grid 3 3 (Cell 3 3) -> [Grid.Grid 3 3 (Cell 3 3)]
 nice f = fmap toGrid' . f . fromGrid'
