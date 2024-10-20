@@ -71,9 +71,6 @@ guessFirst possibilities struct = do
 guess :: forall n m. (Solvable n m) => Sudoku n m -> [Sudoku n m]
 guess = guessFirst possibilities1
 
-choices :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
-choices = traverse possibilities
-
 correct :: forall n m. (Solvable n m) => Sudoku n m -> Bool
 correct = getAll . fold . neighbourhoodwise noDups
   where
