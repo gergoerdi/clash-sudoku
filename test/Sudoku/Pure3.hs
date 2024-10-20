@@ -59,9 +59,10 @@ consistent = All . (== 0) . overlappingBits . fmap (\cell -> if isUnique cell th
 
 search :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
 search grid
-    | blocked grid  = empty
-    | complete grid = pure grid
-    | otherwise     = sudoku =<< expand possibilities grid
+    | not (safe grid)           = empty
+    | any (== conflicted) grid = empty
+    | complete grid           = pure grid
+    | otherwise               = sudoku =<< expand possibilities grid
 
 prune :: (Solvable n m) => Sudoku n m -> Sudoku n m
 prune grid = apply <$> uniques <*> neighbourhood_masks <*> grid
@@ -69,10 +70,15 @@ prune grid = apply <$> uniques <*> neighbourhood_masks <*> grid
     uniques = isUnique <$> grid
     masks = maskOf <$> uniques <*> grid
     neighbourhood_masks = neighbourhoodwise fold masks
+
+    -- Next step: After `prune`, we immediately check `safe` so we might as well do it here!
     _safe = getAll . fold . neighbourhoodwise (All . safeMasks) $ masks
 
     maskOf is_unique cell = if is_unique then cellMask cell else mempty
     apply is_unique mask = if is_unique then id else act mask
+
+fix :: (Eq a) => (a -> a) -> (a -> a)
+fix f x = let x' = f x in if x == x' then x' else f x'
 
 sudoku :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
 sudoku = search . prune
