@@ -35,12 +35,12 @@ possibilities1 cell
   where
     (guess, cont) = splitCell cell
 
-expandFirst :: forall n m. (Solvable n m) => Sudoku n m -> [Sudoku n m]
-expandFirst grid = sequenceA $ evalState (traverse (state . guess1) grid) False
+expandFirst :: forall n m. (Solvable n m) => (Cell n m -> [Cell n m]) -> Sudoku n m -> [Sudoku n m]
+expandFirst possibilities grid = sequenceA $ evalState (traverse (state . guess1) grid) False
   where
     guess1 x guessed_before
         | not guessed_before
-        , xs@(_:_:_) <- possibilities1 x
+        , xs@(_:_:_) <- possibilities x
         = (xs, True)
 
         | otherwise
@@ -73,7 +73,7 @@ search :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
 search grid
     | any (== conflicted) grid = []
     | all isUnique grid       = [grid]
-    | otherwise               = concatMap (search . prune) . expandFirst $ grid
+    | otherwise               = concatMap (search . prune) . expandFirst possibilities $ grid
 
 prune :: (Solvable n m) => Sudoku n m -> Sudoku n m
 prune grid =

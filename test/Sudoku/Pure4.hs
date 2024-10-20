@@ -1,4 +1,4 @@
-{-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
+{-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards, LambdaCase #-}
 {-# LANGUAGE ApplicativeDo #-}
 module Sudoku.Pure4 where
 
@@ -63,8 +63,8 @@ mcp = fmap getCompose . sequenceA . Compose
 -- best cs = (length cs = n)
 -- n = minchoice cm
 
-expand :: forall n m. (Cell n m -> [Cell n m]) -> Matrix (Cell n m) -> [Matrix (Cell n m)]
-expand possibilities grid = [rows1 ++ [row1 ++ [c] ++ row3] ++ rows3 | c <- cells]
+expandSmallest :: forall n m. (Cell n m -> [Cell n m]) -> Matrix (Cell n m) -> [Matrix (Cell n m)]
+expandSmallest possibilities grid = [rows1 ++ [row1 ++ [c] ++ row3] ++ rows3 | c <- cells]
   where
     rows1, rows3 :: [[Cell n m]]
     row1, row3 :: [Cell n m]
@@ -79,16 +79,19 @@ expand possibilities grid = [rows1 ++ [row1 ++ [c] ++ row3] ++ rows3 | c <- cell
     minchoice :: Matrix (Cell n m, [Cell n m]) -> Int
     minchoice = minimum . filter (> 1) . toList . fmap (length . snd) . Compose
 
--- expand :: forall n m. (Solvable n m) => (Cell n m -> [Cell n m]) -> Matrix (Cell n m) -> [Matrix (Cell n m)]
--- expand possibilities grid = fmap getCompose . sequenceA $ evalState (traverse (state . guess1) . Compose $ grid) False
---   where
---     guess1 x guessed_before
---         | not guessed_before
---         , xs@(_:_:_) <- possibilities x
---         = (xs, True)
+expandFirst :: forall n m. (Cell n m -> [Cell n m]) -> Matrix (Cell n m) -> [Matrix (Cell n m)]
+expandFirst possibilities grid = [rows1 ++ [row1 ++ [c] ++ row3] ++ rows3 | c <- cells]
+  where
+    ((fmap (fmap fst) -> rows1), row : (fmap (fmap fst) -> rows3)) = break (any best) grid'
+    ((fmap fst -> row1), (_, cells) : (fmap fst -> row3)) = break best row
 
---         | otherwise
---         = ([x], guessed_before)
+    best = not . single . snd
+    grid' = getCompose . fmap (\x -> (x, possibilities x)) . Compose $ grid
+
+single :: [a] -> Bool
+single = \case
+    [_] -> True
+    _ -> False
 
 blocked :: Matrix Choices -> Bool
 blocked grid = any (any (== conflicted)) grid || not (safe grid)
@@ -104,7 +107,7 @@ search :: Matrix Choices -> [Matrix Choices]
 search grid
     | blocked grid             = []
     | all (all isUnique) grid  = [grid]
-    | otherwise                = concatMap (search . prune) . expand possibilities $ grid
+    | otherwise                = concatMap (search . prune) . expandFirst possibilities $ grid
 
 sudoku :: Matrix Choices -> [Matrix Choices]
 sudoku = search . prune
@@ -130,38 +133,6 @@ possibilities1 cell
   where
     (guess, cont) = splitCell cell
 
--- expandFirst :: forall n m. (Solvable n m) => Sudoku n m -> [Sudoku n m]
--- expandFirst grid = sequenceA $ evalState (traverse (state . guess1) grid) False
---   where
---     guess1 x guessed_before
---         | not guessed_before
---         , xs@(_:_:_) <- possibilities1 x
---         = (xs, True)
-
---         | otherwise
---         = ([x], guessed_before)
-
--- expandSmallest :: forall n m. (Solvable n m) => Sudoku n m -> [Sudoku n m]
--- expandSmallest grid = sequenceA $ evalState (traverse (state . guess1) grid') False
---   where
---     grid' = (\x -> (x, possibilities x)) <$> grid
---     n = minimum . filter (> 1) . toList . fmap (length . snd) $ grid'
-
---     guess1 (x, xs) guessed_before
---         | not guessed_before
---         , length xs == n
---         = (xs, True)
-
---         | otherwise
---         = ([x], guessed_before)
-
--- correct :: forall n m. (Solvable n m) => Sudoku n m -> Bool
--- correct = getAll . fold . neighbourhoodwise noDups
---   where
---     noDups :: Vec (n * m) (Cell n m) -> All
---     noDups xs = All $ all (`elem` xs) (unique <$> [minBound..maxBound])
-
-
 correct :: forall n m. (Solvable n m) => Matrix (Cell n m) -> Bool
 correct b = and
     [ all noDups (rows b)
@@ -176,15 +147,6 @@ noDups :: (Solvable n m) => [Cell n m] -> Bool
 noDups [] = True
 noDups (x:xs) = x `notElem` xs && noDups xs
 
--- correct :: (Solvable n m) => Matrix (Cell n m) -> Bool
--- correct = all (all isUnique)
-
--- search :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
--- search grid
---     | any (== conflicted) grid = []
---     | all isUnique grid       = [grid]
---     | otherwise               = concatMap (search . prune) . expandFirst $ grid
-
 prune :: (Solvable n m) => Matrix (Cell n m) -> Matrix (Cell n m)
 prune = pruneBy boxs . pruneBy cols . pruneBy rows
   where
@@ -197,19 +159,3 @@ prune = pruneBy boxs . pruneBy cols . pruneBy rows
     fixed = fold . fmap (\x -> if isUnique x then cellMask x else mempty)
 
     apply mask cell = if isUnique cell then cell else act mask cell
-
--- prune grid =
---     case neighbourhoodMasks masks of
---         Nothing -> pure conflicted
---         Just neighbourhood_masks ->
---           apply <$> uniques <*> neighbourhood_masks <*> grid
---   where
---     uniques = isUnique <$> grid
---     masks = maskOf <$> uniques <*> grid
---     neighbourhood_masks = neighbourhoodwise fold masks
-
---     maskOf is_unique cell = if is_unique then cellMask cell else mempty
---     apply is_unique mask = if is_unique then id else act mask
-
--- solve' :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
--- solve' = search . prune

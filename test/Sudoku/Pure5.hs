@@ -85,11 +85,7 @@ expand cm = [rows1 ++ [row1 ++ [c] : row3] ++ rows3 | c <- cs]
     (rows1, row : rows3) = break (any best) cm
     (row1, cs : row3) = break best row
 
-    best cs = length cs == n
-    n = minchoice cm
-
-    minchoice :: Matrix Choices -> Int
-    minchoice = minimum . filter (> 1) . toList . fmap length . Compose
+    best = not . single
 
 blocked :: Matrix Choices -> Bool
 blocked grid = any (any null) grid || not (safe grid)
