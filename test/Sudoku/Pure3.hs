@@ -2,15 +2,16 @@
 {-# LANGUAGE ApplicativeDo #-}
 module Sudoku.Pure3 where
 
-import Clash.Prelude
+import Clash.Prelude hiding (fold)
 
-import Sudoku.Solve (Solvable, Sudoku, neighbourhoodMasks)
+import Sudoku.Solve (Solvable, Sudoku, neighbourhoodMasks, overlappingBits, safeMasks)
 import Sudoku.Cell
+import Sudoku.Grid
 
+import Data.Foldable (fold)
+import Data.Monoid (All(..))
 import Data.Monoid.Action
-import Control.Monad ((<=<))
 import Control.Monad.State.Strict
-import Data.Maybe (maybeToList)
 
 isUnique :: (Solvable n m) => Cell n m -> Bool
 isUnique cell = popCount (cellBits cell) == 1
@@ -48,7 +49,13 @@ complete :: (Solvable n m) => Sudoku n m -> Bool
 complete = all isUnique
 
 blocked :: (Solvable n m) => Sudoku n m -> Bool
-blocked = any (== conflicted)
+blocked grid = any (== conflicted) grid || not (safe grid)
+
+safe :: (Solvable n m) => Sudoku n m -> Bool
+safe = getAll . fold . neighbourhoodwise consistent
+
+consistent :: (Solvable n m, KnownNat k) => Vec k (Cell n m) -> All
+consistent = All . (== 0) . overlappingBits . fmap (\cell -> if isUnique cell then cellBits cell else 0)
 
 search :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
 search grid
@@ -56,16 +63,16 @@ search grid
     | complete grid = pure grid
     | otherwise     = sudoku =<< expand possibilities grid
 
-prune :: (Solvable n m) => Sudoku n m -> Maybe (Sudoku n m)
-prune grid = do
-    neighbourhood_masks <- neighbourhoodMasks masks
-    pure $ apply <$> uniques <*> neighbourhood_masks <*> grid
+prune :: (Solvable n m) => Sudoku n m -> Sudoku n m
+prune grid = apply <$> uniques <*> neighbourhood_masks <*> grid
   where
     uniques = isUnique <$> grid
     masks = maskOf <$> uniques <*> grid
+    neighbourhood_masks = neighbourhoodwise fold masks
+    _safe = getAll . fold . neighbourhoodwise (All . safeMasks) $ masks
 
     maskOf is_unique cell = if is_unique then cellMask cell else mempty
     apply is_unique mask = if is_unique then id else act mask
 
 sudoku :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
-sudoku = search <=< maybeToList . prune
+sudoku = search . prune

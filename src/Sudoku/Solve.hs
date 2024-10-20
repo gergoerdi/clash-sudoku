@@ -5,6 +5,8 @@ module Sudoku.Solve
     , Solvable
 
     , neighbourhoodMasks
+    , overlappingBits
+    , safeMasks
 
     , propagator
     , PropagatorCmd(..)
