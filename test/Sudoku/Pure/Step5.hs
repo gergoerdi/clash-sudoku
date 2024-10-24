@@ -12,14 +12,13 @@ import Sudoku.Grid
 import Data.Foldable (fold)
 import Data.Monoid (All(..))
 import Data.Monoid.Action
-import Data.Maybe (maybeToList)
-import Control.Monad (guard, (<=<))
+import Control.Monad (guard, (<=<), MonadPlus)
 import Control.Monad.State.Strict
 
 isUnique :: (Solvable n m) => Cell n m -> Bool
 isUnique cell = popCount (cellBits cell) == 1
 
-expand :: (Solvable n m) => Sudoku n m -> Maybe (Sudoku n m, Sudoku n m)
+expand :: (MonadPlus f, Solvable n m) => Sudoku n m -> f (Sudoku n m, Sudoku n m)
 expand grid = do
     let (grids, guessed) = runState (traverse (state . guess1) grid) False
     guard guessed
@@ -38,7 +37,7 @@ expand grid = do
 complete :: (Solvable n m) => Sudoku n m -> Bool
 complete = all isUnique
 
-search :: (Solvable n m) => Sudoku n m -> Maybe (Sudoku n m)
+search :: (MonadPlus f, Solvable n m) => Sudoku n m -> f (Sudoku n m)
 search grid
     | any (== conflicted) grid = empty
     | complete grid           = pure grid
@@ -46,10 +45,10 @@ search grid
           (grid1, grid2) <- expand grid
           sudoku grid1 <|> sudoku grid2
 
-prune :: (Solvable n m) => Sudoku n m -> Maybe (Sudoku n m)
+prune :: (MonadPlus f, Solvable n m) => Sudoku n m -> f (Sudoku n m)
 prune grid = do
     guard safe
-    pure $ apply <$> uniques <*> neighbourhood_masks <*> grid
+    pure (apply <$> uniques <*> neighbourhood_masks <*> grid)
   where
     uniques = isUnique <$> grid
     masks = maskOf <$> uniques <*> grid
@@ -65,5 +64,5 @@ loopM act x = do
     let changed = x' /= x
     if changed then loopM act x' else pure x'
 
-sudoku :: (Solvable n m) => Sudoku n m -> Maybe (Sudoku n m)
+sudoku :: (MonadPlus f, Solvable n m) => Sudoku n m -> f (Sudoku n m)
 sudoku = search <=< loopM prune

@@ -46,12 +46,12 @@ safe = getAll . fold . neighbourhoodwise consistent
 consistent :: (Solvable n m, KnownNat k) => Vec k (Cell n m) -> All
 consistent = All . (== 0) . overlappingBits . fmap (\cell -> if single cell then cellBits cell else 0)
 
-search :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
+search :: (Alternative f, Solvable n m) => Sudoku n m -> f (Sudoku n m)
 search grid
     | not (safe grid)           = empty
     | any (== conflicted) grid = empty
     | complete grid           = pure grid
-    | otherwise               = sudoku =<< expand grid
+    | otherwise               = asum [sudoku grid' | grid' <- expand grid]
 
 prune :: (Solvable n m) => Sudoku n m -> Sudoku n m
 prune grid = apply <$> is_singles <*> neighbourhood_masks <*> grid
@@ -63,5 +63,5 @@ prune grid = apply <$> is_singles <*> neighbourhood_masks <*> grid
     maskOf is_single cell = if is_single then cellMask cell else mempty
     apply is_single mask = if is_single then id else act mask
 
-sudoku :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
+sudoku :: (Alternative f, Solvable n m) => Sudoku n m -> f (Sudoku n m)
 sudoku = search . prune
