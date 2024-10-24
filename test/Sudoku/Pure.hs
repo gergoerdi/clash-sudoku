@@ -18,8 +18,8 @@ import Control.Monad.State.Strict
 isUnique :: (Solvable n m) => Cell n m -> Bool
 isUnique cell = popCount (cellBits cell) == 1
 
-propagate1 :: (Solvable n m) => Sudoku n m -> Maybe (Sudoku n m)
-propagate1 grid = do
+prune1 :: (Solvable n m) => Sudoku n m -> Maybe (Sudoku n m)
+prune1 grid = do
     guard $ not (failed grid)
     masks' <- neighbourhoodMasks masks
     pure $ apply <$> uniques <*> masks' <*> grid
@@ -30,11 +30,11 @@ propagate1 grid = do
     maskOf is_unique cell = if is_unique then cellMask cell else mempty
     apply is_unique mask = if is_unique then id else act mask
 
-propagate :: (Solvable n m) => Sudoku n m -> Maybe (Sudoku n m)
-propagate grid = do
-    grid' <- propagate1 grid
+prune :: (Solvable n m) => Sudoku n m -> Maybe (Sudoku n m)
+prune grid = do
+    grid' <- prune1 grid
     let changed = grid' /= grid
-    if changed then propagate grid' else pure grid
+    if changed then prune grid' else pure grid
 
 possibilities :: (Solvable n m) => Cell n m -> [Cell n m]
 possibilities cell =
@@ -85,5 +85,5 @@ failed = any (== conflicted)
 
 search :: forall n m. (Solvable n m) => Sudoku n m -> [Sudoku n m]
 search grid = do
-    grid <- maybeToList $ propagate grid
+    grid <- maybeToList $ prune grid
     if correct grid then pure grid else search =<< guess grid
