@@ -50,7 +50,7 @@ overlappingBits =
 data CellUnit dom n m = CellUnit
     { cell :: Signal dom (Cell n m)
     , mask :: Signal dom (Mask n m)
-    , is_unique :: Signal dom Bool
+    , is_single :: Signal dom Bool
     , is_conflicted :: Signal dom Bool
     , changed :: Signal dom Bool
     , cont :: Signal dom (Cell n m)
@@ -85,19 +85,19 @@ propagator cmd shift_in pop = (lastGrid (cell <$> units), result, bundle $ cont 
 
     mb_neighbourhood_masks = neighbourhoodMasks <$> masks
     neighbourhood_masks = unbundle . fmap sequenceA $ mb_neighbourhood_masks
-    overlapping_uniques = isNothing <$> mb_neighbourhood_masks
+    overlapping_singles = isNothing <$> mb_neighbourhood_masks
 
     units :: Grid n m (CellUnit dom n m)
     units = evalState (traverse (state . uncurry unit) ((,) <$> pops <*> neighbourhood_masks)) (shift_in, pure False)
 
-    all_unique  = and <$> bundle (is_unique <$> units)
+    all_single  = and <$> bundle (is_single <$> units)
     any_changed = or <$> bundle (changed <$> units)
     any_failed  = or <$> bundle (is_conflicted <$> units)
 
     result =
-        mux overlapping_uniques  (pure Failure) $
+        mux overlapping_singles  (pure Failure) $
         mux any_failed           (pure Failure) $
-        mux all_unique           (pure Solved) $
+        mux all_single           (pure Solved) $
         mux any_changed          (pure Progress) $
         pure Stuck
 
@@ -113,12 +113,12 @@ propagator cmd shift_in pop = (lastGrid (cell <$> units), result, bundle $ cont 
         shift_out = enable (isJust <$> shift_in) cell
 
         (first_guess, next_guess) = unbundle $ splitCell <$> cell
-        is_unique = next_guess .==. pure conflicted
+        is_single = next_guess .==. pure conflicted
         is_conflicted = cell .==. pure conflicted
 
-        mask = mux is_unique (cellMask <$> cell) (pure mempty)
+        mask = mux is_single (cellMask <$> cell) (pure mempty)
 
-        can_guess_this = not <$> is_unique
+        can_guess_this = not <$> is_single
         guess_this = can_guess_this .&&. not <$> guessed_before
         cont = mux guess_this next_guess cell
         guessed = guessed_before .||. can_guess_this
@@ -129,13 +129,13 @@ propagator cmd shift_in pop = (lastGrid (cell <$> units), result, bundle $ cont 
             pop <- pop
             cmd <- cmd
             guess_this <- guess_this
-            is_unique <- is_unique
+            is_single <- is_single
             first_guess <- first_guess
             neighbourhood_mask <- neighbourhood_mask
             pure if
                 | Just load <- shift_in                                                  -> load
                 | Just load <- pop                                                       -> load
-                | Just Propagate <- cmd, not is_unique, Just mask <- neighbourhood_mask  -> act mask current
+                | Just Propagate <- cmd, not is_single, Just mask <- neighbourhood_mask  -> act mask current
                 | Just CommitGuess <- cmd, guess_this                                    -> first_guess
                 | otherwise                                                              -> current
 
