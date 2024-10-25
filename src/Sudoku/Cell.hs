@@ -39,6 +39,9 @@ splitCell (Cell c) = (Cell last, Cell rest)
     last = lastBit c
     rest = c .&. complement last
 
+rotateCell :: (KnownNat n, KnownNat m) => Cell n m -> Cell n m
+rotateCell (Cell c) = Cell (c `rotateL` 1)
+
 type Textual n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, n * m <= (9 + 26))
 
 decodeOneHot :: (KnownNat n, 1 <= n) => BitVector n -> Index n
@@ -88,3 +91,16 @@ instance (KnownNat n, KnownNat m) => Action (Mask n m) (Cell n m) where
 
 cellMask :: (KnownNat n, KnownNat m) => Cell n m -> Mask n m
 cellMask = Mask . cellBits
+
+newtype MaskBit = MaskBit{ maskBit :: Bit }
+    deriving stock (Show)
+    deriving (Semigroup, Monoid) via Ior Bit
+
+cellMaskBit :: (KnownNat n, KnownNat m) => Cell n m -> MaskBit
+cellMaskBit = MaskBit . lsb . cellBits
+
+instance (KnownNat n, KnownNat m) => Action MaskBit (Cell n m) where
+    act (MaskBit m) (Cell c) = Cell $ c .&. complement (resize . pack $ m)
+
+instance Action MaskBit Bit where
+    act (MaskBit m) b = b .&. complement m

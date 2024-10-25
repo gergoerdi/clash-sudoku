@@ -36,7 +36,8 @@ data MemCmd n
 data St n m
     = ShiftIn (CellIndex n m)
     | Settle   (Cycles n m) (Index (StackDepth n m))
-    | Busy     (Cycles n m) (Index (StackDepth n m))
+    | BusyPropagate (Cycles n m) (Index (StackDepth n m)) Bool Bool (Index (n * m))
+    | BusyRotate    (Cycles n m) (Index (StackDepth n m)) Bool Bool (Index (n * m))
     | WaitPop  (Cycles n m) (Index (StackDepth n m))
     | WaitPush (Cycles n m) (Index (StackDepth n m))
     | ShiftOutCycleCount Bool (Cycles n m) (Index (CyclesWidth n m))
@@ -74,24 +75,24 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
             when (isJust shift_in) $ put $ maybe (Settle countMin 0) ShiftIn $ countSuccChecked i
             pure $ Consume shift_in
         Settle cnt sp -> do
-            put $ Busy (countSucc cnt) sp
+            put $ BusyPropagate (countSucc cnt) sp False False 0
             pure $ Solve Propagate
         WaitPush cnt sp -> do
-            put $ Busy (countSucc cnt) sp
+            put $ BusyPropagate (countSucc cnt) sp False False 0
             pure $ Solve CommitGuess
         WaitPop cnt sp -> do
             put $ Settle (countSucc cnt) sp
             pure $ Solve Propagate
-        Busy cnt sp -> case result of
+        BusyPropagate cnt sp progressed solved bit_idx -> case result of
             Progress -> do
-                put $ Busy (countSucc cnt) sp
-                pure $ Solve Propagate
+                put $ rotate True solved bit_idx
+                pure $ Solve Rotate
             Solved -> do
-                put $ ShiftOutCycleCount True (countSucc cnt) 0
-                pure $ Solve Propagate
+                put $ rotate progressed True bit_idx
+                pure $ Solve Rotate
             Stuck -> do
-                put $ WaitPush (countSucc cnt) (sp + 1)
-                pure $ Stack $ Write sp
+                put $ rotate progressed solved bit_idx
+                pure $ Solve Rotate
             Failure -> case countPredChecked sp of
                 Nothing -> do
                     put $ ShiftOutCycleCount False (countSucc cnt) 0
@@ -99,6 +100,22 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
                 Just sp'-> do
                     put $ WaitPop (countSucc cnt) sp'
                     pure $ Stack $ Read sp'
+          where
+            rotate = BusyRotate (countSucc cnt) sp
+        BusyRotate cnt sp progressed solved bit_idx -> case countSuccChecked bit_idx of
+            Just bit_idx' -> do
+                put $ BusyPropagate (countSucc cnt) sp progressed solved bit_idx'
+                pure $ Solve Propagate
+            Nothing
+                | solved -> do
+                      put $ ShiftOutCycleCount True (countSucc cnt) 0
+                      pure $ Solve Propagate
+                | progressed -> do
+                      put $ BusyPropagate (countSucc cnt) sp False False 0
+                      pure $ Solve Propagate
+                | otherwise -> do
+                      put $ WaitPush (countSucc cnt) (sp + 1)
+                      pure $ Stack $ Write sp
         ShiftOutCycleCount solved cnt i -> do
             let cnt' = cnt `rotateLeftS` SNat @1
             wait out_ack $ maybe (ShiftOutCycleCountFinished solved) (ShiftOutCycleCount solved cnt') $ countSuccChecked i

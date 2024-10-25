@@ -28,7 +28,7 @@ import Control.Monad (guard)
 import Control.Monad.State.Strict
 
 type Sudoku n m = Grid n m (Cell n m)
-type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
+type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n, 1 <= n * m)
 
 neighbourhoodMasks :: forall n m. (Solvable n m) => Grid n m (Mask n m) -> Maybe (Grid n m (Mask n m))
 neighbourhoodMasks masks = do
@@ -44,9 +44,20 @@ consistent = not . bitsOverlap . fmap maskBits
 bitsOverlap :: (KnownNat n, KnownNat k) => Vec k (BitVector n) -> Bool
 bitsOverlap = any (hasOverflowed . sum . map toOverflowing) . transpose . map bv2v
 
+neighbourhoodMaskBits :: forall n m. (Solvable n m) => Grid n m MaskBit -> Maybe (Grid n m MaskBit)
+neighbourhoodMaskBits masks = do
+    guard safe
+    pure masks'
+  where
+    masks' = neighbourhoodwise fold masks
+    safe = getAll . fold $ neighbourhoodwise (All . safeMaskBits) masks
+
+safeMaskBits :: (KnownNat k) => Vec k MaskBit -> Bool
+safeMaskBits = not . hasOverflowed . sum . map (toOverflowing . maskBit)
+
 data CellUnit dom n m = CellUnit
     { cell :: Signal dom (Cell n m)
-    , mask :: Signal dom (Mask n m)
+    , mask :: Signal dom MaskBit
     , is_single :: Signal dom Bool
     , is_conflicted :: Signal dom Bool
     , changed :: Signal dom Bool
@@ -54,7 +65,8 @@ data CellUnit dom n m = CellUnit
     }
 
 data PropagatorCmd
-    = Propagate
+    = Rotate
+    | Propagate
     | CommitGuess
     deriving (Generic, NFDataX, Eq, Show)
 
@@ -78,7 +90,7 @@ propagator cmd shift_in pops = (lastGrid (cell <$> units), result, cont <$> unit
   where
     masks = bundle $ mask <$> units
 
-    mb_neighbourhood_masks = neighbourhoodMasks <$> masks
+    mb_neighbourhood_masks = neighbourhoodMaskBits <$> masks
     neighbourhood_masks = unbundle . fmap sequenceA $ mb_neighbourhood_masks
     overlapping_singles = isNothing <$> mb_neighbourhood_masks
 
@@ -98,7 +110,7 @@ propagator cmd shift_in pops = (lastGrid (cell <$> units), result, cont <$> unit
 
     unit
         :: Signal dom (Maybe (Cell n m))
-        -> Signal dom (Maybe (Mask n m))
+        -> Signal dom (Maybe MaskBit)
         -> (Signal dom (Maybe (Cell n m)), Signal dom Bool)
         -> (CellUnit dom n m, (Signal dom (Maybe (Cell n m)), Signal dom Bool))
     unit pop neighbourhood_mask (shift_in, guessed_before) = (CellUnit{..}, (shift_out, guessed))
@@ -111,7 +123,7 @@ propagator cmd shift_in pops = (lastGrid (cell <$> units), result, cont <$> unit
         is_single = next_guess .==. pure conflicted
         is_conflicted = cell .==. pure conflicted
 
-        mask = mux is_single (cellMask <$> cell) (pure mempty)
+        mask = mux is_single (cellMaskBit <$> cell) (pure mempty)
 
         can_guess_this = not <$> is_single
         guess_this = can_guess_this .&&. not <$> guessed_before
@@ -131,6 +143,7 @@ propagator cmd shift_in pops = (lastGrid (cell <$> units), result, cont <$> unit
                 | Just load <- shift_in <|> pop                                          -> load
                 | Just Propagate <- cmd, not is_single, Just mask <- neighbourhood_mask  -> act mask current
                 | Just CommitGuess <- cmd, guess_this                                    -> first_guess
+                | Just Rotate <- cmd                                                     -> rotateCell current
                 | otherwise                                                              -> current
 
         changed = cell' ./=. cell
