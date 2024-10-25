@@ -39,7 +39,7 @@ neighbourhoodMasks masks = do
     safe = getAll . fold $ neighbourhoodwise (All . safeMasks) masks
 
 safeMasks :: (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Bool
-safeMasks = (== 0) . overlappingBits . fmap (complement . maskBits)
+safeMasks = (== 0) . overlappingBits . fmap maskBits
 
 overlappingBits :: (KnownNat n, KnownNat k) => Vec k (BitVector n) -> BitVector n
 overlappingBits =

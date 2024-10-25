@@ -81,10 +81,10 @@ parseCell x
     = Nothing
 
 newtype Mask n m = Mask{ maskBits :: BitVector (n * m) }
-    deriving (Semigroup, Monoid) via And (BitVector (n * m))
+    deriving (Semigroup, Monoid) via Ior (BitVector (n * m))
 
 instance (KnownNat n, KnownNat m) => Action (Mask n m) (Cell n m) where
-    act (Mask m) (Cell c) = Cell (c .&. m)
+    act (Mask m) (Cell c) = Cell (c .&. complement m)
 
 cellMask :: (KnownNat n, KnownNat m) => Cell n m -> Mask n m
-cellMask = Mask . complement . cellBits
+cellMask = Mask . cellBits
