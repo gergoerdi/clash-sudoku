@@ -121,14 +121,14 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
         put s''
         pure proceed
 
-    (head_cell, result, next_guesses) = propagator propagator_cmd shift_in' popped
+    (head_cell, result, next_guesses) = propagator propagator_cmd shift_in' poppeds
 
-    popped = enable (delay False rd) $
+    poppeds = unbundle . fmap sequenceA $ enable (delay False rd) $
         blockRamU NoClearOnReset (SNat @(StackDepth n m)) undefined sp (packWrite <$> sp <*> wr)
       where
         (sp, rd, wr) = unbundle $ do
             stack_cmd <- stack_cmd
-            next_guesses <- next_guesses
+            next_guesses <- bundle next_guesses
             pure $ case stack_cmd of
                 Nothing -> (0, False, Nothing)
                 Just (Read sp) -> (sp, True, Nothing)

@@ -69,15 +69,13 @@ propagator
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
     => Signal dom (Maybe PropagatorCmd)
     -> Signal dom (Maybe (Cell n m))
-    -> Signal dom (Maybe (Sudoku n m))
+    -> Grid n m (Signal dom (Maybe (Cell n m)))
     -> ( Signal dom (Cell n m)
        , Signal dom PropagatorResult
-       , Signal dom (Sudoku n m)
+       , Grid n m (Signal dom (Cell n m))
        )
-propagator cmd shift_in pop = (lastGrid (cell <$> units), result, bundle $ cont <$> units)
+propagator cmd shift_in pops = (lastGrid (cell <$> units), result, cont <$> units)
   where
-    pops = unbundle . fmap sequenceA $ pop
-
     masks = bundle $ mask <$> units
 
     mb_neighbourhood_masks = neighbourhoodMasks <$> masks
