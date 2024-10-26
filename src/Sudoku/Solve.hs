@@ -130,8 +130,7 @@ propagator cmd shift_in pop = (lastGrid (cell <$> units), result, bundle $ cont 
             first_guess <- first_guess
             neighbourhood_mask <- neighbourhood_mask
             pure if
-                | Just load <- shift_in                                                  -> load
-                | Just load <- pop                                                       -> load
+                | Just load <- shift_in <|> pop                                          -> load
                 | Just Propagate <- cmd, not is_single, Just mask <- neighbourhood_mask  -> act mask current
                 | Just CommitGuess <- cmd, guess_this                                    -> first_guess
                 | otherwise                                                              -> current
