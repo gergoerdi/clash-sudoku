@@ -29,9 +29,9 @@ showDigit n = ascii '0' + fromIntegral n
 type StackDepth n m = ((n * m) * (m * n))
 type CellIndex n m = Index ((n * m) * (m * n))
 
-data MemCmd n a
+data MemCmd n
     = Read (Index n)
-    | Write (Index n) a
+    | Write (Index n)
 
 data St n m
     = ShiftIn (CellIndex n m)
@@ -48,7 +48,7 @@ data St n m
 data Control n m
     = Consume (Maybe (Cell n m))
     | Solve PropagatorCmd
-    | Stack (MemCmd (StackDepth n m) (Sudoku n m))
+    | Stack (MemCmd (StackDepth n m))
     | Produce Bool (Either Word8 (Cell n m))
 
 controller
@@ -59,7 +59,7 @@ controller
 controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
   where
     (shift_in', shift_out, in_ack, propagator_cmd, stack_cmd) =
-        mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, next_guesses, register Progress result)
+        mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Progress result)
 
     lines = \case
         Consume shift_in -> (shift_in, Nothing, Ack True, Nothing, Nothing)
@@ -69,7 +69,7 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
           where
             shift_in = if proceed then Just conflicted else Nothing
 
-    step (shift_in, out_ack, head_cell, next_guesses, result) = fmap lines $ get >>= \case
+    step (shift_in, out_ack, head_cell, result) = fmap lines $ get >>= \case
         ShiftIn i -> do
             when (isJust shift_in) $ put $ maybe (Settle countMin 0) ShiftIn $ countSuccChecked i
             pure $ Consume shift_in
@@ -91,7 +91,7 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
                 pure $ Solve Propagate
             Stuck -> do
                 put $ WaitPush (countSucc cnt) (sp + 1)
-                pure $ Stack $ Write sp next_guesses
+                pure $ Stack $ Write sp
             Failure -> case countPredChecked sp of
                 Nothing -> do
                     put $ ShiftOutCycleCount False (countSucc cnt) 0
@@ -128,7 +128,8 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
       where
         (sp, rd, wr) = unbundle $ do
             stack_cmd <- stack_cmd
+            next_guesses <- next_guesses
             pure $ case stack_cmd of
                 Nothing -> (0, False, Nothing)
                 Just (Read sp) -> (sp, True, Nothing)
-                Just (Write sp x) -> (sp, False, Just x)
+                Just (Write sp) -> (sp, False, Just next_guesses)
