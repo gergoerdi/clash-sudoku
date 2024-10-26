@@ -140,13 +140,17 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
 
     (head_cell, result, next_guesses) = propagator propagator_cmd shift_in' poppeds
 
-    poppeds = unbundle . fmap sequenceA $ enable (delay False rd) $
-        blockRamU NoClearOnReset (SNat @(StackDepth n m)) undefined sp (packWrite <$> sp <*> wr)
+    (rd, wr) = unbundle $ do
+        stack_cmd <- stack_cmd
+        pure $ case stack_cmd of
+            Nothing -> (Nothing, Nothing)
+            Just (Read addr) -> (Just addr, Nothing)
+            Just (Write addr) -> (Nothing, Just addr)
+
+    stack_unit cell = enable (delay False $ isJust <$> rd) $
+        blockRamU NoClearOnReset (SNat @(StackDepth n m)) undefined (fromMaybe 0 <$> rd) (packWrite <$> wr <*> cell)
       where
-        (sp, rd, wr) = unbundle $ do
-            stack_cmd <- stack_cmd
-            next_guesses <- bundle next_guesses
-            pure $ case stack_cmd of
-                Nothing -> (0, False, Nothing)
-                Just (Read sp) -> (sp, True, Nothing)
-                Just (Write sp) -> (sp, False, Just next_guesses)
+        packWrite Nothing     _   = Nothing
+        packWrite (Just addr) dat = Just (addr, dat)
+
+    poppeds = pure stack_unit <*> next_guesses
