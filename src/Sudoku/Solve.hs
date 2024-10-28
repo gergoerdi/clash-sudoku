@@ -23,7 +23,7 @@ import Data.Monoid (Any(..))
 import Data.Monoid.Action
 import Data.Foldable (fold)
 import Control.Monad (guard)
-import Control.Monad.State.Strict
+import Control.Monad.RevState
 
 type Sudoku n m = Grid n m (Cell n m)
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
@@ -75,7 +75,7 @@ propagator
        , Signal dom PropagatorResult
        , Signal dom (Sudoku n m)
        )
-propagator cmd shift_in pop = (lastGrid (cell <$> units), result, bundle $ cont <$> units)
+propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont <$> units)
   where
     pops = unbundle . fmap sequenceA $ pop
 

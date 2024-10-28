@@ -22,6 +22,7 @@ dependencies:
   - clash-protocols
   - clash-cores
   - composition
+  - rev-state
 
 # Anything that Clash uses by default should go here
 default-extensions:
