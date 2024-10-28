@@ -5,7 +5,7 @@ module Sudoku.Pure.Step3 where
 
 import Clash.Prelude hiding (fold)
 
-import Sudoku.Solve (Solvable, Sudoku, safeMasks)
+import Sudoku.Solve (Solvable, Sudoku, consistent)
 import Sudoku.Cell
 import Sudoku.Grid
 
@@ -47,7 +47,7 @@ prune grid = do
     uniques = isUnique <$> grid
     masks = maskOf <$> uniques <*> grid
     neighbourhood_masks = neighbourhoodwise fold masks
-    safe = getAll . fold . neighbourhoodwise (All . safeMasks) $ masks
+    safe = getAll . fold . neighbourhoodwise (All . consistent) $ masks
 
     maskOf is_unique cell = if is_unique then cellMask cell else mempty
     apply is_unique mask = if is_unique then id else act mask

@@ -6,7 +6,7 @@ module Sudoku.Pure.Step1 where
 
 import Clash.Prelude hiding (fold)
 
-import Sudoku.Solve (Solvable, Sudoku, overlappingBits)
+import Sudoku.Solve (Solvable, Sudoku, bitsOverlap)
 import Sudoku.Cell
 import Sudoku.Grid
 
@@ -44,7 +44,7 @@ safe :: (Solvable n m) => Sudoku n m -> Bool
 safe = getAll . fold . neighbourhoodwise consistent
 
 consistent :: (Solvable n m, KnownNat k) => Vec k (Cell n m) -> All
-consistent = All . (== 0) . overlappingBits . fmap (\cell -> if single cell then cellBits cell else 0)
+consistent = All . not . bitsOverlap . fmap (\cell -> if single cell then cellBits cell else 0)
 
 search :: (Alternative f, Solvable n m) => Sudoku n m -> f (Sudoku n m)
 search grid

@@ -5,7 +5,7 @@ module Sudoku.Pure.Step2 where
 
 import Clash.Prelude hiding (fold)
 
-import Sudoku.Solve (Solvable, Sudoku, safeMasks)
+import Sudoku.Solve (Solvable, Sudoku, bitsOverlap)
 import Sudoku.Cell
 import Sudoku.Grid
 
@@ -19,12 +19,9 @@ isUnique :: (Solvable n m) => Cell n m -> Bool
 isUnique cell = popCount (cellBits cell) == 1
 
 choices :: (Solvable n m) => Cell n m -> [Cell n m]
-choices cell =
-    [ cell'
-    | i <- [minBound..maxBound]
-    , let cell' = unique i
-    , cellBits cell .&. cellBits cell' /= 0
-    ]
+choices cell = [ cell' | i <- [minBound..maxBound], let cell' = unique i, overlaps cell' ]
+  where
+    overlaps cell' = cellBits cell .&. cellBits cell' /= 0
 
 expand :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
 expand grid = sequenceA $ evalState (traverse (state . guess1) grid) False
@@ -54,10 +51,13 @@ prune grid = do
     uniques = isUnique <$> grid
     masks = maskOf <$> uniques <*> grid
     neighbourhood_masks = neighbourhoodwise fold masks
-    safe = getAll . fold . neighbourhoodwise (All . safeMasks) $ masks
+    safe = getAll . fold . neighbourhoodwise (All . consistent) $ masks
 
     maskOf is_unique cell = if is_unique then cellMask cell else mempty
     apply is_unique mask = if is_unique then id else act mask
+
+consistent :: (Solvable n m, KnownNat k) => Vec k (Mask n m) -> Bool
+consistent = not . bitsOverlap . fmap maskBits
 
 sudoku :: (MonadPlus f, Solvable n m) => Sudoku n m -> f (Sudoku n m)
 sudoku = search <=< prune

@@ -5,8 +5,8 @@ module Sudoku.Solve
     , Solvable
 
     , neighbourhoodMasks
-    , overlappingBits
-    , safeMasks
+    , bitsOverlap
+    , consistent
 
     , propagator
     , PropagatorCmd(..)
@@ -36,16 +36,13 @@ neighbourhoodMasks masks = do
     pure masks'
   where
     masks' = neighbourhoodwise fold masks
-    safe = getAll . fold $ neighbourhoodwise (All . safeMasks) masks
+    safe = getAll . fold $ neighbourhoodwise (All . consistent) masks
 
-safeMasks :: (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Bool
-safeMasks = (== 0) . overlappingBits . fmap maskBits
+consistent :: (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Bool
+consistent = not . bitsOverlap . fmap maskBits
 
-overlappingBits :: (KnownNat n, KnownNat k) => Vec k (BitVector n) -> BitVector n
-overlappingBits =
-    v2bv . map boolToBit .
-    map (hasOverflowed . sum . map toOverflowing) .
-    transpose . map bv2v
+bitsOverlap :: (KnownNat n, KnownNat k) => Vec k (BitVector n) -> Bool
+bitsOverlap = any (hasOverflowed . sum . map toOverflowing) . transpose . map bv2v
 
 data CellUnit dom n m = CellUnit
     { cell :: Signal dom (Cell n m)
