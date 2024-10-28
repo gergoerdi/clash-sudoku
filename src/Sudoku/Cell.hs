@@ -20,7 +20,7 @@ conflicted :: (KnownNat n, KnownNat m) => Cell n m
 conflicted = Cell zeroBits
 
 unique :: (KnownNat n, KnownNat m) => Index (n * m) -> Cell n m
-unique n = Cell (1 `rotateR` (1 + fromIntegral n))
+unique n = Cell (1 `rotateL` fromIntegral n)
 
 uniqueFromIntegral :: forall a n m. (KnownNat n, KnownNat m, Integral a) => a -> Maybe (Cell n m)
 uniqueFromIntegral x
@@ -42,7 +42,7 @@ splitCell (Cell c) = (Cell last, Cell rest)
 type Textual n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, n * m <= (9 + 26))
 
 decodeOneHot :: (KnownNat n, 1 <= n) => BitVector n -> Index n
-decodeOneHot = unpack . collapseBits . fmap pack . zipWith mask indicesI . bv2v
+decodeOneHot = unpack . collapseBits . fmap pack . zipWith mask indicesI . reverse . bv2v
   where
     mask i en = if bitToBool en then i else 0
 
