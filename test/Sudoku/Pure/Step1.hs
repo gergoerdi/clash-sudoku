@@ -19,12 +19,7 @@ single :: (Solvable n m) => Cell n m -> Bool
 single cell = popCount (cellBits cell) == 1
 
 choices :: (Solvable n m) => Cell n m -> [Cell n m]
-choices cell =
-    [ cell'
-    | i <- [minBound..maxBound]
-    , let cell' = unique i
-    , cellBits cell .&. cellBits cell' /= 0
-    ]
+choices cell = [ unique i | i <- [minBound..maxBound], cellBits cell ! i == 1 ]
 
 expand :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
 expand grid = sequenceA $ evalState (traverse (state . guess1) grid) False
