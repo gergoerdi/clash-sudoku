@@ -25,25 +25,25 @@ instance (KnownNat n, KnownNat m) => Bundle (Grid n m a) where
     unbundle = Grid . fmap unbundle . unbundle . fmap getGrid
 
 instance (KnownNat n, KnownNat m) => Traversable (Grid n m) where
-    traverse f = fmap coerce . traverse @(Compose (Matrix n m) (Matrix m n)) f . coerce
+    traverse f = fmap unflattenGrid . traverse f . flattenGrid
 
-flattenGrid :: Grid n m a -> Vec (n * m * m * n) a
-flattenGrid = concat . toRowMajorOrder . fmap toRowMajorOrder . getGrid
+flattenGrid :: (KnownNat n, KnownNat m) => Grid n m a -> Vec (n * m * m * n) a
+flattenGrid = concat . gridToRows
 
 unflattenGrid :: (KnownNat n, KnownNat m) => Vec (n * m * m * n) a -> Grid n m a
-unflattenGrid = Grid . fmap fromRowMajorOrder . fromRowMajorOrder . unconcatI
+unflattenGrid = gridFromRows . unconcatI
 
 lastGrid :: forall n m a. (KnownNat n, KnownNat m, 1 <= n * m * m * n) => Grid n m a -> a
 lastGrid = last @(n * m * m * n - 1) . flattenGrid
 
-gridToRows :: Grid n m a -> Vec (n * m) (Vec (m * n) a)
-gridToRows = concatMap (fmap toRowMajorOrder) . matrixRows . getGrid
+gridToRows :: (KnownNat n, KnownNat m) => Grid n m a -> Vec (n * m) (Vec (m * n) a)
+gridToRows = concatMap (fmap concat . transpose . fmap matrixRows) . matrixRows . getGrid
 
 gridFromRows
     :: (KnownNat n, KnownNat m)
     => Vec (n * m) (Vec (m * n) a)
     -> Grid n m a
-gridFromRows = Grid . FromRows . unconcatI . fmap (FromRows . unconcatI)
+gridFromRows = Grid . FromRows . fmap (fmap FromRows . transpose) . unconcatI . fmap unconcatI
 
 rowwise
     :: (KnownNat n, KnownNat m)
@@ -82,7 +82,7 @@ boxwise
     => (Vec (n * m) a -> Vec (n * m) b)
     -> Grid n m a
     -> Grid n m b
-boxwise f = fromBoxes . fmap f . toBoxes
+boxwise f = Grid . fmap (fromRowMajorOrder . f . toRowMajorOrder) . getGrid
 
 neighbourhoodwise
     :: (KnownNat n, KnownNat m, Semigroup b)
