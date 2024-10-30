@@ -45,12 +45,13 @@ gridFromRows
     -> Grid n m a
 gridFromRows = Grid . FromRows . fmap (fmap FromRows . transpose) . unconcatI . fmap unconcatI
 
-rowwise
+rows, cols, boxs
     :: (KnownNat n, KnownNat m)
-    => (Vec (n * m) a -> Vec (n * m) b)
-    -> Grid n m a
-    -> Grid n m b
-rowwise f = gridFromRows . fmap f . gridToRows
+    => Grid n m a
+    -> Grid n m (Vec (n * m) a)
+rows = gridFromRows . fmap repeat . gridToRows
+cols = transposeGrid . rows . transposeGrid
+boxs = Grid . fmap (pure . toRowMajorOrder) . getGrid
 
 transposeGrid
     :: (KnownNat n, KnownNat m)
@@ -58,38 +59,12 @@ transposeGrid
     -> Grid m n a
 transposeGrid = gridFromRows . transpose . gridToRows
 
-columnwise
-    :: (KnownNat n, KnownNat m)
-    => (Vec (n * m) a -> Vec (n * m) b)
-    -> Grid n m a
-    -> Grid n m b
-columnwise f = transposeGrid . rowwise f . transposeGrid
-
-toBoxes
-    :: (KnownNat n, KnownNat m)
-    => Grid n m a
-    -> Matrix n m (Vec (n * m) a)
-toBoxes = FromRows . fmap (fmap concat . transpose . fmap matrixRows) . matrixRows . getGrid
-
-fromBoxes
-    :: forall n m a. (KnownNat n, KnownNat m)
-    => Matrix n m (Vec (n * m) a)
-    -> Grid n m a
-fromBoxes = Grid . FromRows . fmap (fmap FromRows . transpose . fmap unconcatI) . matrixRows
-
-boxwise
-    :: (KnownNat n, KnownNat m)
-    => (Vec (n * m) a -> Vec (n * m) b)
-    -> Grid n m a
-    -> Grid n m b
-boxwise f = Grid . fmap (fromRowMajorOrder . f . toRowMajorOrder) . getGrid
-
 neighbourhoodwise
     :: (KnownNat n, KnownNat m, Semigroup b)
     => (Vec (n * m) a -> b)
     -> Grid n m a
     -> Grid n m b
-neighbourhoodwise f g = rowwise (repeat . f) g .<>. columnwise (repeat . f) g .<>. boxwise (repeat . f) g
+neighbourhoodwise f g = fmap f (rows g) .<>. fmap f (cols g) .<>. fmap f (boxs g)
   where
     infixr 6 .<>.
     (.<>.) :: forall f m. (Applicative f, Semigroup m) => f m -> f m -> f m
