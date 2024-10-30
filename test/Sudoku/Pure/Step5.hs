@@ -39,7 +39,6 @@ complete = all single
 
 search :: (MonadPlus f, Solvable n m) => Sudoku n m -> f (Sudoku n m)
 search grid
-    | any (== conflicted) grid = empty
     | complete grid           = pure grid
     | otherwise               = do
           (grid1, grid2) <- expand grid
@@ -47,7 +46,7 @@ search grid
 
 prune :: (MonadPlus f, Solvable n m) => Sudoku n m -> f (Sudoku n m)
 prune grid = do
-    guard safe
+    guard $ safe && all (/= conflicted) grid
     pure $ apply <$> is_singles <*> neighbourhood_masks <*> grid
   where
     is_singles = single <$> grid
