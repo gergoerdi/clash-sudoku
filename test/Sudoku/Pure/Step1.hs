@@ -14,6 +14,7 @@ import Data.Foldable (fold)
 import Data.Monoid (All(..))
 import Data.Monoid.Action
 import Control.Monad.State.Strict
+import Data.Isomorphism
 
 single :: (Solvable n m) => Cell n m -> Bool
 single cell = popCount (cellBits cell) == 1
@@ -36,7 +37,12 @@ complete :: (Solvable n m) => Sudoku n m -> Bool
 complete = all single
 
 safe :: (Solvable n m) => Sudoku n m -> Bool
-safe = getAll . fold . neighbourhoodwise consistent
+-- safe = getAll . fold . neighbourhoodwise consistent
+safe grid = and
+    [ all (getAll . consistent) $ embed rows grid
+    , all (getAll . consistent) $ embed cols grid
+    , all (getAll . consistent) $ embed boxs grid
+    ]
 
 consistent :: (Solvable n m, KnownNat k) => Vec k (Cell n m) -> All
 consistent = All . not . bitsOverlap . fmap (\cell -> if single cell then cellBits cell else 0)

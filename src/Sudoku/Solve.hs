@@ -26,6 +26,7 @@ import Data.Monoid.Action
 import Data.Foldable (fold)
 import Control.Monad (guard)
 import Control.Monad.State.Strict
+import Data.Isomorphism
 
 type Sudoku n m = Grid n m (Cell n m)
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
@@ -35,8 +36,10 @@ neighbourhoodMasks masks = do
     guard safe
     pure masks'
   where
-    masks' = neighbourhoodwise fold masks
-    safe = getAll . fold $ neighbourhoodwise (All . consistent) masks
+    masks' = foldBy rows masks <> foldBy cols masks <> foldBy boxs masks
+    safe = consistentBy rows && consistentBy cols && consistentBy boxs
+      where
+        consistentBy f = all consistent $ embed f masks
 
 consistent :: (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Bool
 consistent = not . bitsOverlap . fmap maskBits
