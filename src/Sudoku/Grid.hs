@@ -12,11 +12,7 @@ newtype Grid n m a = Grid{ getGrid :: Matrix n m (Matrix m n a) }
     deriving stock (Generic)
     deriving anyclass (NFDataX, BitPack)
     deriving newtype (Eq)
-    deriving (Functor, Applicative) via Compose (Matrix n m) (Matrix m n)
-
--- More efficient than via Compose (Matrix n m) (Matrix m n)
-instance (KnownNat n, KnownNat m) => Foldable (Grid n m) where
-    foldMap f = foldMap f . flattenGrid
+    deriving (Functor, Applicative, Foldable) via Compose (Matrix n m) (Matrix m n)
 
 instance (KnownNat n, KnownNat m) => Bundle (Grid n m a) where
     type Unbundled dom (Grid n m a) = Grid n m (Signal dom a)

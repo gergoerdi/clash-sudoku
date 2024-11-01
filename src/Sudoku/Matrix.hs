@@ -9,11 +9,7 @@ newtype Matrix n m a = FromRows{ matrixRows :: Vec n (Vec m a) }
     deriving stock (Generic)
     deriving anyclass (NFDataX, BitPack)
     deriving newtype (Eq)
-    deriving (Functor, Applicative) via Compose (Vec n) (Vec m)
-
--- More efficient than via Compose (Vec n) (Vec m)
-instance (KnownNat n, KnownNat m) => Foldable (Matrix n m) where
-    foldMap f = foldMap f . toRowMajorOrder
+    deriving (Functor, Applicative, Foldable) via Compose (Vec n) (Vec m)
 
 instance (KnownNat n, KnownNat m) => Bundle (Matrix n m a) where
     type Unbundled dom (Matrix n m a) = Matrix n m (Signal dom a)
