@@ -46,7 +46,7 @@ transposeGrid :: (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Grid m n a)
 transposeGrid = inv grid . imap transposeMatrix . transposeMatrix . grid
 
 rows :: forall n m a. (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Vec (n * m) (Vec (m * n) a))
-rows = imap isoConcat . isoConcat . imap (Iso transpose transpose) . matrix . imap matrix . grid
+rows = imap isoConcat . isoConcat . imap isoTranspose . matrix . imap matrix . grid
 
 cols :: forall n m a. (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Vec (n * m) (Vec (m * n) a))
 cols = rows . transposeGrid

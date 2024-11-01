@@ -6,6 +6,7 @@ import Data.Functor.Compose
 import Data.Monoid (Ap(..))
 import Data.Coerce
 import Data.Isomorphism
+import Data.Groupoid
 import Control.Category
 
 newtype Matrix n m a = FromRows{ matrixRows :: Vec n (Vec m a) }
@@ -30,8 +31,11 @@ matrix = Iso coerce coerce
 isoConcat :: (KnownNat n, KnownNat m) => Iso (->) (Vec n (Vec m a)) (Vec (n * m) a)
 isoConcat = Iso concat unconcatI
 
+isoTranspose :: (KnownNat n, KnownNat m) => Iso (->) (Vec n (Vec m a)) (Vec m (Vec n a))
+isoTranspose = Iso transpose transpose
+
 rowMajorOrder :: (KnownNat n, KnownNat m) => Iso (->) (Matrix n m a) (Vec (n * m) a)
 rowMajorOrder = isoConcat . matrix
 
 transposeMatrix :: (KnownNat n, KnownNat m) => Iso (->) (Matrix n m a) (Matrix m n a)
-transposeMatrix = Iso (FromRows . transpose . matrixRows) (FromRows . transpose . matrixRows)
+transposeMatrix = inv matrix . isoTranspose . matrix
