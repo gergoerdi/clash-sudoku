@@ -33,13 +33,10 @@ lastGrid :: forall n m a. (KnownNat n, KnownNat m, 1 <= n * m * m * n) => Grid n
 lastGrid = last @(n * m * m * n - 1) . flattenGrid
 
 gridToRows :: (KnownNat n, KnownNat m) => Grid n m a -> Vec (n * m) (Vec (m * n) a)
-gridToRows = concatMap (fmap concat . transpose . fmap matrixRows) . matrixRows . getGrid
+gridToRows = concat . fmap (fmap concat . transpose . fmap matrixRows) . matrixRows . getGrid
 
-gridFromRows
-    :: (KnownNat n, KnownNat m)
-    => Vec (n * m) (Vec (m * n) a)
-    -> Grid n m a
-gridFromRows = Grid . FromRows . fmap (fmap FromRows . transpose) . unconcatI . fmap unconcatI
+gridFromRows :: (KnownNat n, KnownNat m) => Vec (n * m) (Vec (m * n) a) -> Grid n m a
+gridFromRows = Grid . FromRows . fmap (coerce . transpose . fmap unconcatI) . unconcatI
 
 rowwise
     :: (KnownNat n, KnownNat m)
