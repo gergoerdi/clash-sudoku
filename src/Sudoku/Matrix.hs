@@ -24,11 +24,14 @@ instance (KnownNat n, KnownNat m) => Bundle (Matrix n m a) where
 instance (KnownNat n, KnownNat m) => Traversable (Matrix n m) where
     traverse f = fmap coerce . traverse @(Compose (Vec n) (Vec m)) f . coerce
 
+matrix :: (KnownNat n, KnownNat m) => Iso (->) (Matrix n m a) (Vec n (Vec m a))
+matrix = Iso coerce coerce
+
 isoConcat :: (KnownNat n, KnownNat m) => Iso (->) (Vec n (Vec m a)) (Vec (n * m) a)
 isoConcat = Iso concat unconcatI
 
 rowMajorOrder :: (KnownNat n, KnownNat m) => Iso (->) (Matrix n m a) (Vec (n * m) a)
-rowMajorOrder = isoConcat . Iso coerce coerce
+rowMajorOrder = isoConcat . matrix
 
 transposeMatrix :: (KnownNat n, KnownNat m) => Iso (->) (Matrix n m a) (Matrix m n a)
 transposeMatrix = Iso (FromRows . transpose . matrixRows) (FromRows . transpose . matrixRows)

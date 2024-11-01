@@ -13,7 +13,7 @@ module Sudoku.Solve
     , PropagatorResult(..)
     ) where
 
-import Clash.Prelude hiding (fold)
+import Clash.Prelude
 import Clash.Num.Overflowing
 
 import Sudoku.Utils
@@ -21,25 +21,17 @@ import Sudoku.Grid
 import Sudoku.Cell
 
 import Data.Maybe
-import Data.Monoid (All(..))
 import Data.Monoid.Action
-import Data.Foldable (fold)
 import Control.Monad (guard)
 import Control.Monad.State.Strict
-import Data.Isomorphism
 
 type Sudoku n m = Grid n m (Cell n m)
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
 
 neighbourhoodMasks :: forall n m. (Solvable n m) => Grid n m (Mask n m) -> Maybe (Grid n m (Mask n m))
 neighbourhoodMasks masks = do
-    guard safe
-    pure masks'
-  where
-    masks' = foldBy rows masks <> foldBy cols masks <> foldBy boxs masks
-    safe = consistentBy rows && consistentBy cols && consistentBy boxs
-      where
-        consistentBy f = all consistent $ embed f masks
+    guard $ allNeighbourhoods consistent masks
+    pure $ foldNeighbourhoods masks
 
 consistent :: (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Bool
 consistent = not . bitsOverlap . fmap maskBits

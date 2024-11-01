@@ -13,6 +13,7 @@ import qualified Clash.Sized.Vector as V
 import Data.Word
 import Control.Arrow.Transformer.Automaton
 import Control.Monad (guard)
+import Data.Isomorphism
 
 import Sudoku.Grid
 import Sudoku.Cell
@@ -30,7 +31,7 @@ showGrid =
     fmap (chr . fromIntegral) .
     formatModel (GridFormat n m) .
     fmap showCell .
-    toList . flattenGrid
+    toList . embed flatGrid
 
 instance (Textual n m) => Show (Sudoku n m) where
     show = showGrid
@@ -69,7 +70,7 @@ sim_topEntity =
     encodeSerials 16 . fmap ascii . showGrid @3 @3
 
 solve :: forall n m. (Solvable n m, Textual n m) => Sudoku n m -> (Int, Maybe (Sudoku n m))
-solve = start (signalAutomaton @System $ bundle . controller @n @m . unbundle) . toList . flattenGrid
+solve = start (signalAutomaton @System $ bundle . controller @n @m . unbundle) . toList . embed flatGrid
   where
     start (Automaton step) xs = load sim xs
       where
@@ -88,7 +89,7 @@ solve = start (signalAutomaton @System $ bundle . controller @n @m . unbundle) .
 
     consume acc (Automaton step)
         | Just cells <- V.fromList (L.reverse acc)
-        = Just $ unflattenGrid cells
+        = Just $ project flatGrid cells
 
         | Df.Data (Right x) <- output
         = guard (x /= conflicted) *> consume (x : acc) sim
@@ -99,8 +100,9 @@ solve = start (signalAutomaton @System $ bundle . controller @n @m . unbundle) .
         ((_, output), sim) = step (Df.NoData, Ack True)
 
 checkSolved :: forall n m. (Solvable n m) => Sudoku n m -> Bool
-checkSolved = bitToBool . reduceAnd . fmap getAnd . neighbourhoodwise (And . valid)
+checkSolved grid = validBy rows && validBy cols && validBy boxs
   where
+    validBy f = all valid $ embed f grid
     valid xs = L.sort (toList xs) == L.sort [ unique i | i <- [minBound..maxBound] ]
 
 main :: IO ()

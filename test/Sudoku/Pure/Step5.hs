@@ -3,14 +3,12 @@
 
 module Sudoku.Pure.Step5 where
 
-import Clash.Prelude hiding (fold)
+import Clash.Prelude 
 
 import Sudoku.Solve (Solvable, Sudoku, bitsOverlap)
 import Sudoku.Cell
 import Sudoku.Grid
 
-import Data.Foldable (fold)
-import Data.Monoid (All(..))
 import Data.Monoid.Action
 import Control.Monad (guard, (<=<), MonadPlus)
 import Control.Monad.State.Strict
@@ -51,8 +49,8 @@ prune grid = do
   where
     is_singles = single <$> grid
     masks = maskOf <$> is_singles <*> grid
-    neighbourhood_masks = neighbourhoodwise fold masks
-    safe = getAll . fold . neighbourhoodwise (All . consistent) $ masks
+    neighbourhood_masks = foldNeighbourhoods masks
+    safe = allNeighbourhoods consistent masks
 
     maskOf is_single cell = if is_single then cellMask cell else mempty
     apply is_single mask = if is_single then id else act mask

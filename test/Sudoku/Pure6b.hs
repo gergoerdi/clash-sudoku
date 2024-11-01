@@ -6,6 +6,7 @@ module Sudoku.Pure6b {-(nice, solve4)-} where
 
 import Prelude
 import Data.List
+import qualified Sudoku.Pure.Utils as U
 
 import Clash.Prelude (KnownNat)
 import qualified Clash.Sized.Vector as V
@@ -17,19 +18,13 @@ import Data.Functor.Compose
 import Data.Maybe
 import Control.Monad.State.Strict
 
-fromGrid :: (KnownNat n, KnownNat m) => Grid.Grid n m a -> Matrix a
-fromGrid = Compose . V.toList . fmap V.toList . Grid.gridToRows
-
 fromGrid' :: Grid.Grid 3 3 (Cell 3 3) -> Board
-fromGrid' = fmap fromCell . fromGrid
+fromGrid' = fmap fromCell . Compose . U.fromGrid
   where
     fromCell = chr . fromIntegral . showCell
 
-toGrid :: Matrix a -> Grid.Grid 3 3 a
-toGrid = Grid.gridFromRows . V.unsafeFromList . fmap V.unsafeFromList . getCompose
-
 toGrid' :: Board -> Grid.Grid 3 3 (Cell 3 3)
-toGrid' = fmap toCell . toGrid
+toGrid' = fmap toCell . U.toGrid . getCompose
   where
     toCell = fromMaybe (error "toCell") . parseCell . fromIntegral . ord
 

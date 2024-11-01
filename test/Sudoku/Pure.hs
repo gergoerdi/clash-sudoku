@@ -2,16 +2,14 @@
 {-# LANGUAGE ApplicativeDo #-}
 module Sudoku.Pure where
 
-import Clash.Prelude hiding (fold)
+import Clash.Prelude
 
 import Sudoku.Solve
 import Sudoku.Grid
 import Sudoku.Cell
 
 import Data.Maybe
-import Data.Monoid (All(..))
 import Data.Monoid.Action
-import Data.Foldable (fold)
 import Control.Monad (guard)
 import Control.Monad.State.Strict
 
@@ -72,10 +70,10 @@ guess :: forall n m. (Solvable n m) => Sudoku n m -> [Sudoku n m]
 guess = guessFirst possibilities1
 
 correct :: forall n m. (Solvable n m) => Sudoku n m -> Bool
-correct = getAll . fold . neighbourhoodwise noDups
+correct = allNeighbourhoods noDups
   where
-    noDups :: Vec (n * m) (Cell n m) -> All
-    noDups xs = All $ all (`elem` xs) (unique <$> [minBound..maxBound])
+    noDups :: Vec (n * m) (Cell n m) -> Bool
+    noDups xs = all (`elem` xs) (unique <$> [minBound..maxBound])
 
 correct' :: forall n m. (Solvable n m) => Sudoku n m -> Bool
 correct' = all isUnique

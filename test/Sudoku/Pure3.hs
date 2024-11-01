@@ -2,14 +2,12 @@
 {-# LANGUAGE ApplicativeDo #-}
 module Sudoku.Pure3 where
 
-import Clash.Prelude hiding (fold)
+import Clash.Prelude
 
 import Sudoku.Solve (Solvable, Sudoku, neighbourhoodMasks, bitsOverlap)
 import Sudoku.Cell
 import Sudoku.Grid
 
-import Data.Foldable (fold)
-import Data.Monoid (All(..))
 import Data.Monoid.Action
 import Control.Monad.State.Strict
 
@@ -52,10 +50,10 @@ blocked :: (Solvable n m) => Sudoku n m -> Bool
 blocked grid = any (== conflicted) grid || not (safe grid)
 
 safe :: (Solvable n m) => Sudoku n m -> Bool
-safe = getAll . fold . neighbourhoodwise consistent
+safe = allNeighbourhoods consistent
 
-consistent :: (Solvable n m, KnownNat k) => Vec k (Cell n m) -> All
-consistent = All . not . bitsOverlap . fmap (\cell -> if isUnique cell then cellBits cell else 0)
+consistent :: (Solvable n m, KnownNat k) => Vec k (Cell n m) -> Bool
+consistent = not . bitsOverlap . fmap (\cell -> if isUnique cell then cellBits cell else 0)
 
 search :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
 search grid
@@ -69,7 +67,7 @@ prune grid = apply <$> uniques <*> neighbourhood_masks <*> grid
   where
     uniques = isUnique <$> grid
     masks = maskOf <$> uniques <*> grid
-    neighbourhood_masks = neighbourhoodwise fold masks
+    neighbourhood_masks = foldNeighbourhoods masks
 
     maskOf is_unique cell = if is_unique then cellMask cell else mempty
     apply is_unique mask = if is_unique then id else act mask

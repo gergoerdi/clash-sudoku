@@ -6,6 +6,7 @@ import qualified Clash.Sized.Vector as V
 import Sudoku.Grid
 import Sudoku.Solve (Sudoku)
 import Sudoku.Cell
+import Data.Isomorphism
 import Format (ascii)
 
 readGrid :: forall n m. (Textual n m) => String -> Maybe (Sudoku n m)
@@ -13,7 +14,7 @@ readGrid = go []
   where
     go xs cs
         | Just cells <- V.fromList xs
-        = Just $ unflattenGrid . reverse $ cells
+        = Just $ project flatGrid . reverse $ cells
 
         | (c:cs) <- cs
         = go (maybe xs (:xs) $ parseCell . ascii $ c) cs

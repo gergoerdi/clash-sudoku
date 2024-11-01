@@ -6,8 +6,6 @@ module Sudoku.Pure5 where
 import Prelude
 -- -- import Clash.Prelude hiding (fold, concatMap, toList, minimum, length)
 -- import Prelude
-import Clash.Prelude (KnownNat)
-import qualified Clash.Sized.Vector as V
 
 -- import Sudoku.Solve (Solvable)
 import qualified Sudoku.Grid as Grid
@@ -20,6 +18,7 @@ import Data.Char (chr, ord)
 import Data.Foldable (fold, toList, minimum, length)
 -- import Control.Monad.State.Strict
 import Data.Maybe
+import Sudoku.Pure.Utils
 
 import Data.Functor.Compose
 
@@ -28,20 +27,10 @@ boardsize = 9
 cellvals = "123456789"
 blank = (== '_')
 
-type Matrix a = [[a]]
-type Board = Matrix Char
-
-
-fromGrid :: (KnownNat n, KnownNat m) => Grid.Grid n m a -> Matrix a
-fromGrid = V.toList . fmap V.toList . Grid.gridToRows
-
 fromGrid' :: Grid.Grid 3 3 (Cell 3 3) -> Board
 fromGrid' = (getCompose . fmap fromCell . Compose) . fromGrid
   where
     fromCell = chr . fromIntegral . showCell
-
-toGrid :: Matrix a -> Grid.Grid 3 3 a
-toGrid = Grid.gridFromRows . V.unsafeFromList . fmap V.unsafeFromList
 
 toGrid' :: Board -> Grid.Grid 3 3 (Cell 3 3)
 toGrid' = toGrid . getCompose . fmap toCell . Compose

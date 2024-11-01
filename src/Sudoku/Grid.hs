@@ -36,17 +36,8 @@ flatGrid = isoConcat . rows
 lastGrid :: forall n m a. (KnownNat n, KnownNat m, 1 <= n * m * m * n) => Grid n m a -> a
 lastGrid = last @(n * m * m * n - 1) . embed flatGrid
 
-foo :: (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Vec n (Vec m (Vec m (Vec n a))))
-foo = Iso coerce coerce
-
 imap :: (Functor f) => Iso (->) a b -> Iso (->) (f a) (f b)
 imap iso = Iso (fmap $ embed iso) (fmap $ project iso)
-
-transposeGrid'
-    :: (KnownNat n, KnownNat m)
-    => Grid n m a
-    -> Grid m n a
-transposeGrid' = Grid . fmap (embed transposeMatrix) . embed transposeMatrix . getGrid
 
 grid :: Iso (->) (Grid n m a) (Matrix n m (Matrix m n a))
 grid = Iso coerce coerce
@@ -55,7 +46,7 @@ transposeGrid :: (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Grid m n a)
 transposeGrid = inv grid . imap transposeMatrix . transposeMatrix . grid
 
 rows :: forall n m a. (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Vec (n * m) (Vec (m * n) a))
-rows = isoConcat . imap (imap isoConcat . Iso transpose transpose) . foo
+rows = imap isoConcat . isoConcat . imap (Iso transpose transpose) . matrix . imap matrix . grid
 
 cols :: forall n m a. (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Vec (n * m) (Vec (m * n) a))
 cols = rows . transposeGrid
@@ -63,68 +54,17 @@ cols = rows . transposeGrid
 boxs :: forall n m a. (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Vec (n * m) (Vec (m * n) a))
 boxs = rowMajorOrder . imap rowMajorOrder . grid
 
-mapBy
-    :: (KnownNat n, KnownNat m)
-    => (forall a. Iso (->) (Grid n m a) (Vec (n * m) (Vec (m * n) a)))
-    -> (Vec (n * m) a -> Vec (n * m) b)
-    -> Grid n m a
-    -> Grid n m b
-mapBy neighbourhood f = project neighbourhood . fmap f . embed neighbourhood
-
-foldBy
-    :: (KnownNat n, KnownNat m, Monoid a)
-    => (forall a. Iso (->) (Grid n m a) (Vec (n * m) (Vec (m * n) a)))
-    -> Grid n m a
-    -> Grid n m a
-foldBy neighbourhood = project neighbourhood . fmap (repeat . fold) . embed neighbourhood
-
-rowwise
-    :: (KnownNat n, KnownNat m)
-    => (Vec (n * m) a -> Vec (n * m) b)
-    -> Grid n m a
-    -> Grid n m b
-rowwise = mapBy rows
-
-columnwise
-    :: (KnownNat n, KnownNat m)
-    => (Vec (n * m) a -> Vec (n * m) b)
-    -> Grid n m a
-    -> Grid n m b
-columnwise = mapBy cols
-
-boxwise
-    :: (KnownNat n, KnownNat m)
-    => (Vec (n * m) a -> Vec (n * m) b)
-    -> Grid n m a
-    -> Grid n m b
-boxwise = mapBy boxs
-
-neighbourhoodwise
-    :: (KnownNat n, KnownNat m, Semigroup b)
-    => (Vec (n * m) a -> b)
-    -> Grid n m a
-    -> Grid n m b
-neighbourhoodwise f g = rowwise (repeat . f) g .<>. columnwise (repeat . f) g .<>. boxwise (repeat . f) g
+foldNeighbourhoods :: (KnownNat n, KnownNat m, Monoid a) => Grid n m a -> Grid n m a
+foldNeighbourhoods = foldBy rows <> foldBy cols <> foldBy boxs
   where
-    infixr 6 .<>.
-    (.<>.) :: forall f m. (Applicative f, Semigroup m) => f m -> f m -> f m
-    (.<>.) = liftA2 (<>)
+    foldBy
+        :: (KnownNat n, KnownNat m, Monoid a)
+        => (forall a. Iso (->) (Grid n m a) (Vec (n * m) (Vec (m * n) a)))
+        -> Grid n m a
+        -> Grid n m a
+    foldBy neighbourhood = project neighbourhood . fmap (repeat . fold) . embed neighbourhood
 
-
-
-
-
-flattenGrid :: (KnownNat n, KnownNat m) => Grid n m a -> Vec (n * m * m * n) a
-flattenGrid = embed flatGrid
-
-unflattenGrid :: (KnownNat n, KnownNat m) => Vec (n * m * m * n) a -> Grid n m a
-unflattenGrid = project flatGrid
-
-gridToRows :: (KnownNat n, KnownNat m) => Grid n m a -> Vec (n * m) (Vec (m * n) a)
--- gridToRows = concat . fmap (fmap concat . transpose . fmap matrixRows) . matrixRows . getGrid
--- gridToRows = concat . fmap (fmap concat . transpose) . coerce
--- gridToRows = concat . fmap (_ . fmap matrixRows) . matrixRows . getGrid
-gridToRows = embed rows
-
-gridFromRows :: (KnownNat n, KnownNat m) => Vec (n * m) (Vec (m * n) a) -> Grid n m a
-gridFromRows = project rows
+allNeighbourhoods :: (KnownNat n, KnownNat m) => (Vec (n * m) a -> Bool) -> Grid n m a -> Bool
+allNeighbourhoods p grid = allBy rows && allBy cols && allBy boxs
+  where
+    allBy neighbourhood = all p $ embed neighbourhood grid

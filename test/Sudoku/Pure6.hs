@@ -7,8 +7,7 @@ module Sudoku.Pure6 (nice, solve4) where
 import Prelude
 import Data.List
 
-import Clash.Prelude (KnownNat)
-import qualified Clash.Sized.Vector as V
+import Sudoku.Pure.Utils
 
 import qualified Sudoku.Grid as Grid
 import Sudoku.Cell
@@ -16,16 +15,10 @@ import Data.Char (chr, ord)
 import Data.Functor.Compose
 import Data.Maybe
 
-fromGrid :: (KnownNat n, KnownNat m) => Grid.Grid n m a -> Matrix a
-fromGrid = V.toList . fmap V.toList . Grid.gridToRows
-
 fromGrid' :: Grid.Grid 3 3 (Cell 3 3) -> Board
 fromGrid' = (getCompose . fmap fromCell . Compose) . fromGrid
   where
     fromCell = chr . fromIntegral . showCell
-
-toGrid :: Matrix a -> Grid.Grid 3 3 a
-toGrid = Grid.gridFromRows . V.unsafeFromList . fmap V.unsafeFromList
 
 toGrid' :: Board -> Grid.Grid 3 3 (Cell 3 3)
 toGrid' = toGrid . getCompose . fmap toCell . Compose
@@ -33,9 +26,6 @@ toGrid' = toGrid . getCompose . fmap toCell . Compose
     toCell = fromMaybe (error "toCell") . parseCell . fromIntegral . ord
 
 type Grid  = Matrix Value
-type Board = Grid
-
-type Matrix a = [Row a]
 
 type Row a = [a]
 

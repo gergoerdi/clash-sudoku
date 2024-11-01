@@ -4,30 +4,18 @@ module Sudoku.Pure4 where
 
 -- import Clash.Prelude hiding (fold, concatMap, toList, minimum, length)
 import Prelude
-import Clash.Prelude (KnownNat)
-import qualified Clash.Sized.Vector as V
 
 import Sudoku.Solve (Solvable)
-import qualified Sudoku.Grid as Grid
 import Sudoku.Cell
 
 import Data.Bits
--- import Data.Monoid (All(..))
 import Data.Monoid.Action
-import Data.Foldable (fold, toList, minimum, length)
-import Control.Monad.State.Strict
+import Data.Foldable (fold, toList)
 
 import Data.Functor.Compose
-
-type Matrix a = [[a]]
+import Sudoku.Pure.Utils
 
 boxsize = 3
-
-fromGrid :: (KnownNat n, KnownNat m) => Grid.Grid n m a -> Matrix a
-fromGrid = V.toList . fmap V.toList . Grid.gridToRows
-
-toGrid :: Matrix a -> Grid.Grid 3 3 a
-toGrid = Grid.gridFromRows . V.unsafeFromList . fmap V.unsafeFromList
 
 rows :: Matrix a -> Matrix a
 rows = id
