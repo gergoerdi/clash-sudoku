@@ -66,8 +66,8 @@ data CellUnit n m = CellUnit
 
 prune :: (Solvable n m) => Sudoku n m -> Maybe (Grid n m (CellUnit n m))
 prune grid = do
-    neighbourhood_masks <- neighbourhoodMasks masks
-    pure $ apply <$> uniques <*> neighbourhood_masks <*> grid
+    group_masks <- groupMasks masks
+    pure $ apply <$> uniques <*> group_masks <*> grid
   where
     uniques = isUnique <$> grid
     masks = maskOf <$> uniques <*> grid

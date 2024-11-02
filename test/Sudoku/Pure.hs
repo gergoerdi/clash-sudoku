@@ -19,7 +19,7 @@ isUnique cell = popCount (cellBits cell) == 1
 prune1 :: (Solvable n m) => Sudoku n m -> Maybe (Sudoku n m)
 prune1 grid = do
     guard $ not (failed grid)
-    masks' <- neighbourhoodMasks masks
+    masks' <- groupMasks masks
     pure $ apply <$> uniques <*> masks' <*> grid
   where
     uniques = isUnique <$> grid
@@ -70,7 +70,7 @@ guess :: forall n m. (Solvable n m) => Sudoku n m -> [Sudoku n m]
 guess = guessFirst possibilities1
 
 correct :: forall n m. (Solvable n m) => Sudoku n m -> Bool
-correct = allNeighbourhoods noDups
+correct = allGroups noDups
   where
     noDups :: Vec (n * m) (Cell n m) -> Bool
     noDups xs = all (`elem` xs) (unique <$> [minBound..maxBound])

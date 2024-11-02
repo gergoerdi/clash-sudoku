@@ -4,7 +4,7 @@ module Sudoku.Solve
     ( Sudoku
     , Solvable
 
-    , neighbourhoodMasks
+    , groupMasks
     , bitsOverlap
     , consistent
 
@@ -28,10 +28,10 @@ import Control.Monad.State.Strict
 type Sudoku n m = Grid n m (Cell n m)
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
 
-neighbourhoodMasks :: forall n m. (Solvable n m) => Grid n m (Mask n m) -> Maybe (Grid n m (Mask n m))
-neighbourhoodMasks masks = do
-    guard $ allNeighbourhoods consistent masks
-    pure $ foldNeighbourhoods masks
+groupMasks :: (Solvable n m) => Grid n m (Mask n m) -> Maybe (Grid n m (Mask n m))
+groupMasks masks = do
+    guard $ allGroups consistent masks
+    pure $ foldGroups masks
 
 consistent :: (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Bool
 consistent = not . bitsOverlap . fmap maskBits
@@ -75,12 +75,12 @@ propagator cmd shift_in pop = (lastGrid (cell <$> units), result, bundle $ cont 
 
     masks = bundle $ mask <$> units
 
-    mb_neighbourhood_masks = neighbourhoodMasks <$> masks
-    neighbourhood_masks = unbundle . fmap sequenceA $ mb_neighbourhood_masks
-    overlapping_singles = isNothing <$> mb_neighbourhood_masks
+    mb_group_masks = groupMasks <$> masks
+    group_masks = unbundle . fmap sequenceA $ mb_group_masks
+    overlapping_singles = isNothing <$> mb_group_masks
 
     units :: Grid n m (CellUnit dom n m)
-    units = evalState (traverse (state . uncurry unit) ((,) <$> pops <*> neighbourhood_masks)) (shift_in, pure False)
+    units = evalState (traverse (state . uncurry unit) ((,) <$> pops <*> group_masks)) (shift_in, pure False)
 
     all_single  = and <$> bundle (is_single <$> units)
     any_changed = or <$> bundle (changed <$> units)
@@ -98,7 +98,7 @@ propagator cmd shift_in pop = (lastGrid (cell <$> units), result, bundle $ cont 
         -> Signal dom (Maybe (Mask n m))
         -> (Signal dom (Maybe (Cell n m)), Signal dom Bool)
         -> (CellUnit dom n m, (Signal dom (Maybe (Cell n m)), Signal dom Bool))
-    unit pop neighbourhood_mask (shift_in, guessed_before) = (CellUnit{..}, (shift_out, guessed))
+    unit pop group_mask (shift_in, guessed_before) = (CellUnit{..}, (shift_out, guessed))
       where
         cell = register conflicted cell'
 
@@ -123,11 +123,11 @@ propagator cmd shift_in pop = (lastGrid (cell <$> units), result, bundle $ cont 
             guess_this <- guess_this
             is_single <- is_single
             first_guess <- first_guess
-            neighbourhood_mask <- neighbourhood_mask
+            group_mask <- group_mask
             pure if
-                | Just load <- shift_in <|> pop                                          -> load
-                | Just Propagate <- cmd, not is_single, Just mask <- neighbourhood_mask  -> act mask current
-                | Just CommitGuess <- cmd, guess_this                                    -> first_guess
-                | otherwise                                                              -> current
+                | Just load <- shift_in <|> pop                                  -> load
+                | Just Propagate <- cmd, not is_single, Just mask <- group_mask  -> act mask current
+                | Just CommitGuess <- cmd, guess_this                             -> first_guess
+                | otherwise                                                      -> current
 
         changed = cell' ./=. cell

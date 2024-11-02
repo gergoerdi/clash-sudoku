@@ -42,12 +42,12 @@ search grid
 prune :: (MonadPlus f, Solvable n m) => Sudoku n m -> f (Sudoku n m)
 prune grid = do
     guard safe
-    pure $ apply <$> is_singles <*> neighbourhood_masks <*> grid
+    pure $ apply <$> is_singles <*> group_masks <*> grid
   where
     is_singles = single <$> grid
     masks = maskOf <$> is_singles <*> grid
-    neighbourhood_masks = foldNeighbourhoods masks
-    safe = allNeighbourhoods consistent masks
+    group_masks = foldGroups masks
+    safe = allGroups consistent masks
 
     maskOf is_single cell = if is_single then cellMask cell else mempty
     apply is_single mask = if is_single then id else act mask

@@ -45,26 +45,25 @@ grid = Iso coerce coerce
 transposeGrid :: (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Grid m n a)
 transposeGrid = inv grid . imap transposeMatrix . transposeMatrix . grid
 
-rows :: forall n m a. (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Vec (n * m) (Vec (m * n) a))
+type Group n m a = Vec (m * n) a
+type Groups n m a = Vec (n * m) (Group n m a)
+
+rows, cols, boxs :: (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Groups n m a)
 rows = imap isoConcat . isoConcat . imap isoTranspose . matrix . imap matrix . grid
-
-cols :: forall n m a. (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Vec (n * m) (Vec (m * n) a))
 cols = rows . transposeGrid
-
-boxs :: forall n m a. (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Vec (n * m) (Vec (m * n) a))
 boxs = rowMajorOrder . imap rowMajorOrder . grid
 
-foldNeighbourhoods :: (KnownNat n, KnownNat m, Monoid a) => Grid n m a -> Grid n m a
-foldNeighbourhoods = foldBy rows <> foldBy cols <> foldBy boxs
+foldGroups :: (KnownNat n, KnownNat m, Monoid a) => Grid n m a -> Grid n m a
+foldGroups = foldBy rows <> foldBy cols <> foldBy boxs
   where
     foldBy
         :: (KnownNat n, KnownNat m, Monoid a)
-        => (forall a. Iso (->) (Grid n m a) (Vec (n * m) (Vec (m * n) a)))
+        => (forall a. Iso (->) (Grid n m a) (Groups n m a))
         -> Grid n m a
         -> Grid n m a
-    foldBy neighbourhood = project neighbourhood . fmap (repeat . fold) . embed neighbourhood
+    foldBy group = project group . fmap (repeat . fold) . embed group
 
-allNeighbourhoods :: (KnownNat n, KnownNat m) => (Vec (n * m) a -> Bool) -> Grid n m a -> Bool
-allNeighbourhoods p grid = allBy rows && allBy cols && allBy boxs
+allGroups :: (KnownNat n, KnownNat m) => (Group n m a -> Bool) -> Grid n m a -> Bool
+allGroups p grid = allBy rows && allBy cols && allBy boxs
   where
-    allBy neighbourhood = all p $ embed neighbourhood grid
+    allBy group = all p $ embed group grid

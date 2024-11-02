@@ -23,7 +23,7 @@ data CellUnit n m = CellUnit
     }
 
 unit :: (Solvable n m) => Cell n m -> Mask n m -> CellUnit n m
-unit cell neighbourhood_mask = CellUnit{ cell = cell', ..}
+unit cell group_mask = CellUnit{ cell = cell', ..}
   where
     (guess, cont) = splitCell cell
     is_unique = cont == conflicted
@@ -31,14 +31,14 @@ unit cell neighbourhood_mask = CellUnit{ cell = cell', ..}
     possibilities = if is_unique then [cell] else [guess, cont]
 
     mask = if is_unique then cellMask cell else mempty
-    cell' = if is_unique then cell else act neighbourhood_mask cell
+    cell' = if is_unique then cell else act group_mask cell
 
 propagate1 :: (Solvable n m) => Sudoku n m -> Maybe (Grid n m (CellUnit n m))
 propagate1 grid = do
     rec
-        let units = unit <$> grid <*> neighbourhood_masks
+        let units = unit <$> grid <*> group_masks
             masks = mask <$> units
-        neighbourhood_masks <- neighbourhoodMasks masks
+        group_masks <- groupMasks masks
     guard $ not $ any is_conflicted units
     pure units
 
