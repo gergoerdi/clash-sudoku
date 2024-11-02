@@ -25,8 +25,11 @@ instance (KnownNat n, KnownNat m) => Bundle (Matrix n m a) where
 instance (KnownNat n, KnownNat m) => Traversable (Matrix n m) where
     traverse f = fmap coerce . traverse @(Compose (Vec n) (Vec m)) f . coerce
 
+isoCoerce :: (Coercible a b) => Iso (->) a b
+isoCoerce = Iso coerce coerce
+
 matrix :: (KnownNat n, KnownNat m) => Iso (->) (Matrix n m a) (Vec n (Vec m a))
-matrix = Iso coerce coerce
+matrix = isoCoerce
 
 isoConcat :: (KnownNat n, KnownNat m) => Iso (->) (Vec n (Vec m a)) (Vec (n * m) a)
 isoConcat = Iso concat unconcatI

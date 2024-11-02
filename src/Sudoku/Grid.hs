@@ -40,7 +40,7 @@ imap :: (Functor f) => Iso (->) a b -> Iso (->) (f a) (f b)
 imap iso = Iso (fmap $ embed iso) (fmap $ project iso)
 
 grid :: Iso (->) (Grid n m a) (Matrix n m (Matrix m n a))
-grid = Iso coerce coerce
+grid = isoCoerce
 
 transposeGrid :: (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Grid m n a)
 transposeGrid = inv grid . imap transposeMatrix . transposeMatrix . grid
