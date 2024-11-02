@@ -6,7 +6,7 @@ import qualified Clash.Sized.Vector as V
 import Sudoku.Grid
 import Sudoku.Solve (Sudoku)
 import Sudoku.Cell
-import Data.Isomorphism
+import Sudoku.Iso
 import Format (ascii)
 
 readGrid :: forall n m. (Textual n m) => String -> Maybe (Sudoku n m)

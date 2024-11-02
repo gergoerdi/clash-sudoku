@@ -8,7 +8,7 @@ import Clash.Prelude (KnownNat)
 import qualified Clash.Sized.Vector as V
 
 import qualified Sudoku.Grid as Grid
-import Data.Isomorphism
+import Sudoku.Iso
 
 type Matrix a = [[a]]
 type Board = Matrix Char

@@ -13,8 +13,8 @@ import qualified Clash.Sized.Vector as V
 import Data.Word
 import Control.Arrow.Transformer.Automaton
 import Control.Monad (guard)
-import Data.Isomorphism
 
+import Sudoku.Iso
 import Sudoku.Grid
 import Sudoku.Cell
 import Format (ascii)

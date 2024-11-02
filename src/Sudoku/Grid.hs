@@ -7,8 +7,7 @@ import Clash.Prelude hiding ((.), imap, fold)
 import Data.Functor.Compose
 import Data.Monoid (Ap(..))
 import Data.Coerce
-import Data.Isomorphism
-import Data.Groupoid
+import Sudoku.Iso
 import Control.Category ((.))
 import Data.Foldable (fold)
 
@@ -31,16 +30,13 @@ instance (KnownNat n, KnownNat m) => Traversable (Grid n m) where
     traverse f = fmap (project flatGrid) . traverse f . embed flatGrid
 
 flatGrid :: (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Vec (n * m * m * n) a)
-flatGrid = isoConcat . rows
+flatGrid = iconcat . rows
 
 lastGrid :: forall n m a. (KnownNat n, KnownNat m, 1 <= n * m * m * n) => Grid n m a -> a
 lastGrid = last @(n * m * m * n - 1) . embed flatGrid
 
-imap :: (Functor f) => Iso (->) a b -> Iso (->) (f a) (f b)
-imap iso = Iso (fmap $ embed iso) (fmap $ project iso)
-
 grid :: Iso (->) (Grid n m a) (Matrix n m (Matrix m n a))
-grid = isoCoerce
+grid = icoerce
 
 transposeGrid :: (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Grid m n a)
 transposeGrid = inv grid . imap transposeMatrix . transposeMatrix . grid
@@ -49,7 +45,7 @@ type Group n m a = Vec (m * n) a
 type Groups n m a = Vec (n * m) (Group n m a)
 
 rows, cols, boxs :: (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Groups n m a)
-rows = imap isoConcat . isoConcat . imap isoTranspose . matrix . imap matrix . grid
+rows = imap iconcat . iconcat . imap itranspose . matrix . imap matrix . grid
 cols = rows . transposeGrid
 boxs = rowMajorOrder . imap rowMajorOrder . grid
 
