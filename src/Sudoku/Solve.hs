@@ -69,7 +69,7 @@ propagator
        , Signal dom PropagatorResult
        , Signal dom (Sudoku n m)
        )
-propagator cmd shift_in pop = (lastGrid (cell <$> units), result, bundle $ cont <$> units)
+propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont <$> units)
   where
     pops = unbundle . fmap sequenceA $ pop
 

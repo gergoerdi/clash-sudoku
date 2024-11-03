@@ -26,13 +26,16 @@ instance (KnownNat n, KnownNat m) => Bundle (Grid n m a) where
     unbundle = Grid . fmap unbundle . unbundle . fmap getGrid
 
 instance (KnownNat n, KnownNat m) => Traversable (Grid n m) where
-    traverse f = fmap (project flatGrid) . traverse f . embed flatGrid
+    traverse f = fmap (project phi) . traverse f . embed phi
+      where
+        phi = ireverse . flatGrid
+        ireverse = Iso reverse reverse
 
 flatGrid :: (KnownNat n, KnownNat m) => Grid n m a <-> Vec (n * m * m * n) a
 flatGrid = iconcat . rows
 
-lastGrid :: forall n m a. (KnownNat n, KnownNat m, 1 <= n * m * m * n) => Grid n m a -> a
-lastGrid = last @(n * m * m * n - 1) . embed flatGrid
+headGrid :: forall n m a. (KnownNat n, KnownNat m, 1 <= n * m * m * n) => Grid n m a -> a
+headGrid = head @(n * m * m * n - 1) . embed flatGrid
 
 grid :: Grid n m a <-> Matrix n m (Matrix m n a)
 grid = icoerce
@@ -57,7 +60,7 @@ foldGroups = foldBy rows <> foldBy cols <> foldBy boxs
         => Grouping n m
         -> Grid n m a
         -> Grid n m a
-    foldBy group = project group . fmap (repeat . fold) . embed group
+    foldBy grouping = project grouping . fmap (repeat . fold) . embed grouping
 
 allGroups :: (KnownNat n, KnownNat m) => (Group n m a -> Bool) -> Grid n m a -> Bool
 allGroups p grid = allBy rows && allBy cols && allBy boxs
