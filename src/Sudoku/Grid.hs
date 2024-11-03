@@ -14,9 +14,8 @@ import Data.Foldable (fold)
 import Sudoku.Matrix
 
 newtype Grid n m a = Grid{ getGrid :: Matrix n m (Matrix m n a) }
-    deriving stock (Generic)
-    deriving anyclass (NFDataX, BitPack)
-    deriving newtype (Eq)
+    deriving stock (Generic, Eq)
+    deriving anyclass (NFDataX)
     deriving (Functor, Applicative, Foldable) via Compose (Matrix n m) (Matrix m n)
     deriving (Semigroup, Monoid) via Ap (Grid n m) a
 
@@ -29,22 +28,23 @@ instance (KnownNat n, KnownNat m) => Bundle (Grid n m a) where
 instance (KnownNat n, KnownNat m) => Traversable (Grid n m) where
     traverse f = fmap (project flatGrid) . traverse f . embed flatGrid
 
-flatGrid :: (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Vec (n * m * m * n) a)
+flatGrid :: (KnownNat n, KnownNat m) => Grid n m a <-> Vec (n * m * m * n) a
 flatGrid = iconcat . rows
 
 lastGrid :: forall n m a. (KnownNat n, KnownNat m, 1 <= n * m * m * n) => Grid n m a -> a
 lastGrid = last @(n * m * m * n - 1) . embed flatGrid
 
-grid :: Iso (->) (Grid n m a) (Matrix n m (Matrix m n a))
+grid :: Grid n m a <-> Matrix n m (Matrix m n a)
 grid = icoerce
 
-transposeGrid :: (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Grid m n a)
+transposeGrid :: (KnownNat n, KnownNat m) => Grid n m a <-> Grid m n a
 transposeGrid = inv grid . imap transposeMatrix . transposeMatrix . grid
 
 type Group n m a = Vec (m * n) a
 type Groups n m a = Vec (n * m) (Group n m a)
+type Grouping n m = forall a. Grid n m a <-> Groups n m a
 
-rows, cols, boxs :: (KnownNat n, KnownNat m) => Iso (->) (Grid n m a) (Groups n m a)
+rows, cols, boxs :: (KnownNat n, KnownNat m) => Grouping n m
 rows = imap iconcat . iconcat . imap itranspose . matrix . imap matrix . grid
 cols = rows . transposeGrid
 boxs = rowMajorOrder . imap rowMajorOrder . grid
@@ -54,7 +54,7 @@ foldGroups = foldBy rows <> foldBy cols <> foldBy boxs
   where
     foldBy
         :: (KnownNat n, KnownNat m, Monoid a)
-        => (forall a. Iso (->) (Grid n m a) (Groups n m a))
+        => Grouping n m
         -> Grid n m a
         -> Grid n m a
     foldBy group = project group . fmap (repeat . fold) . embed group

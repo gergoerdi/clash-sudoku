@@ -9,9 +9,8 @@ import Data.Coerce
 import Control.Category ((.))
 
 newtype Matrix n m a = FromRows{ matrixRows :: Vec n (Vec m a) }
-    deriving stock (Generic)
-    deriving anyclass (NFDataX, BitPack)
-    deriving newtype (Eq)
+    deriving stock (Generic, Eq)
+    deriving anyclass (NFDataX)
     deriving (Functor, Applicative, Foldable) via Compose (Vec n) (Vec m)
     deriving (Semigroup, Monoid) via Ap (Matrix n m) a
 
@@ -24,17 +23,17 @@ instance (KnownNat n, KnownNat m) => Bundle (Matrix n m a) where
 instance (KnownNat n, KnownNat m) => Traversable (Matrix n m) where
     traverse f = fmap coerce . traverse @(Compose (Vec n) (Vec m)) f . coerce
 
-matrix :: (KnownNat n, KnownNat m) => Iso (->) (Matrix n m a) (Vec n (Vec m a))
+matrix :: Matrix n m a <-> Vec n (Vec m a)
 matrix = icoerce
 
-iconcat :: (KnownNat n, KnownNat m) => Iso (->) (Vec n (Vec m a)) (Vec (n * m) a)
+iconcat :: (KnownNat n, KnownNat m) => Vec n (Vec m a) <-> Vec (n * m) a
 iconcat = Iso concat unconcatI
 
-itranspose :: (KnownNat n, KnownNat m) => Iso (->) (Vec n (Vec m a)) (Vec m (Vec n a))
+itranspose :: (KnownNat n, KnownNat m) => Vec n (Vec m a) <-> Vec m (Vec n a)
 itranspose = Iso transpose transpose
 
-rowMajorOrder :: (KnownNat n, KnownNat m) => Iso (->) (Matrix n m a) (Vec (n * m) a)
+rowMajorOrder :: (KnownNat n, KnownNat m) => Matrix n m a <-> Vec (n * m) a
 rowMajorOrder = iconcat . matrix
 
-transposeMatrix :: (KnownNat n, KnownNat m) => Iso (->) (Matrix n m a) (Matrix m n a)
+transposeMatrix :: (KnownNat n, KnownNat m) => Matrix n m a <-> Matrix m n a
 transposeMatrix = inv matrix . itranspose . matrix

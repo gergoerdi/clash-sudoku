@@ -9,8 +9,11 @@ import Data.Coerce
 import Data.Isomorphism
 import Data.Groupoid
 
-icoerce :: (Coercible a b) => Iso (->) a b
+infixr 0 <->
+type (<->) = Iso (->)
+
+icoerce :: (Coercible a b) => a <-> b
 icoerce = Iso coerce coerce
 
-imap :: (Functor f) => Iso (->) a b -> Iso (->) (f a) (f b)
-imap iso = Iso (fmap $ embed iso) (fmap $ project iso)
+imap :: (Functor f) => a <-> b -> f a <-> f b
+imap phi = Iso (fmap $ embed phi) (fmap $ project phi)
