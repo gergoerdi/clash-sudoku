@@ -20,7 +20,7 @@ possibilities :: (Solvable n m) => Cell n m -> [Cell n m]
 possibilities cell =
     [ cell'
     | i <- [minBound..maxBound]
-    , let cell' = unique i
+    , let cell' = given i
     , cellBits cell .&. cellBits cell' /= 0
     ]
 

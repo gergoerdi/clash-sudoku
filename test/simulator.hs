@@ -103,7 +103,7 @@ checkSolved :: forall n m. (Solvable n m) => Sudoku n m -> Bool
 checkSolved grid = validBy rows && validBy cols && validBy boxs
   where
     validBy f = all valid $ embed f grid
-    valid xs = L.sort (toList xs) == L.sort [ unique i | i <- [minBound..maxBound] ]
+    valid xs = L.sort (toList xs) == L.sort [ given i | i <- [minBound..maxBound] ]
 
 main :: IO ()
 main = do

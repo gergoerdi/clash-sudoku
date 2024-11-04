@@ -19,13 +19,13 @@ wild = Cell oneBits
 conflicted :: (KnownNat n, KnownNat m) => Cell n m
 conflicted = Cell zeroBits
 
-unique :: (KnownNat n, KnownNat m) => Index (n * m) -> Cell n m
-unique n = Cell (1 `rotateL` fromIntegral n)
+given :: (KnownNat n, KnownNat m) => Index (n * m) -> Cell n m
+given i = Cell (bit $ fromIntegral i)
 
-uniqueFromIntegral :: forall a n m. (KnownNat n, KnownNat m, Integral a) => a -> Maybe (Cell n m)
-uniqueFromIntegral x
+givenFromIntegral :: forall a n m. (KnownNat n, KnownNat m, Integral a) => a -> Maybe (Cell n m)
+givenFromIntegral x
     | x <= fromIntegral (maxBound :: Index (n * m))
-    = Just $ unique . fromIntegral $ x
+    = Just $ given . fromIntegral $ x
 
     | otherwise
     = Nothing
@@ -69,13 +69,13 @@ parseCell x
     = Just conflicted
 
     | ascii '1' <= x && x <= ascii '9'
-    = uniqueFromIntegral $ x - ascii '1' + 0
+    = givenFromIntegral $ x - ascii '1' + 0
 
     | ascii 'a' <= x && x <= ascii 'z'
-    = uniqueFromIntegral $ x - ascii 'a' + 9
+    = givenFromIntegral $ x - ascii 'a' + 9
 
     | ascii 'A' <= x && x <= ascii 'Z'
-    = uniqueFromIntegral $ x - ascii 'A' + 9
+    = givenFromIntegral $ x - ascii 'A' + 9
 
     | otherwise
     = Nothing

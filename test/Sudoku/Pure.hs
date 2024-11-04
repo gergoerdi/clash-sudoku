@@ -38,7 +38,7 @@ possibilities :: (Solvable n m) => Cell n m -> [Cell n m]
 possibilities cell =
     [ cell'
     | i <- [minBound..maxBound]
-    , let cell' = unique i
+    , let cell' = given i
     , cellBits cell .&. cellBits cell' /= 0
     ]
 
@@ -73,7 +73,7 @@ correct :: forall n m. (Solvable n m) => Sudoku n m -> Bool
 correct = allGroups noDups
   where
     noDups :: Vec (n * m) (Cell n m) -> Bool
-    noDups xs = all (`elem` xs) (unique <$> [minBound..maxBound])
+    noDups xs = all (`elem` xs) (given <$> [minBound..maxBound])
 
 correct' :: forall n m. (Solvable n m) => Sudoku n m -> Bool
 correct' = all isUnique
