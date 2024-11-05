@@ -9,12 +9,17 @@ import Sudoku.Grid
 import Sudoku.Cell
 
 import Data.Monoid.Action
-import Control.Monad ((<=<))
+import Control.Monad ((<=<), guard)
 import Control.Monad.State.Strict
 import Data.Maybe (maybeToList)
 
 isUnique :: (Solvable n m) => Cell n m -> Bool
 isUnique cell = popCount (cellBits cell) == 1
+
+groupMasks :: (Solvable n m) => Grid n m (Mask n m) -> Maybe (Grid n m (Mask n m))
+groupMasks masks = do
+    guard $ allGroups consistent masks
+    pure $ foldGroups masks
 
 possibilities :: (Solvable n m) => Cell n m -> [Cell n m]
 possibilities cell =

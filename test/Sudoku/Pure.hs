@@ -16,6 +16,11 @@ import Control.Monad.State.Strict
 isUnique :: (Solvable n m) => Cell n m -> Bool
 isUnique cell = popCount (cellBits cell) == 1
 
+groupMasks :: (Solvable n m) => Grid n m (Mask n m) -> Maybe (Grid n m (Mask n m))
+groupMasks masks = do
+    guard $ allGroups consistent masks
+    pure $ foldGroups masks
+
 prune1 :: (Solvable n m) => Sudoku n m -> Maybe (Sudoku n m)
 prune1 grid = do
     guard $ not (failed grid)

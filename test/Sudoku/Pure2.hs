@@ -14,6 +14,11 @@ import Data.Monoid.Action
 import Control.Monad (guard)
 import Control.Monad.State.Strict
 
+groupMasks :: (Solvable n m) => Grid n m (Mask n m) -> Maybe (Grid n m (Mask n m))
+groupMasks masks = do
+    guard $ allGroups consistent masks
+    pure $ foldGroups masks
+
 data CellUnit n m = CellUnit
     { cell :: Cell n m
     , mask :: Mask n m

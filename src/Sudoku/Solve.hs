@@ -4,7 +4,6 @@ module Sudoku.Solve
     ( Sudoku
     , Solvable
 
-    , groupMasks
     , bitsOverlap
     , consistent
 
@@ -22,16 +21,11 @@ import Sudoku.Cell
 
 import Data.Maybe
 import Data.Monoid.Action
-import Control.Monad (guard)
 import Control.Monad.State.Strict
+import Data.Monoid (Ap(..))
 
 type Sudoku n m = Grid n m (Cell n m)
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
-
-groupMasks :: (Solvable n m) => Grid n m (Mask n m) -> Maybe (Grid n m (Mask n m))
-groupMasks masks = do
-    guard $ allGroups consistent masks
-    pure $ foldGroups masks
 
 consistent :: (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Bool
 consistent = not . bitsOverlap . fmap maskBits
@@ -60,6 +54,12 @@ data PropagatorResult
     | Stuck
     deriving (Generic, NFDataX, Eq, Show)
 
+propagate
+    :: (Solvable n m, HiddenClockResetEnable dom)
+    => Grid n m (Signal dom (Mask n m))
+    -> Grid n m (Signal dom (Mask n m))
+propagate = fmap getAp . foldGroups . fmap Ap
+
 propagator
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
     => Signal dom (Maybe PropagatorCmd)
@@ -73,11 +73,10 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont 
   where
     pops = unbundle . fmap sequenceA $ pop
 
-    masks = bundle $ mask <$> units
+    masks = mask <$> units
 
-    mb_group_masks = groupMasks <$> masks
-    group_masks = unbundle . fmap sequenceA $ mb_group_masks
-    overlapping_singles = isNothing <$> mb_group_masks
+    group_masks = propagate masks
+    safe = allGroups consistent <$> bundle masks
 
     units :: Grid n m (CellUnit dom n m)
     units = evalState (traverse (state . uncurry unit) ((,) <$> pops <*> group_masks)) (shift_in, pure False)
@@ -87,15 +86,15 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont 
     any_failed  = or <$> bundle (is_conflicted <$> units)
 
     result =
-        mux overlapping_singles  (pure Failure) $
-        mux any_failed           (pure Failure) $
-        mux all_single           (pure Solved) $
-        mux any_changed          (pure Progress) $
+        mux (not <$> safe)  (pure Failure) $
+        mux any_failed      (pure Failure) $
+        mux all_single      (pure Solved) $
+        mux any_changed     (pure Progress) $
         pure Stuck
 
     unit
         :: Signal dom (Maybe (Cell n m))
-        -> Signal dom (Maybe (Mask n m))
+        -> Signal dom (Mask n m)
         -> (Signal dom (Maybe (Cell n m)), Signal dom Bool)
         -> (CellUnit dom n m, (Signal dom (Maybe (Cell n m)), Signal dom Bool))
     unit pop group_mask (shift_in, guessed_before) = (CellUnit{..}, (shift_out, guessed))
@@ -123,11 +122,11 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont 
             guess_this <- guess_this
             is_single <- is_single
             first_guess <- first_guess
-            group_mask <- group_mask
+            mask <- group_mask
             pure if
-                | Just load <- shift_in <|> pop                                  -> load
-                | Just Propagate <- cmd, not is_single, Just mask <- group_mask  -> act mask current
-                | Just CommitGuess <- cmd, guess_this                             -> first_guess
-                | otherwise                                                      -> current
+                | Just load <- shift_in <|> pop         -> load
+                | Just Propagate <- cmd, not is_single  -> act mask current
+                | Just CommitGuess <- cmd, guess_this   -> first_guess
+                | otherwise                             -> current
 
         changed = cell' ./=. cell
