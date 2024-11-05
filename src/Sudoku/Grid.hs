@@ -6,7 +6,6 @@ module Sudoku.Grid where
 import Clash.Prelude hiding ((.), imap, fold)
 import Data.Functor.Compose
 import Data.Monoid (Ap(..))
-import Data.Coerce
 import Sudoku.Iso
 import Control.Category ((.))
 import Data.Foldable (fold)
