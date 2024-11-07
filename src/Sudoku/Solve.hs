@@ -114,19 +114,17 @@ propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont 
         cont = mux guess_this next_guess cell
         guessed = guessed_before .||. can_guess_this
 
-        cell' = do
-            current <- cell
-            shift_in <- shift_in
-            pop <- pop
-            cmd <- cmd
-            guess_this <- guess_this
-            is_single <- is_single
-            first_guess <- first_guess
-            mask <- group_mask
-            pure if
-                | Just load <- shift_in <|> pop         -> load
-                | Just Propagate <- cmd, not is_single  -> act mask current
-                | Just CommitGuess <- cmd, guess_this   -> first_guess
-                | otherwise                             -> current
+        update cmd load mask guess cell
+            | Just load <- load                             = load
+            | Just Propagate <- cmd, Just mask <- mask      = act mask cell
+            | Just CommitGuess <- cmd, Just guess <- guess  = guess
+            | otherwise                                     = cell
+
+        cell' = update
+            <$> cmd
+            <*> (shift_in .<|>. pop)
+            <*> enable (not <$> is_single) mask
+            <*> enable guess_this first_guess
+            <*> cell
 
         changed = cell' ./=. cell
