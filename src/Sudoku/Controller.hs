@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase, MultiWayIf, ApplicativeDo #-}
+{-# LANGUAGE ViewPatterns #-}
 module Sudoku.Controller where
 
 import Clash.Prelude
@@ -30,9 +31,9 @@ showDigit n = ascii '0' + fromIntegral n
 type StackDepth n m = ((n * m) * (m * n))
 type CellIndex n m = Index ((n * m) * (m * n))
 
-data MemCmd n a
+data MemCmd n
     = Read (Index n)
-    | Write (Index n) a
+    | Write (Index n)
 
 data St n m
     = ShiftIn (CellIndex n m)
@@ -49,7 +50,7 @@ data St n m
 data Control n m
     = Consume (Maybe (Cell n m))
     | Solve
-    | Stack (MemCmd (StackDepth n m) (Sudoku n m))
+    | Stack (MemCmd (StackDepth n m))
     | Produce Bool (Either Word8 (Cell n m))
 
 controller
@@ -60,7 +61,7 @@ controller
 controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
   where
     (shift_in', shift_out, in_ack, solve, stack_cmd) =
-        mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Nothing result)
+        mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register undefined result)
 
     lines = \case
         Consume shift_in -> (shift_in, Nothing, Ack True, False, Nothing)
@@ -84,16 +85,16 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
             put $ Settle (countSucc cnt) sp
             pure Solve
         Busy cnt sp -> case result of
-            Nothing -> do
+            Pruned -> do
                 put $ Busy (countSucc cnt) sp
                 pure Solve
-            Just Solved -> do
+            Complete -> do
                 put $ ShiftOutCycleCount True (countSucc cnt) 0
                 pure Solve
-            Just (Push grid) -> do
+            Guess -> do
                 put $ WaitPush (countSucc cnt) (sp + 1)
-                pure $ Stack $ Write sp grid
-            Just Pop -> case countPredChecked sp of
+                pure $ Stack $ Write sp
+            Blocked -> case countPredChecked sp of
                 Nothing -> do
                     put $ ShiftOutCycleCount False (countSucc cnt) 0
                     pure Solve
@@ -123,7 +124,7 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
         pure proceed
 
     grid = register (pure wild) grid'
-    (result, grid') = unbundle $ runState <$> (machine <$> shift_in' <*> popped <*> solve) <*> grid
+    (unbundle -> (unbundle -> (result, register undefined -> grid2), grid')) = runState <$> (machine <$> shift_in' <*> popped <*> solve) <*> grid
     head_cell = headGrid @n @m <$> grid
 
     popped = enable (delay False rd) $
@@ -131,7 +132,8 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
       where
         (sp, rd, wr) = unbundle $ do
             stack_cmd <- stack_cmd
+            grid2 <- grid2
             pure $ case stack_cmd of
                 Nothing -> (0, False, Nothing)
                 Just (Read sp) -> (sp, True, Nothing)
-                Just (Write sp x) -> (sp, False, Just x)
+                Just (Write sp) -> (sp, False, Just grid2)

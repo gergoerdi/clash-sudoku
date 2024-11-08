@@ -39,18 +39,19 @@ data CellUnit n m = CellUnit
     , first_guess, next_guess :: Cell n m
     }
 
-data SolveResult n m
+data Result
     = Blocked
     | Complete
-    | Progress (Sudoku n m)
-    | Guess (Sudoku n m) (Sudoku n m)
+    | Pruned
+    | Guess
+    deriving (Generic, NFDataX, Show)
 
-solve :: (Solvable n m) => Sudoku n m -> SolveResult n m
+solve :: (Solvable n m) => Sudoku n m -> (Result, Sudoku n m, Sudoku n m)
 solve grid
-    | blocked   = Blocked
-    | complete  = Complete
-    | changed   = Progress pruned
-    | otherwise = Guess grid1 grid2
+    | blocked   = (Blocked, grid, grid2)
+    | complete  = (Complete, grid, grid2)
+    | changed   = (Pruned, pruned, grid2)
+    | otherwise = (Guess, grid1, grid2)
   where
     blocked = void || not safe
     void = any (== conflicted) grid
@@ -85,32 +86,19 @@ solve grid
         | otherwise
         = ((cell, cell), guessed_before)
 
-data Result n m
-    = Solved
-    | Push (Sudoku n m)
-    | Pop
-    deriving (Generic, NFDataX)
-
-instance Show (Result n m) where
-    show = \case
-        Solved -> "Solved"
-        Push{} -> "Push"
-        Pop -> "Pop"
-
-machine :: (Solvable n m) => Maybe (Cell n m) -> Maybe (Sudoku n m) -> Bool -> State (Sudoku n m) (Maybe (Result n m))
+machine :: (Solvable n m) => Maybe (Cell n m) -> Maybe (Sudoku n m) -> Bool -> State (Sudoku n m) (Result, Sudoku n m)
 machine shift_in pop run
     | Just cell <- shift_in
-    = Nothing <$ modify (shiftIn cell)
+    = (Pruned, undefined) <$ modify (shiftIn cell)
 
     | Just pop <- pop
-    = Nothing <$ put pop
+    = (Pruned, undefined) <$ put pop
 
     | run
-    = solve <$> get >>= \case
-          Blocked -> Just Pop <$ pure ()
-          Complete -> Just Solved <$ pure ()
-          Progress grid' -> Nothing <$ put grid'
-          Guess grid1 grid2 -> Just (Push grid2) <$ put grid1
+    = do
+          (result, grid', grid2) <- solve <$> get
+          put grid'
+          pure (result, grid2)
 
     | otherwise
-    = pure Nothing
+    = pure (Pruned, undefined)
