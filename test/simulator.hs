@@ -17,24 +17,14 @@ import Control.Monad (guard)
 import Sudoku.Iso
 import Sudoku.Grid
 import Sudoku.Cell
+import Sudoku.Show
 import Format (ascii)
-import Format.Model
 import Sudoku
 import Sudoku.Controller
 import Sudoku.Solve (Sudoku, Solvable)
 import Sudoku.Sim.Serial
 import Sudoku.Sim.Examples
 import Text.Printf
-
-showGrid :: forall n m. (Textual n m) => Sudoku n m -> String
-showGrid =
-    fmap (chr . fromIntegral) .
-    formatModel (GridFormat n m) .
-    fmap showCell .
-    toList . embed flatGrid
-
-instance (Textual n m) => Show (Sudoku n m) where
-    show = showGrid
 
 model_decodeSerial :: Int -> [Bit] -> [Word8]
 model_decodeSerial stretch = wait
