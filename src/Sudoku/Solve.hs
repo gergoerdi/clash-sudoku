@@ -1,5 +1,6 @@
-{-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
+{-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards, LambdaCase #-}
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Sudoku.Solve
     ( Sudoku
     , Solvable
@@ -7,9 +8,8 @@ module Sudoku.Solve
     , bitsOverlap
     , consistent
 
-    , propagator
-    , PropagatorCmd(..)
-    , PropagatorResult(..)
+    , machine
+    , Result(..)
     ) where
 
 import Clash.Prelude
@@ -33,98 +33,84 @@ consistent = not . bitsOverlap . fmap maskBits
 bitsOverlap :: (KnownNat n, KnownNat k) => Vec k (BitVector n) -> Bool
 bitsOverlap = any (hasOverflowed . sum . map toOverflowing) . transpose . map bv2v
 
-data CellUnit dom n m = CellUnit
-    { cell :: Signal dom (Cell n m)
-    , mask :: Signal dom (Mask n m)
-    , is_single :: Signal dom Bool
-    , is_conflicted :: Signal dom Bool
-    , changed :: Signal dom Bool
-    , cont :: Signal dom (Cell n m)
+data CellUnit n m = CellUnit
+    { cell :: Cell n m
+    , single :: Bool
+    , first_guess, next_guess :: Cell n m
     }
 
-data PropagatorCmd
-    = Propagate
-    | CommitGuess
-    deriving (Generic, NFDataX, Eq, Show)
+data SolveResult n m
+    = Blocked
+    | Complete
+    | Progress (Sudoku n m)
+    | Guess (Sudoku n m) (Sudoku n m)
 
-data PropagatorResult
-    = Progress
-    | Solved
-    | Failure
-    | Stuck
-    deriving (Generic, NFDataX, Eq, Show)
-
-propagate
-    :: (Solvable n m, HiddenClockResetEnable dom)
-    => Grid n m (Signal dom (Mask n m))
-    -> Grid n m (Signal dom (Mask n m))
-propagate = fmap getAp . foldGroups . fmap Ap
-
-propagator
-    :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
-    => Signal dom (Maybe PropagatorCmd)
-    -> Signal dom (Maybe (Cell n m))
-    -> Signal dom (Maybe (Sudoku n m))
-    -> ( Signal dom (Cell n m)
-       , Signal dom PropagatorResult
-       , Signal dom (Sudoku n m)
-       )
-propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont <$> units)
+solve :: (Solvable n m) => Sudoku n m -> SolveResult n m
+solve grid
+    | blocked   = Blocked
+    | complete  = Complete
+    | changed   = Progress pruned
+    | otherwise = Guess grid1 grid2
   where
-    pops = unbundle . fmap sequenceA $ pop
+    blocked = void || not safe
+    void = any (== conflicted) grid
+    safe = allGroups consistent masks
+    complete = all single units
 
-    masks = mask <$> units
+    consistent = not . bitsOverlap . fmap maskBits
 
-    group_masks = propagate masks
-    safe = allGroups consistent <$> bundle masks
-
-    units :: Grid n m (CellUnit dom n m)
-    units = evalState (traverse (state . uncurry unit) ((,) <$> pops <*> group_masks)) (shift_in, pure False)
-
-    all_single  = and <$> bundle (is_single <$> units)
-    any_changed = or <$> bundle (changed <$> units)
-    any_failed  = or <$> bundle (is_conflicted <$> units)
-
-    result =
-        mux (not <$> safe)  (pure Failure) $
-        mux any_failed      (pure Failure) $
-        mux all_single      (pure Solved) $
-        mux any_changed     (pure Progress) $
-        pure Stuck
-
-    unit
-        :: Signal dom (Maybe (Cell n m))
-        -> Signal dom (Mask n m)
-        -> (Signal dom (Maybe (Cell n m)), Signal dom Bool)
-        -> (CellUnit dom n m, (Signal dom (Maybe (Cell n m)), Signal dom Bool))
-    unit pop group_mask (shift_in, guessed_before) = (CellUnit{..}, (shift_out, guessed))
+    units = unit <$> grid
+    unit cell = CellUnit{..}
       where
-        cell = register conflicted cell'
+        (first_guess, next_guess) = splitCell cell
+        single = next_guess == conflicted
 
-        shift_out = enable (isJust <$> shift_in) cell
+    masks = maskOf <$> units
+    group_masks = foldGroups masks
 
-        (first_guess, next_guess) = unbundle $ splitCell <$> cell
-        is_single = next_guess .==. pure conflicted
-        is_conflicted = cell .==. pure conflicted
+    pruned = apply <$> group_masks <*> units
+    changed = pruned /= grid
 
-        mask = mux is_single (cellMask <$> cell) (pure mempty)
+    maskOf CellUnit{..} = if single then cellMask cell else mempty
+    apply mask CellUnit{..} = if single then cell else act mask cell
 
-        can_guess_this = not <$> is_single
-        guess_this = can_guess_this .&&. not <$> guessed_before
-        cont = mux guess_this next_guess cell
-        guessed = guessed_before .||. can_guess_this
+    guesses = evalState (traverse (state . guess1) units) False
+    (grid1, grid2) = (fst <$> guesses, snd <$> guesses)
 
-        update cmd load mask guess cell
-            | Just load <- load                             = load
-            | Just Propagate <- cmd, Just mask <- mask      = act mask cell
-            | Just CommitGuess <- cmd, Just guess <- guess  = guess
-            | otherwise                                     = cell
+    guess1 CellUnit{..} guessed_before
+        | not guessed_before
+        , not single
+        = ((first_guess, next_guess), True)
 
-        cell' = update
-            <$> cmd
-            <*> (shift_in .<|>. pop)
-            <*> enable (not <$> is_single) mask
-            <*> enable guess_this first_guess
-            <*> cell
+        | otherwise
+        = ((cell, cell), guessed_before)
 
-        changed = cell' ./=. cell
+data Result n m
+    = Solved
+    | Push (Sudoku n m)
+    | Pop
+    deriving (Generic, NFDataX)
+
+instance Show (Result n m) where
+    show = \case
+        Solved -> "Solved"
+        Push{} -> "Push"
+        Pop -> "Pop"
+
+machine :: (Solvable n m) => Maybe (Cell n m) -> Maybe (Sudoku n m) -> Bool -> State (Sudoku n m) (Maybe (Result n m))
+machine shift_in pop run
+    | Just cell <- shift_in
+    = Nothing <$ modify (shiftIn cell)
+
+    | Just pop <- pop
+    = Nothing <$ put pop
+
+    | run
+    = solve <$> get >>= \case
+          Blocked -> Just Pop <$ pure ()
+          Complete -> Just Solved <$ pure ()
+          Progress grid' -> Nothing <$ put grid'
+          Guess grid1 grid2 -> Just (Push grid2) <$ put grid1
+
+    | otherwise
+    = pure Nothing

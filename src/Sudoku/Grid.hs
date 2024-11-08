@@ -33,6 +33,9 @@ instance (KnownNat n, KnownNat m) => Traversable (Grid n m) where
 flatGrid :: (KnownNat n, KnownNat m) => Grid n m a <-> Vec (n * m * m * n) a
 flatGrid = iconcat . rows
 
+shiftIn :: (KnownNat n, KnownNat m) => a -> Grid n m a -> Grid n m a
+shiftIn x = project flatGrid . tail . (++ (x :> Nil)) . embed flatGrid
+
 headGrid :: forall n m a. (KnownNat n, KnownNat m, 1 <= n * m * m * n) => Grid n m a -> a
 headGrid = head @(n * m * m * n - 1) . embed flatGrid
 

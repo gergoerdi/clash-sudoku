@@ -6,7 +6,7 @@ import Clash.Class.Counter
 
 import Data.Maybe
 import Control.Monad
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Data.Word
 
 import Protocols
@@ -15,6 +15,7 @@ import qualified Protocols.Df as Df
 import Sudoku.Utils
 import Sudoku.Cell
 import Sudoku.Solve
+import Sudoku.Grid
 import Format
 
 type Digit = Index 10
@@ -29,9 +30,9 @@ showDigit n = ascii '0' + fromIntegral n
 type StackDepth n m = ((n * m) * (m * n))
 type CellIndex n m = Index ((n * m) * (m * n))
 
-data MemCmd n
+data MemCmd n a
     = Read (Index n)
-    | Write (Index n)
+    | Write (Index n) a
 
 data St n m
     = ShiftIn (CellIndex n m)
@@ -47,25 +48,25 @@ data St n m
 
 data Control n m
     = Consume (Maybe (Cell n m))
-    | Solve PropagatorCmd
-    | Stack (MemCmd (StackDepth n m))
+    | Solve
+    | Stack (MemCmd (StackDepth n m) (Sudoku n m))
     | Produce Bool (Either Word8 (Cell n m))
 
 controller
-    :: forall n m dom k. (Solvable n m)
+    :: forall n m dom k. (Solvable n m, Textual n m)
     => (HiddenClockResetEnable dom)
     => (Signal dom (Df.Data (Cell n m)), Signal dom Ack)
     -> (Signal dom Ack, Signal dom (Df.Data (Either Word8 (Cell n m))))
 controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
   where
-    (shift_in', shift_out, in_ack, propagator_cmd, stack_cmd) =
-        mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Progress result)
+    (shift_in', shift_out, in_ack, solve, stack_cmd) =
+        mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Nothing result)
 
     lines = \case
-        Consume shift_in -> (shift_in, Nothing, Ack True, Nothing, Nothing)
-        Solve cmd -> (Nothing, Nothing, Ack False, Just cmd, Nothing)
-        Stack cmd -> (Nothing, Nothing, Ack False, Nothing, Just cmd)
-        Produce proceed output -> (shift_in, Just output, Ack False, Nothing, Nothing)
+        Consume shift_in -> (shift_in, Nothing, Ack True, False, Nothing)
+        Solve -> (Nothing, Nothing, Ack False, True, Nothing)
+        Stack cmd -> (Nothing, Nothing, Ack False, False, Just cmd)
+        Produce proceed output -> (shift_in, Just output, Ack False, False, Nothing)
           where
             shift_in = if proceed then Just conflicted else Nothing
 
@@ -75,27 +76,27 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
             pure $ Consume shift_in
         Settle cnt sp -> do
             put $ Busy (countSucc cnt) sp
-            pure $ Solve Propagate
+            pure Solve
         WaitPush cnt sp -> do
             put $ Busy (countSucc cnt) sp
-            pure $ Solve CommitGuess
+            pure Solve
         WaitPop cnt sp -> do
             put $ Settle (countSucc cnt) sp
-            pure $ Solve Propagate
+            pure Solve
         Busy cnt sp -> case result of
-            Progress -> do
+            Nothing -> do
                 put $ Busy (countSucc cnt) sp
-                pure $ Solve Propagate
-            Solved -> do
+                pure Solve
+            Just Solved -> do
                 put $ ShiftOutCycleCount True (countSucc cnt) 0
-                pure $ Solve Propagate
-            Stuck -> do
+                pure Solve
+            Just (Push grid) -> do
                 put $ WaitPush (countSucc cnt) (sp + 1)
-                pure $ Stack $ Write sp
-            Failure -> case countPredChecked sp of
+                pure $ Stack $ Write sp grid
+            Just Pop -> case countPredChecked sp of
                 Nothing -> do
                     put $ ShiftOutCycleCount False (countSucc cnt) 0
-                    pure $ Solve Propagate
+                    pure Solve
                 Just sp'-> do
                     put $ WaitPop (countSucc cnt) sp'
                     pure $ Stack $ Read sp'
@@ -121,15 +122,16 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
         put s''
         pure proceed
 
-    (head_cell, result, next_guesses) = propagator propagator_cmd shift_in' popped
+    grid = register (pure wild) grid'
+    (result, grid') = unbundle $ runState <$> (machine <$> shift_in' <*> popped <*> solve) <*> grid
+    head_cell = headGrid @n @m <$> grid
 
     popped = enable (delay False rd) $
         blockRamU NoClearOnReset (SNat @(StackDepth n m)) undefined sp (packWrite <$> sp <*> wr)
       where
         (sp, rd, wr) = unbundle $ do
             stack_cmd <- stack_cmd
-            next_guesses <- next_guesses
             pure $ case stack_cmd of
                 Nothing -> (0, False, Nothing)
                 Just (Read sp) -> (sp, True, Nothing)
-                Just (Write sp) -> (sp, False, Just next_guesses)
+                Just (Write sp x) -> (sp, False, Just x)
