@@ -35,11 +35,8 @@ bitsOverlap = any (hasOverflowed . sum . map toOverflowing) . transpose . map bv
 
 data CellUnit dom n m = CellUnit
     { cell :: Signal dom (Cell n m)
-    , mask :: Signal dom (Mask n m)
-    , is_single :: Signal dom Bool
-    , is_conflicted :: Signal dom Bool
-    , changed :: Signal dom Bool
-    , cont :: Signal dom (Cell n m)
+    , single :: Signal dom Bool
+    , firstGuess, nextGuess :: Signal dom (Cell n m)
     }
 
 data PropagatorCmd
@@ -69,62 +66,65 @@ propagator
        , Signal dom PropagatorResult
        , Signal dom (Sudoku n m)
        )
-propagator cmd shift_in pop = (headGrid (cell <$> units), result, bundle $ cont <$> units)
+propagator cmd shift_in pop = (headGrid cells, result, bundle grid2)
   where
     pops = unbundle . fmap sequenceA $ pop
 
-    masks = mask <$> units
-
-    group_masks = propagate masks
+    blocked = void .||. (not <$> safe)
+    void = or <$> bundle ((.==. pure conflicted) <$> cells)
     safe = allGroups consistent <$> bundle masks
+    complete = and <$> bundle (single <$> units)
+
+    cells :: Grid n m (Signal dom (Cell n m))
+    cells = pure (regMaybe wild) <*> cells'
+
+    shift_ins :: Grid n m (Signal dom (Cell n m))
+    shift_ins = evalState (traverse (state . fmap unbundle . liftA2 step) cells) shift_in
+      where
+        step cell shift_in = case shift_in of
+            Nothing -> (cell, Nothing)
+            Just shift_in -> (shift_in, Just cell)
+
+    cells' :: Grid n m (Signal dom (Maybe (Cell n m)))
+    cells' = unbundle $ fmap sequenceA $
+              enable (isJust <$> shift_in) (bundle shift_ins)
+        .<|>. pop
+        .<|>. enable (cmd .==. pure (Just Propagate) .&&. changed) (bundle pruned)
+        .<|>. enable (cmd .==. pure (Just CommitGuess)) (bundle grid1)
 
     units :: Grid n m (CellUnit dom n m)
-    units = evalState (traverse (state . uncurry unit) ((,) <$> pops <*> group_masks)) (shift_in, pure False)
+    units = unit <$> cells
+    masks = maskOf <$> units
+    group_masks = propagate masks
 
-    all_single  = and <$> bundle (is_single <$> units)
-    any_changed = or <$> bundle (changed <$> units)
-    any_failed  = or <$> bundle (is_conflicted <$> units)
+    pruned :: Grid n m (Signal dom (Cell n m))
+    pruned = apply <$> group_masks <*> units
+
+    changed :: Signal dom Bool
+    changed = or <$> (bundle $ (./=.) <$> pruned <*> cells)
 
     result =
-        mux (not <$> safe)  (pure Failure) $
-        mux any_failed      (pure Failure) $
-        mux all_single      (pure Solved) $
-        mux any_changed     (pure Progress) $
+        mux blocked  (pure Failure) $
+        mux complete (pure Solved) $
+        mux changed  (pure Progress) $
         pure Stuck
 
-    unit
-        :: Signal dom (Maybe (Cell n m))
-        -> Signal dom (Mask n m)
-        -> (Signal dom (Maybe (Cell n m)), Signal dom Bool)
-        -> (CellUnit dom n m, (Signal dom (Maybe (Cell n m)), Signal dom Bool))
-    unit pop group_mask (shift_in, guessed_before) = (CellUnit{..}, (shift_out, guessed))
+
+    unit :: Signal dom (Cell n m) -> CellUnit dom n m
+    unit cell = CellUnit{..}
       where
-        cell = register conflicted cell'
+        (firstGuess, nextGuess) = unbundle $ splitCell <$> cell
+        single = nextGuess .==. pure conflicted
 
-        shift_out = enable (isJust <$> shift_in) cell
+    maskOf CellUnit{..} = mux single (cellMask <$> cell) (pure mempty)
+    apply mask CellUnit{..} = mux single cell (act <$> mask <*> cell)
 
-        (first_guess, next_guess) = unbundle $ splitCell <$> cell
-        is_single = next_guess .==. pure conflicted
-        is_conflicted = cell .==. pure conflicted
+    guesses = evalState (traverse (state . guess1) units) (pure False)
+    grid1 = fmap fst <$> guesses
+    grid2 = fmap snd <$> guesses
 
-        mask = mux is_single (cellMask <$> cell) (pure mempty)
-
-        can_guess_this = not <$> is_single
-        guess_this = can_guess_this .&&. not <$> guessed_before
-        cont = mux guess_this next_guess cell
-        guessed = guessed_before .||. can_guess_this
-
-        update cmd load mask guess cell
-            | Just load <- load                             = load
-            | Just Propagate <- cmd, Just mask <- mask      = act mask cell
-            | Just CommitGuess <- cmd, Just guess <- guess  = guess
-            | otherwise                                     = cell
-
-        cell' = update
-            <$> cmd
-            <*> (shift_in .<|>. pop)
-            <*> enable (not <$> is_single) mask
-            <*> enable guess_this first_guess
-            <*> cell
-
-        changed = cell' ./=. cell
+    guess1 :: CellUnit dom n m -> Signal dom Bool -> (Signal dom (Cell n m, Cell n m), Signal dom Bool)
+    guess1 CellUnit{..} guessed_before = unbundle $
+        mux (not <$> guessed_before .&&. not <$> single)
+          (bundle (bundle (firstGuess, nextGuess), pure True))
+          (bundle (bundle (cell, cell), guessed_before))
