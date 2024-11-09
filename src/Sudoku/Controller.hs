@@ -17,6 +17,8 @@ import Sudoku.Cell
 import Sudoku.Solve
 import Format
 
+import Debug.Trace
+
 type Digit = Index 10
 type BCD n = Vec n Digit
 
@@ -52,7 +54,7 @@ data Control n m
     | Produce Bool (Either Word8 (Cell n m))
 
 controller
-    :: forall n m dom k. (Solvable n m)
+    :: forall n m dom k. (Solvable n m, Textual n m)
     => (HiddenClockResetEnable dom)
     => (Signal dom (Df.Data (Cell n m)), Signal dom Ack)
     -> (Signal dom Ack, Signal dom (Df.Data (Either Word8 (Cell n m))))

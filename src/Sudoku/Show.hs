@@ -11,7 +11,9 @@ import Sudoku.Grid
 import Sudoku.Cell
 import Format
 import Format.Model
-import Sudoku.Solve (Sudoku, Solvable)
+
+type Sudoku n m = Grid n m (Cell n m)
+type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
 
 type GridFormat n m = ((((Forward :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n
 

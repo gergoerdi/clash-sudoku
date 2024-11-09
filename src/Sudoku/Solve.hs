@@ -18,14 +18,14 @@ import Clash.Num.Overflowing
 import Sudoku.Utils
 import Sudoku.Grid
 import Sudoku.Cell
+import Sudoku.Show
 
 import Data.Maybe
 import Data.Monoid.Action
 import Control.Monad.State.Strict
 import Data.Monoid (Ap(..))
 
-type Sudoku n m = Grid n m (Cell n m)
-type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
+import Debug.Trace
 
 consistent :: (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Bool
 consistent = not . bitsOverlap . fmap maskBits
@@ -61,7 +61,7 @@ propagate
 propagate = fmap getAp . foldGroups . fmap Ap
 
 propagator
-    :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
+    :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom, Textual n m)
     => Signal dom (Maybe PropagatorCmd)
     -> Signal dom (Maybe (Cell n m))
     -> Signal dom (Maybe (Sudoku n m))
