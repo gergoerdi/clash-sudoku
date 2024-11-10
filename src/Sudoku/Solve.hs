@@ -67,57 +67,55 @@ solver
        , Signal dom SolverResult
        , Signal dom (Sudoku n m)
        )
-solver cmd shift_in pop = (headGrid cells, result, bundle grid2)
+solver cmd shift_in pop = (headGrid cells, result, bundle next_guesses)
   where
     pops = unbundle . fmap sequenceA $ pop
 
-    blocked = void .||. (not <$> safe)
-    void = or <$> bundle ((.==. pure conflicted) <$> cells)
-    safe = allGroups consistent <$> bundle masks
-    complete = and <$> bundle (fmap single <$> memos)
+    result =
+        mux (void .||. not <$> safe) (pure Blocked) $
+        mux (and <$> bundle singles) (pure Complete) $
+        mux changed                  (pure Progress) $
+        pure Stuck
+      where
+        void = or <$> bundle ((== conflicted) .<$>. cells)
+        safe = allGroups consistent <$> bundle masks
 
     cells = pure (regMaybe wild) <*> cells'
-    cells' = select <$> shift_ins <*> pops <*> pruneds <*> grid1
+    cells' = select <$> shifted_ins <*> pops <*> pruneds <*> first_guesses
       where
-        select shift_in_prev pop pruned guess = fmap getAlt . getAp . mconcat . coerce $
+        select shifted_in pop pruned guess = fmap getAlt . getAp . mconcat . coerce $
             [ pop
-            , enable (isJust <$> shift_in) shift_in_prev
+            , enable (isJust <$> shift_in) shifted_in
             , enable (cmd .==. pure Prune .&&. changed) pruned
             , enable (cmd .==. pure Guess) guess
             ]
 
-    shift_ins = traverseS step shift_in cells
+    shifted_ins = traverseS step shift_in cells
       where
         step cell shift_in = case shift_in of
             Nothing -> (cell, Nothing)
             Just shift_in -> (shift_in, Just cell)
 
+    pruneds = apply .<$>. group_masks .<*>. memos
+
     memos = memo <$> cells
+    singles = single .<$>. memos
 
-    masks = liftA maskOf <$> memos
+    masks = maskOf .<$>. memos
     group_masks = propagate masks
-    pruneds = liftA2 apply <$> group_masks <*> memos
-    changed = or <$> (bundle $ (./=.) <$> pruneds <*> cells)
+    changed = or <$> (bundle $ (/=) .<$>. pruneds .<*>. cells)
 
-    guesses = traverseS guess1 (pure False) memos
-    grid1 = fmap fst <$> guesses
-    grid2 = fmap snd <$> guesses
-
-    result =
-        mux blocked   (pure Blocked) $
-        mux complete  (pure Complete) $
-        mux changed   (pure Progress) $
-        pure Stuck
+    maskOf CellMemo{..} = if single then cellMask cell else mempty
+    apply mask CellMemo{..} = if single then cell else act mask cell
 
     memo cell = CellMemo <$> cell <*> single <*> first_guess <*> next_guess
       where
         (first_guess, next_guess) = unbundle $ splitCell <$> cell
         single = next_guess .==. pure conflicted
+    guesses = traverseS guess1 (pure False) memos
+    first_guesses = fst .<$>. guesses
+    next_guesses = snd .<$>. guesses
 
-    maskOf CellMemo{..} = if single then cellMask cell else mempty
-    apply mask CellMemo{..} = if single then cell else act mask cell
-
-    guess1 :: CellMemo n m -> Bool -> ((Cell n m, Cell n m), Bool)
     guess1 CellMemo{..} guessed_before
         | not guessed_before
         , not single
