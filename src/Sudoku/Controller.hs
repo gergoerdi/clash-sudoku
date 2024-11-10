@@ -47,7 +47,7 @@ data St n m
 
 data Control n m
     = Consume (Maybe (Cell n m))
-    | Solve PropagatorCmd
+    | Solve SolverCmd
     | Stack (MemCmd (StackDepth n m))
     | Produce Bool (Either Word8 (Cell n m))
 
@@ -58,14 +58,14 @@ controller
     -> (Signal dom Ack, Signal dom (Df.Data (Either Word8 (Cell n m))))
 controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
   where
-    (shift_in', shift_out, in_ack, propagator_cmd, stack_cmd) =
+    (shift_in', shift_out, in_ack, solver_cmd, stack_cmd) =
         mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Progress result)
 
     lines = \case
-        Consume shift_in -> (shift_in, Nothing, Ack True, Nothing, Nothing)
-        Solve cmd -> (Nothing, Nothing, Ack False, Just cmd, Nothing)
-        Stack cmd -> (Nothing, Nothing, Ack False, Nothing, Just cmd)
-        Produce proceed output -> (shift_in, Just output, Ack False, Nothing, Nothing)
+        Consume shift_in -> (shift_in, Nothing, Ack True, Idle, Nothing)
+        Solve cmd -> (Nothing, Nothing, Ack False, cmd, Nothing)
+        Stack cmd -> (Nothing, Nothing, Ack False, Idle, Just cmd)
+        Produce proceed output -> (shift_in, Just output, Ack False, Idle, Nothing)
           where
             shift_in = if proceed then Just conflicted else Nothing
 
@@ -75,30 +75,30 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
             pure $ Consume shift_in
         Settle cnt sp -> do
             put $ Busy (countSucc cnt) sp
-            pure $ Solve Propagate
+            pure $ Solve Prune
         WaitPush cnt sp -> do
             put $ Busy (countSucc cnt) sp
-            pure $ Solve CommitGuess
+            pure $ Solve Guess
         WaitPop cnt sp -> do
             put $ Settle (countSucc cnt) sp
-            pure $ Solve Propagate
+            pure $ Solve Prune
         Busy cnt sp -> case result of
-            Progress -> do
-                put $ Busy (countSucc cnt) sp
-                pure $ Solve Propagate
-            Solved -> do
-                put $ ShiftOutCycleCount True (countSucc cnt) 0
-                pure $ Solve Propagate
-            Stuck -> do
-                put $ WaitPush (countSucc cnt) (sp + 1)
-                pure $ Stack $ Write sp
-            Failure -> case countPredChecked sp of
+            Blocked -> case countPredChecked sp of
                 Nothing -> do
                     put $ ShiftOutCycleCount False (countSucc cnt) 0
-                    pure $ Solve Propagate
+                    pure $ Solve Idle
                 Just sp'-> do
                     put $ WaitPop (countSucc cnt) sp'
                     pure $ Stack $ Read sp'
+            Complete -> do
+                put $ ShiftOutCycleCount True (countSucc cnt) 0
+                pure $ Solve Idle
+            Progress -> do
+                put $ Busy (countSucc cnt) sp
+                pure $ Solve Prune
+            Stuck -> do
+                put $ WaitPush (countSucc cnt) (sp + 1)
+                pure $ Stack $ Write sp
         ShiftOutCycleCount solved cnt i -> do
             let cnt' = cnt `rotateLeftS` SNat @1
             wait out_ack $ maybe (ShiftOutCycleCountFinished solved) (ShiftOutCycleCount solved cnt') $ countSuccChecked i
@@ -121,7 +121,7 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
         put s''
         pure proceed
 
-    (head_cell, result, next_guesses) = propagator propagator_cmd shift_in' popped
+    (head_cell, result, next_guesses) = solver solver_cmd shift_in' popped
 
     popped = enable (delay False rd) $
         blockRamU NoClearOnReset (SNat @(StackDepth n m)) undefined sp (packWrite <$> sp <*> wr)

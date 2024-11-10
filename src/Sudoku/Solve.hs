@@ -7,9 +7,9 @@ module Sudoku.Solve
     , bitsOverlap
     , consistent
 
-    , propagator
-    , PropagatorCmd(..)
-    , PropagatorResult(..)
+    , solver
+    , SolverCmd(..)
+    , SolverResult(..)
     ) where
 
 import Clash.Prelude
@@ -40,15 +40,16 @@ data CellMemo dom n m = CellMemo
     , firstGuess, nextGuess :: Signal dom (Cell n m)
     }
 
-data PropagatorCmd
-    = Propagate
-    | CommitGuess
+data SolverCmd
+    = Idle
+    | Prune
+    | Guess
     deriving (Generic, NFDataX, Eq, Show)
 
-data PropagatorResult
-    = Progress
-    | Solved
-    | Failure
+data SolverResult
+    = Blocked
+    | Complete
+    | Progress
     | Stuck
     deriving (Generic, NFDataX, Eq, Show)
 
@@ -58,16 +59,16 @@ propagate
     -> Grid n m (Signal dom (Mask n m))
 propagate = fmap getAp . foldGroups . fmap Ap
 
-propagator
+solver
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
-    => Signal dom (Maybe PropagatorCmd)
+    => Signal dom SolverCmd
     -> Signal dom (Maybe (Cell n m))
     -> Signal dom (Maybe (Sudoku n m))
     -> ( Signal dom (Cell n m)
-       , Signal dom PropagatorResult
+       , Signal dom SolverResult
        , Signal dom (Sudoku n m)
        )
-propagator cmd shift_in pop = (headGrid cells, result, bundle grid2)
+solver cmd shift_in pop = (headGrid cells, result, bundle grid2)
   where
     pops = unbundle . fmap sequenceA $ pop
 
@@ -82,8 +83,8 @@ propagator cmd shift_in pop = (headGrid cells, result, bundle grid2)
         select shift_in_prev pop pruned guess = fmap getAlt . getAp . mconcat . coerce $
             [ pop
             , enable (isJust <$> shift_in) shift_in_prev
-            , enable (cmd .==. pure (Just Propagate) .&&. changed) pruned
-            , enable (cmd .==. pure (Just CommitGuess)) guess
+            , enable (cmd .==. pure Prune .&&. changed) pruned
+            , enable (cmd .==. pure Guess) guess
             ]
 
     shift_ins = traverseS step shift_in cells
@@ -100,8 +101,8 @@ propagator cmd shift_in pop = (headGrid cells, result, bundle grid2)
     changed = or <$> (bundle $ (./=.) <$> pruneds <*> cells)
 
     result =
-        mux blocked   (pure Failure) $
-        mux complete  (pure Solved) $
+        mux blocked   (pure Blocked) $
+        mux complete  (pure Complete) $
         mux changed   (pure Progress) $
         pure Stuck
 
