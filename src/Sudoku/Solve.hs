@@ -33,12 +33,6 @@ consistent = not . bitsOverlap . fmap maskBits
 bitsOverlap :: (KnownNat n, KnownNat k) => Vec k (BitVector n) -> Bool
 bitsOverlap = any (hasOverflowed . sum . map toOverflowing) . transpose . map bv2v
 
-data CellMemo n m = CellMemo
-    { cell :: Cell n m
-    , single :: Bool
-    , firstGuess, nextGuess :: Cell n m
-    }
-
 data SolverCmd
     = Idle
     | Prune
@@ -96,30 +90,26 @@ solver cmd shift_in pop = (headGrid cells, result, bundle next_guesses)
             Nothing -> (cell, Nothing)
             Just shift_in -> (shift_in, Just cell)
 
-    pruneds = apply .<$>. group_masks .<*>. memos
+    pruneds = apply .<$>. group_masks .<*>. singles .<*>. cells
 
-    memos = memo <$> cells
-    singles = single .<$>. memos
+    splits = splitCell .<$>. cells
+    singles = (== conflicted) . snd .<$>. splits
 
-    masks = maskOf .<$>. memos
+    masks = maskOf .<$>. singles .<*>. cells
     group_masks = propagate masks
     changed = or <$> (bundle $ (/=) .<$>. pruneds .<*>. cells)
 
-    maskOf CellMemo{..} = if single then cellMask cell else mempty
-    apply mask CellMemo{..} = if single then cell else act mask cell
+    maskOf single cell = if single then cellMask cell else mempty
+    apply mask single cell = if single then cell else act mask cell
 
-    memo cell = CellMemo <$> cell <*> single <*> first_guess <*> next_guess
-      where
-        (first_guess, next_guess) = unbundle $ splitCell <$> cell
-        single = next_guess .==. pure conflicted
-    guesses = traverseS guess1 (pure False) memos
+    guesses = traverseS guess1 (pure False) ((,,) .<$>. singles .<*>. cells .<*>. splits)
     first_guesses = fst .<$>. guesses
     next_guesses = snd .<$>. guesses
 
-    guess1 CellMemo{..} guessed_before
+    guess1 (single, cell, guess) guessed_before
         | not guessed_before
         , not single
-        = ((firstGuess, nextGuess), True)
+        = (guess, True)
 
         | otherwise
         = ((cell, cell), guessed_before)
