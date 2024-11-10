@@ -21,7 +21,6 @@ import Sudoku.Cell
 
 import Data.Maybe
 import Data.Monoid.Action
-import Control.Monad.State.Strict
 import Data.Monoid (Ap(..), Alt(..))
 import Data.Coerce
 
@@ -34,10 +33,10 @@ consistent = not . bitsOverlap . fmap maskBits
 bitsOverlap :: (KnownNat n, KnownNat k) => Vec k (BitVector n) -> Bool
 bitsOverlap = any (hasOverflowed . sum . map toOverflowing) . transpose . map bv2v
 
-data CellMemo dom n m = CellMemo
-    { cell :: Signal dom (Cell n m)
-    , single :: Signal dom Bool
-    , firstGuess, nextGuess :: Signal dom (Cell n m)
+data CellMemo n m = CellMemo
+    { cell :: Cell n m
+    , single :: Bool
+    , firstGuess, nextGuess :: Cell n m
     }
 
 data SolverCmd
@@ -75,7 +74,7 @@ solver cmd shift_in pop = (headGrid cells, result, bundle grid2)
     blocked = void .||. (not <$> safe)
     void = or <$> bundle ((.==. pure conflicted) <$> cells)
     safe = allGroups consistent <$> bundle masks
-    complete = and <$> bundle (single <$> memos)
+    complete = and <$> bundle (fmap single <$> memos)
 
     cells = pure (regMaybe wild) <*> cells'
     cells' = select <$> shift_ins <*> pops <*> pruneds <*> grid1
@@ -94,11 +93,15 @@ solver cmd shift_in pop = (headGrid cells, result, bundle grid2)
             Just shift_in -> (shift_in, Just cell)
 
     memos = memo <$> cells
-    masks = maskOf <$> memos
-    group_masks = propagate masks
 
-    pruneds = apply <$> group_masks <*> memos
+    masks = liftA maskOf <$> memos
+    group_masks = propagate masks
+    pruneds = liftA2 apply <$> group_masks <*> memos
     changed = or <$> (bundle $ (./=.) <$> pruneds <*> cells)
+
+    guesses = traverseS guess1 (pure False) memos
+    grid1 = fmap fst <$> guesses
+    grid2 = fmap snd <$> guesses
 
     result =
         mux blocked   (pure Blocked) $
@@ -106,21 +109,19 @@ solver cmd shift_in pop = (headGrid cells, result, bundle grid2)
         mux changed   (pure Progress) $
         pure Stuck
 
-
-    memo cell = CellMemo{..}
+    memo cell = CellMemo <$> cell <*> single <*> first_guess <*> next_guess
       where
-        (firstGuess, nextGuess) = unbundle $ splitCell <$> cell
-        single = nextGuess .==. pure conflicted
+        (first_guess, next_guess) = unbundle $ splitCell <$> cell
+        single = next_guess .==. pure conflicted
 
-    maskOf CellMemo{..} = mux single (cellMask <$> cell) (pure mempty)
-    apply mask CellMemo{..} = mux single cell (act <$> mask <*> cell)
+    maskOf CellMemo{..} = if single then cellMask cell else mempty
+    apply mask CellMemo{..} = if single then cell else act mask cell
 
-    guesses = evalState (traverse (state . guess1) memos) (pure False)
-    grid1 = fmap fst <$> guesses
-    grid2 = fmap snd <$> guesses
+    guess1 :: CellMemo n m -> Bool -> ((Cell n m, Cell n m), Bool)
+    guess1 CellMemo{..} guessed_before
+        | not guessed_before
+        , not single
+        = ((firstGuess, nextGuess), True)
 
-    guess1 :: CellMemo dom n m -> Signal dom Bool -> (Signal dom (Cell n m, Cell n m), Signal dom Bool)
-    guess1 CellMemo{..} guessed_before = unbundle $
-        mux (not <$> guessed_before .&&. not <$> single)
-          (bundle (bundle (firstGuess, nextGuess), pure True))
-          (bundle (bundle (cell, cell), guessed_before))
+        | otherwise
+        = ((cell, cell), guessed_before)
