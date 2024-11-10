@@ -3,20 +3,20 @@ module Sudoku.Pure.Step2_2 where
 
 import Clash.Prelude
 
-import Sudoku.Solve (Solvable, Sudoku, bitsOverlap)
+import Sudoku.Solve (Sudoku, bitsOverlap)
 import Sudoku.Cell
 import Sudoku.Grid
 
 import Data.Monoid.Action
 import Control.Monad.State.Strict
 
-single :: (Solvable n m) => Cell n m -> Bool
+single :: (KnownNat n, KnownNat m) => Cell n m -> Bool
 single cell = popCount (cellBits cell) == 1
 
-choices :: (Solvable n m) => Cell n m -> [Cell n m]
+choices :: (KnownNat n, KnownNat m) => Cell n m -> [Cell n m]
 choices cell = [ given i | i <- [minBound..maxBound], cellBits cell ! i == 1 ]
 
-expand :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
+expand :: (KnownNat n, KnownNat m) => Sudoku n m -> [Sudoku n m]
 expand grid = sequenceA $ evalState (traverse (state . guess1) grid) False
   where
     guess1 cell guessed_before
@@ -27,16 +27,16 @@ expand grid = sequenceA $ evalState (traverse (state . guess1) grid) False
         | otherwise
         = ([cell], guessed_before)
 
-complete :: (Solvable n m) => Sudoku n m -> Bool
+complete :: (KnownNat n, KnownNat m) => Sudoku n m -> Bool
 complete = all single
 
-safe :: (Solvable n m) => Sudoku n m -> Bool
+safe :: (KnownNat n, KnownNat m) => Sudoku n m -> Bool
 safe = allGroups consistent
 
-consistent :: (Solvable n m, KnownNat k) => Vec k (Cell n m) -> Bool
+consistent :: (KnownNat n, KnownNat m, KnownNat k) => Vec k (Cell n m) -> Bool
 consistent = not . bitsOverlap . fmap (\cell -> if single cell then cellBits cell else 0)
 
-sudoku :: (Alternative f, Solvable n m) => Sudoku n m -> f (Sudoku n m)
+sudoku :: (Alternative f, KnownNat n, KnownNat m) => Sudoku n m -> f (Sudoku n m)
 sudoku grid
     | not (safe grid')           = empty
     | any (== conflicted) grid' = empty
