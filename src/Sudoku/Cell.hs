@@ -31,7 +31,7 @@ givenFromIntegral x
     = Nothing
 
 lastBit :: (KnownNat n) => BitVector n -> BitVector n
-lastBit x = x `xor` (x .&. (x - 1))
+lastBit x = x .&. negate x
 
 splitCell :: (KnownNat n, KnownNat m) => Cell n m -> (Cell n m, Cell n m)
 splitCell (Cell c) = (Cell last, Cell rest)
