@@ -13,11 +13,8 @@ countPredChecked x = x' <$ guard (not underflow)
   where
     (underflow, x') = countPredOverflow x
 
-enable :: (Applicative f) => f Bool -> f a -> f (Maybe a)
-enable en x = mux en (Just <$> x) (pure Nothing)
-
-(.<|>.) :: (Applicative f, Alternative g) => f (g a) -> f (g a) -> f (g a)
-(.<|>.) = liftA2 (<|>)
+enable :: (Applicative f, Alternative g) => f Bool -> f a -> f (g a)
+enable en x = mux en (pure <$> x) (pure empty)
 
 packWrite :: addr -> Maybe val -> Maybe (addr, val)
 packWrite addr val = (addr,) <$> val
