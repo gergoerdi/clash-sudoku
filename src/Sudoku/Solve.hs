@@ -86,7 +86,7 @@ propagator cmd shift_in pop = (headGrid cells, result, bundle grid2)
             , enable (cmd .==. pure (Just CommitGuess)) guess
             ]
 
-    shift_ins = evalState (traverse (state . fmap unbundle . liftA2 step) cells) shift_in
+    shift_ins = traverseS step shift_in cells
       where
         step cell shift_in = case shift_in of
             Nothing -> (cell, Nothing)
@@ -100,9 +100,9 @@ propagator cmd shift_in pop = (headGrid cells, result, bundle grid2)
     changed = or <$> (bundle $ (./=.) <$> pruneds <*> cells)
 
     result =
-        mux blocked  (pure Failure) $
-        mux complete (pure Solved) $
-        mux changed  (pure Progress) $
+        mux blocked   (pure Failure) $
+        mux complete  (pure Solved) $
+        mux changed   (pure Progress) $
         pure Stuck
 
 
