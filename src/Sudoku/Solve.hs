@@ -84,11 +84,11 @@ solver cmd shift_in pop = (headGrid cells, result, bundle next_guesses)
             , enable (cmd .==. pure Guess) guess
             ]
 
-    shifted_ins = traverseS step shift_in cells
+    (_, shifted_ins) = mapAccumRS step shift_in cells
       where
-        step cell shift_in = case shift_in of
-            Nothing -> (cell, Nothing)
-            Just shift_in -> (shift_in, Just cell)
+        step shift_in cell = case shift_in of
+            Nothing -> (Nothing, cell)
+            Just shift_in -> (Just cell, shift_in)
 
     pruneds = apply .<$>. group_masks .<*>. singles .<*>. cells
 
@@ -102,14 +102,14 @@ solver cmd shift_in pop = (headGrid cells, result, bundle next_guesses)
     maskOf single cell = if single then cellMask cell else mempty
     apply mask single cell = if single then cell else act mask cell
 
-    guesses = traverseS guess1 (pure False) ((,,) .<$>. singles .<*>. cells .<*>. splits)
+    (_, guesses) = mapAccumRS guess1 (pure False) ((,,) .<$>. singles .<*>. cells .<*>. splits)
     first_guesses = fst .<$>. guesses
     next_guesses = snd .<$>. guesses
 
-    guess1 (single, cell, guess) guessed_before
+    guess1 guessed_before (single, cell, guess)
         | not guessed_before
         , not single
-        = (guess, True)
+        = (True, guess)
 
         | otherwise
-        = ((cell, cell), guessed_before)
+        = (guessed_before, (cell, cell))

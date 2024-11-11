@@ -25,10 +25,7 @@ instance (KnownNat n, KnownNat m) => Bundle (Grid n m a) where
     unbundle = Grid . fmap unbundle . unbundle . fmap getGrid
 
 instance (KnownNat n, KnownNat m) => Traversable (Grid n m) where
-    traverse f = fmap (project phi) . traverse f . embed phi
-      where
-        phi = ireverse . flatGrid
-        ireverse = Iso reverse reverse
+    traverse f = fmap (project flatGrid) . traverse f . embed flatGrid
 
 flatGrid :: (KnownNat n, KnownNat m) => Grid n m a <-> Vec (n * m * m * n) a
 flatGrid = iconcat . rows
