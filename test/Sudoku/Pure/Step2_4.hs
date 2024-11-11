@@ -31,7 +31,8 @@ sudoku :: (Alternative f, Solvable n m) => Sudoku n m -> f (Sudoku n m)
 sudoku grid
     | blocked   = empty
     | complete  = pure grid
-    | otherwise = asum [sudoku grid' | grid' <- expand pruned]
+    | changed   = sudoku pruned
+    | otherwise = asum [sudoku grid' | grid' <- expand grid]
   where
     blocked = void || not safe
     void = any (== conflicted) grid
@@ -45,6 +46,7 @@ sudoku grid
     group_masks = foldGroups masks
     
     pruned = apply <$> is_singles <*> group_masks <*> grid
+    changed = pruned /= grid
 
     maskOf is_single cell = if is_single then cellMask cell else mempty
     apply is_single mask = if is_single then id else act mask

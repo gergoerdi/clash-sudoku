@@ -38,16 +38,18 @@ consistent = not . bitsOverlap . fmap (\cell -> if single cell then cellBits cel
 
 sudoku :: (Alternative f, KnownNat n, KnownNat m) => Sudoku n m -> f (Sudoku n m)
 sudoku grid
-    | not (safe grid')           = empty
-    | any (== conflicted) grid' = empty
-    | complete grid'           = pure grid'
-    | otherwise                = asum [sudoku grid'' | grid'' <- expand grid']
+    | not (safe grid)           = empty
+    | any (== conflicted) grid = empty
+    | complete grid           = pure grid
+    | changed                 = sudoku pruned
+    | otherwise               = asum [sudoku grid' | grid' <- expand grid]
   where
     is_singles = single <$> grid
     masks = maskOf <$> is_singles <*> grid
     group_masks = foldGroups masks
     
-    grid' = apply <$> is_singles <*> group_masks <*> grid
+    pruned = apply <$> is_singles <*> group_masks <*> grid
+    changed = pruned /= grid
 
     maskOf is_single cell = if is_single then cellMask cell else mempty
     apply is_single mask = if is_single then id else act mask

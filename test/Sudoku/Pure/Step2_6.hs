@@ -1,14 +1,15 @@
 -- Compute `single` via `splitCell`
 module Sudoku.Pure.Step2_6 where
 
-import Clash.Prelude
+import Clash.Prelude hiding (mapAccumL)
 
 import Sudoku.Solve (Solvable, Sudoku, bitsOverlap)
 import Sudoku.Cell
 import Sudoku.Grid
 
 import Data.Monoid.Action
-import Control.Monad.State.Strict
+-- import Control.Monad.State.Strict
+import Data.Traversable
 
 sudoku :: (Alternative f, Solvable n m) => Sudoku n m -> f (Sudoku n m)
 sudoku grid
@@ -20,30 +21,30 @@ sudoku grid
     blocked = void || not safe
     void = any (== conflicted) grid
     safe = allGroups consistent masks
-    complete = and is_singles
+    complete = and singles
     
     consistent = not . bitsOverlap . fmap maskBits
 
-    splits = (\c -> (c, splitCell c)) <$> grid
+    splits = splitCell <$> grid
 
-    is_singles = (\(c, (first_guess, next_guess)) -> next_guess == conflicted) <$> splits
-    masks = maskOf <$> is_singles <*> grid
+    singles = (== conflicted) . snd <$> splits
+    masks = maskOf <$> singles <*> grid
     group_masks = foldGroups masks
     
-    pruned = apply <$> is_singles <*> group_masks <*> grid
+    pruned = apply <$> singles <*> group_masks <*> grid
     changed = pruned /= grid
 
-    maskOf is_single cell = if is_single then cellMask cell else mempty
-    apply is_single mask = if is_single then id else act mask
+    maskOf single cell = if single then cellMask cell else mempty
+    apply single mask = if single then id else act mask
 
-    guesses = evalState (traverse (state . guess1) splits) False
+    (_, guesses) = mapAccumL guess1 False $ (,,) <$> singles <*> grid <*> splits
     (grid1, grid2) = (fst <$> guesses, snd <$> guesses)
 
-    guess1 (cell, (first_guess, next_guess)) guessed_before
+    guess1 guessed_before (single, cell, (first_guess, next_guess))
         | not guessed_before
-        , next_guess /= conflicted
-        = ((first_guess, next_guess), True)
+        , not single
+        = (True, (first_guess, next_guess))
 
         | otherwise
-        = ((cell, cell), guessed_before)
+        = (guessed_before, (cell, cell))
 

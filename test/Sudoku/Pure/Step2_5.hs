@@ -15,10 +15,9 @@ single :: (Solvable n m) => Cell n m -> Bool
 single cell = popCount (cellBits cell) == 1
 
 expand :: (Solvable n m) => Sudoku n m -> (Sudoku n m, Sudoku n m)
-expand grid = (grid1, grid2)
+expand grid = (fst <$> grids, snd <$> grids)
   where
     grids = evalState (traverse (state . guess1) grid) False
-    (grid1, grid2) = (fst <$> grids, snd <$> grids)
 
     guess1 cell guessed_before
         | not guessed_before
@@ -33,7 +32,8 @@ sudoku :: (Alternative f, Solvable n m) => Sudoku n m -> f (Sudoku n m)
 sudoku grid
     | blocked   = empty
     | complete  = pure grid
-    | otherwise = let (grid1, grid2) = expand pruned in sudoku grid1 <|> sudoku grid2
+    | changed   = sudoku pruned
+    | otherwise = let (grid1, grid2) = expand grid in sudoku grid1 <|> sudoku grid2
   where
     blocked = void || not safe
     void = any (== conflicted) grid
@@ -47,6 +47,7 @@ sudoku grid
     group_masks = foldGroups masks
     
     pruned = apply <$> is_singles <*> group_masks <*> grid
+    changed = pruned /= grid
 
     maskOf is_single cell = if is_single then cellMask cell else mempty
     apply is_single mask = if is_single then id else act mask
