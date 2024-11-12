@@ -10,22 +10,20 @@ import Sudoku.Grid
 import Data.Monoid.Action
 import Data.Traversable
 
-expand :: (KnownNat n, KnownNat m) => Sudoku n m -> (Grid n m Bool, Sudoku n m, Sudoku n m)
-expand grid = (singles, first_guesses, next_guesses)
-  where
-    (_, guesses) = mapAccumR guess False grid
-    singles = fst <$> guesses
-    first_guesses = fst . snd <$> guesses
-    next_guesses = snd . snd <$> guesses
+funzip3 :: (Functor f) => f (a, b, c) -> (f a, f b, f c)
+funzip3 xyzs = ((\(x, y, z) -> x) <$> xyzs, (\(x, y, z) -> y) <$> xyzs, (\(x, y, z) -> z) <$> xyzs)
 
+expand :: (KnownNat n, KnownNat m) => Sudoku n m -> (Grid n m Bool, Sudoku n m, Sudoku n m)
+expand = funzip3 . snd . mapAccumR guess False
+  where
     guess guessed_before cell
         | not guessed_before && not single
-        = (True, (single, split))
+        = (True, (single, first_guess, next_guess))
 
         | otherwise
-        = (guessed_before, (single, (cell, cell)))
+        = (guessed_before, (single, cell, cell))
       where
-        split@(_, next_guess) = splitCell cell
+        (first_guess, next_guess) = splitCell cell
         single = next_guess == conflicted
 
 sudoku :: (Alternative f, KnownNat n, KnownNat m) => Sudoku n m -> f (Sudoku n m)

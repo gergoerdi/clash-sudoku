@@ -12,7 +12,7 @@ module Sudoku.Solve
     , SolverResult(..)
     ) where
 
-import Clash.Prelude
+import Clash.Prelude hiding (mapAccumR)
 import Clash.Num.Overflowing
 
 import Sudoku.Utils
@@ -23,6 +23,7 @@ import Data.Maybe
 import Data.Monoid.Action
 import Data.Monoid (Ap(..), Alt(..))
 import Data.Coerce
+import Data.Traversable (mapAccumR)
 
 type Sudoku n m = Grid n m (Cell n m)
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
@@ -52,27 +53,21 @@ propagate
     -> Grid n m (Signal dom (Mask n m))
 propagate = fmap getAp . foldGroups . fmap Ap
 
-expand
-    :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
-    => Grid n m (Signal dom (Cell n m))
-    -> (Grid n m (Signal dom Bool), Grid n m (Signal dom (Cell n m)), Grid n m (Signal dom (Cell n m)))
-expand cells = (singles, first_guesses, next_guesses)
-  where
-    singles = fst .<$>. guesses
-    first_guesses = fst . snd .<$>. guesses
-    next_guesses = snd . snd .<$>. guesses
+funzip3 :: (Functor f) => f (a, b, c) -> (f a, f b, f c)
+funzip3 xyzs = ((\(x, y, z) -> x) <$> xyzs, (\(x, y, z) -> y) <$> xyzs, (\(x, y, z) -> z) <$> xyzs)
 
-    (_, guesses) = mapAccumRS guess (pure False) cells
+expand :: (KnownNat n, KnownNat m) => Sudoku n m -> (Grid n m Bool, Sudoku n m, Sudoku n m)
+expand = funzip3 . snd . mapAccumR guess False
+  where
     guess guessed_before cell
         | not guessed_before && not single
-        = (True, (single, (first_guess, next_guess)))
+        = (True, (single, first_guess, next_guess))
 
         | otherwise
-        = (guessed_before, (single, (cell, cell)))
+        = (guessed_before, (single, cell, cell))
       where
         (first_guess, next_guess) = splitCell cell
         single = next_guess == conflicted
-
 
 solver
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
@@ -114,7 +109,7 @@ solver cmd shift_in pop = (headGrid cells, result, bundle next_guesses)
 
     pruneds = apply .<$>. group_masks .<*>. singles .<*>. cells
 
-    (singles, first_guesses, next_guesses) = expand cells
+    (unbundle -> singles, unbundle -> first_guesses, unbundle -> next_guesses) = unbundle . fmap expand . bundle $ cells
 
     masks = maskOf .<$>. singles .<*>. cells
     group_masks = propagate masks
