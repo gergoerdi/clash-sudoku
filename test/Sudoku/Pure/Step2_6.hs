@@ -1,17 +1,34 @@
 -- Compute `single` via `splitCell`
 module Sudoku.Pure.Step2_6 where
 
-import Clash.Prelude hiding (mapAccumL)
+import Clash.Prelude hiding (mapAccumR)
 
-import Sudoku.Solve (Solvable, Sudoku, bitsOverlap)
+import Sudoku.Solve (Sudoku, bitsOverlap)
 import Sudoku.Cell
 import Sudoku.Grid
 
 import Data.Monoid.Action
--- import Control.Monad.State.Strict
 import Data.Traversable
 
-sudoku :: (Alternative f, Solvable n m) => Sudoku n m -> f (Sudoku n m)
+expand :: (KnownNat n, KnownNat m) => Sudoku n m -> (Grid n m Bool, Sudoku n m, Sudoku n m)
+expand grid = (singles, first_guesses, next_guesses)
+  where
+    (_, guesses) = mapAccumR guess False grid
+    singles = fst <$> guesses
+    first_guesses = fst . snd <$> guesses
+    next_guesses = snd . snd <$> guesses
+
+    guess guessed_before cell
+        | not guessed_before && not single
+        = (True, (single, split))
+
+        | otherwise
+        = (guessed_before, (single, (cell, cell)))
+      where
+        split@(_, next_guess) = splitCell cell
+        single = next_guess == conflicted
+
+sudoku :: (Alternative f, KnownNat n, KnownNat m) => Sudoku n m -> f (Sudoku n m)
 sudoku grid
     | blocked   = empty
     | complete  = pure grid
@@ -25,9 +42,8 @@ sudoku grid
     
     consistent = not . bitsOverlap . fmap maskBits
 
-    splits = splitCell <$> grid
+    (singles, grid1, grid2) = expand grid
 
-    singles = (== conflicted) . snd <$> splits
     masks = maskOf <$> singles <*> grid
     group_masks = foldGroups masks
     
@@ -36,15 +52,3 @@ sudoku grid
 
     maskOf single cell = if single then cellMask cell else mempty
     apply single mask = if single then id else act mask
-
-    (_, guesses) = mapAccumL guess1 False $ (,,) <$> singles <*> grid <*> splits
-    (grid1, grid2) = (fst <$> guesses, snd <$> guesses)
-
-    guess1 guessed_before (single, cell, (first_guess, next_guess))
-        | not guessed_before
-        , not single
-        = (True, (first_guess, next_guess))
-
-        | otherwise
-        = (guessed_before, (cell, cell))
-

@@ -1,14 +1,14 @@
 -- Merge `prune` into `search`
 module Sudoku.Pure.Step2_2 where
 
-import Clash.Prelude
+import Clash.Prelude hiding (mapAccumR)
 
 import Sudoku.Solve (Sudoku, bitsOverlap)
 import Sudoku.Cell
 import Sudoku.Grid
 
 import Data.Monoid.Action
-import Control.Monad.State.Strict
+import Data.Traversable (mapAccumR)
 
 single :: (KnownNat n, KnownNat m) => Cell n m -> Bool
 single cell = popCount (cellBits cell) == 1
@@ -17,15 +17,15 @@ choices :: (KnownNat n, KnownNat m) => Cell n m -> [Cell n m]
 choices cell = [ given i | i <- [minBound..maxBound], cellBits cell ! i == 1 ]
 
 expand :: (KnownNat n, KnownNat m) => Sudoku n m -> [Sudoku n m]
-expand grid = sequenceA $ evalState (traverse (state . guess1) grid) False
+expand = sequenceA . snd . mapAccumR guess1 False
   where
-    guess1 cell guessed_before
+    guess1 guessed_before cell
         | not guessed_before
         , cells@(_:_:_) <- choices cell
-        = (cells, True)
+        = (True, cells)
 
         | otherwise
-        = ([cell], guessed_before)
+        = (guessed_before, [cell])
 
 complete :: (KnownNat n, KnownNat m) => Sudoku n m -> Bool
 complete = all single
@@ -47,10 +47,9 @@ sudoku grid
     is_singles = single <$> grid
     masks = maskOf <$> is_singles <*> grid
     group_masks = foldGroups masks
-    
+
     pruned = apply <$> is_singles <*> group_masks <*> grid
     changed = pruned /= grid
 
     maskOf is_single cell = if is_single then cellMask cell else mempty
     apply is_single mask = if is_single then id else act mask
-

@@ -1,31 +1,31 @@
 -- Merge `prune` into `search`
 module Sudoku.Pure.Step2_3 where
 
-import Clash.Prelude
+import Clash.Prelude hiding (mapAccumR)
 
 import Sudoku.Solve (Solvable, Sudoku, bitsOverlap)
 import Sudoku.Cell
 import Sudoku.Grid
 
 import Data.Monoid.Action
-import Control.Monad.State.Strict
+import Data.Traversable (mapAccumR)
 
-single :: (Solvable n m) => Cell n m -> Bool
+single :: (KnownNat n, KnownNat m) => Cell n m -> Bool
 single cell = popCount (cellBits cell) == 1
 
-choices :: (Solvable n m) => Cell n m -> [Cell n m]
+choices :: (KnownNat n, KnownNat m) => Cell n m -> [Cell n m]
 choices cell = [ given i | i <- [minBound..maxBound], cellBits cell ! i == 1 ]
 
-expand :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
-expand grid = sequenceA $ evalState (traverse (state . guess1) grid) False
+expand :: (KnownNat n, KnownNat m) => Sudoku n m -> [Sudoku n m]
+expand = sequenceA . snd . mapAccumR guess False
   where
-    guess1 cell guessed_before
+    guess guessed_before cell
         | not guessed_before
         , cells@(_:_:_) <- choices cell
-        = (cells, True)
+        = (True, cells)
 
         | otherwise
-        = ([cell], guessed_before)
+        = (guessed_before, [cell])
 
 consistent :: (Solvable n m, KnownNat k) => Vec k (Cell n m) -> Bool
 consistent = not . bitsOverlap . fmap (\cell -> if single cell then cellBits cell else 0)

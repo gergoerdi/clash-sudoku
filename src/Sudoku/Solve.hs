@@ -52,6 +52,28 @@ propagate
     -> Grid n m (Signal dom (Mask n m))
 propagate = fmap getAp . foldGroups . fmap Ap
 
+expand
+    :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
+    => Grid n m (Signal dom (Cell n m))
+    -> (Grid n m (Signal dom Bool), Grid n m (Signal dom (Cell n m)), Grid n m (Signal dom (Cell n m)))
+expand cells = (singles, first_guesses, next_guesses)
+  where
+    singles = fst .<$>. guesses
+    first_guesses = fst . snd .<$>. guesses
+    next_guesses = snd . snd .<$>. guesses
+
+    (_, guesses) = mapAccumRS guess (pure False) cells
+    guess guessed_before cell
+        | not guessed_before && not single
+        = (True, (single, (first_guess, next_guess)))
+
+        | otherwise
+        = (guessed_before, (single, (cell, cell)))
+      where
+        (first_guess, next_guess) = splitCell cell
+        single = next_guess == conflicted
+
+
 solver
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
     => Signal dom SolverCmd
@@ -92,8 +114,7 @@ solver cmd shift_in pop = (headGrid cells, result, bundle next_guesses)
 
     pruneds = apply .<$>. group_masks .<*>. singles .<*>. cells
 
-    splits = splitCell .<$>. cells
-    singles = (== conflicted) . snd .<$>. splits
+    (singles, first_guesses, next_guesses) = expand cells
 
     masks = maskOf .<$>. singles .<*>. cells
     group_masks = propagate masks
@@ -101,15 +122,3 @@ solver cmd shift_in pop = (headGrid cells, result, bundle next_guesses)
 
     maskOf single cell = if single then cellMask cell else mempty
     apply mask single cell = if single then cell else act mask cell
-
-    (_, guesses) = mapAccumRS guess1 (pure False) ((,,) .<$>. singles .<*>. cells .<*>. splits)
-    first_guesses = fst .<$>. guesses
-    next_guesses = snd .<$>. guesses
-
-    guess1 guessed_before (single, cell, guess)
-        | not guessed_before
-        , not single
-        = (True, guess)
-
-        | otherwise
-        = (guessed_before, (cell, cell))
