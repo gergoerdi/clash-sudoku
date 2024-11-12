@@ -25,6 +25,9 @@ infixl 4 .<$>., .<*>.
 (.<*>.) :: (Applicative f, Applicative g) => f (g (a -> b)) -> f (g a) -> f (g b)
 (.<*>.) = liftA2 (<*>)
 
+funzip3 :: (Functor f) => f (a, b, c) -> (f a, f b, f c)
+funzip3 xyzs = ((\(x, y, z) -> x) <$> xyzs, (\(x, y, z) -> y) <$> xyzs, (\(x, y, z) -> z) <$> xyzs)
+
 mapAccumRS
     :: (Traversable f, HiddenClockResetEnable dom)
     => (s -> a -> (s, b))

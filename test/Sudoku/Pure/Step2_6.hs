@@ -6,12 +6,10 @@ import Clash.Prelude hiding (mapAccumR)
 import Sudoku.Solve (Sudoku, bitsOverlap)
 import Sudoku.Cell
 import Sudoku.Grid
+import Sudoku.Utils
 
 import Data.Monoid.Action
 import Data.Traversable
-
-funzip3 :: (Functor f) => f (a, b, c) -> (f a, f b, f c)
-funzip3 xyzs = ((\(x, y, z) -> x) <$> xyzs, (\(x, y, z) -> y) <$> xyzs, (\(x, y, z) -> z) <$> xyzs)
 
 expand :: (KnownNat n, KnownNat m) => Sudoku n m -> (Grid n m Bool, Sudoku n m, Sudoku n m)
 expand = funzip3 . snd . mapAccumR guess False

@@ -53,9 +53,6 @@ propagate
     -> Grid n m (Signal dom (Mask n m))
 propagate = fmap getAp . foldGroups . fmap Ap
 
-funzip3 :: (Functor f) => f (a, b, c) -> (f a, f b, f c)
-funzip3 xyzs = ((\(x, y, z) -> x) <$> xyzs, (\(x, y, z) -> y) <$> xyzs, (\(x, y, z) -> z) <$> xyzs)
-
 expand :: (KnownNat n, KnownNat m) => Sudoku n m -> (Grid n m Bool, Sudoku n m, Sudoku n m)
 expand = funzip3 . snd . mapAccumR guess False
   where
