@@ -98,7 +98,7 @@ solver cmd shift_in pop = (headGrid cells, result, bundle next_guesses)
             , enable (cmd .==. pure Guess) guess
             ]
 
-    (_, shifted_ins) = mapAccumRS step shift_in cells
+    shifted_ins = unbundle . fmap snd $ mapAccumR step <$> shift_in <*> bundle cells
       where
         step shift_in cell = case shift_in of
             Nothing -> (Nothing, cell)

@@ -2,13 +2,11 @@
 {-# LANGUAGE StandaloneDeriving, DerivingStrategies #-}
 module Sudoku.Utils where
 
-import Clash.Prelude hiding (mapAccumR)
+import Clash.Prelude
 import Clash.Class.Counter.Internal
 import Data.Function (on)
 import Data.Composition
 import Control.Monad (guard)
-import Control.Monad.State.Strict
-import Data.Traversable
 
 countPredChecked :: Counter a => a -> Maybe a
 countPredChecked x = x' <$ guard (not underflow)
@@ -27,14 +25,6 @@ infixl 4 .<$>., .<*>.
 
 funzip3 :: (Functor f) => f (a, b, c) -> (f a, f b, f c)
 funzip3 xyzs = ((\(x, y, z) -> x) <$> xyzs, (\(x, y, z) -> y) <$> xyzs, (\(x, y, z) -> z) <$> xyzs)
-
-mapAccumRS
-    :: (Traversable f, HiddenClockResetEnable dom)
-    => (s -> a -> (s, b))
-    -> Signal dom s
-    -> f (Signal dom a)
-    -> (Signal dom s, f (Signal dom b))
-mapAccumRS f s = mapAccumR (fmap unbundle . liftA2 f) s
 
 packWrite :: addr -> Maybe val -> Maybe (addr, val)
 packWrite addr val = (addr,) <$> val
