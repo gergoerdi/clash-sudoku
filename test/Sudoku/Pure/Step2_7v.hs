@@ -1,6 +1,6 @@
--- Open `sudoku`'s recursion
+-- Open `sudoku`'s recursion with a sized stack
 {-# LANGUAGE RecordWildCards #-}
-module Sudoku.Pure.Step2_7 where
+module Sudoku.Pure.Step2_7v where
 
 import Clash.Prelude hiding (mapAccumR)
 
@@ -56,11 +56,15 @@ solve grid
     maskOf single cell = if single then cellMask cell else mempty
     apply single mask = if single then id else act mask
 
-type Stack n m = [Sudoku n m]
+type StackDepth n m = ((n * m) * (m * n))
+type StackMem n m = Vec (StackDepth n m) (Sudoku n m)
+type StackPtr n m = Index (StackDepth n m)
+type Stack n m = (StackMem n m, StackPtr n m)
 
-sudoku :: forall n m f. (Alternative f, KnownNat n, KnownNat m) => Sudoku n m -> f (Sudoku n m)
+sudoku :: forall n m f. (Alternative f, KnownNat n, KnownNat m, 1 <= StackDepth n m) => Sudoku n m -> f (Sudoku n m)
 sudoku = go emptyStack
   where
+    go :: Stack n m -> Sudoku n m -> f (Sudoku n m)
     go stack grid = case solve grid of
         Complete solution -> pure solution
         Progress grid' -> go stack grid'
@@ -69,7 +73,12 @@ sudoku = go emptyStack
             Just (top, stack') -> go stack' top
         Stuck grid1 grid2 -> go (push grid2 stack) grid1
 
-    emptyStack = []
-    push x xs = x:xs
-    pop [] = Nothing
-    pop (x:xs) = Just (x, xs)
+    emptyStack = (repeat undefined, 0)
+    push x (elems, sp) = (replace sp x elems, sp + 1)
+    pop (elems, sp)
+        | sp == 0
+        = Nothing
+
+        | otherwise
+        = let sp' = sp - 1 in Just (elems !! sp', (elems, sp'))
+        
