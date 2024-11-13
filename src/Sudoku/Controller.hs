@@ -121,7 +121,7 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
         put s''
         pure proceed
 
-    (result, head_cell, next_guesses) = solver solver_cmd shift_in' popped
+    (result, head_cell, next_guesses) = solver solver_cmd popped shift_in'
 
     popped = enable (delay False rd) $
         blockRamU NoClearOnReset (SNat @(StackDepth n m)) undefined sp (packWrite <$> sp <*> wr)

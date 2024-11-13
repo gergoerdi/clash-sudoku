@@ -57,38 +57,26 @@ expand = funzip3 . snd . mapAccumR guess False
         (first_guess, next_guess) = splitCell cell
         single = next_guess == conflicted
 
-solve
-    :: forall n m. (KnownNat n, KnownNat m)
-    => SolverCmd
-    -> Maybe (Cell n m)
-    -> Maybe (Sudoku n m)
-    -> Sudoku n m
-    -> (SolverResult, Sudoku n m, Sudoku n m)
-solve cmd shift_in pop grid = (result, grid', next_guess)
+solve :: (KnownNat n, KnownNat m) => Sudoku n m -> (SolverResult, Sudoku n m, Sudoku n m)
+solve grid = (result, grid', next_guess)
   where
-    result
-        | blocked   = Blocked
-        | complete  = Complete
-        | changed   = Progress
-        | otherwise = Stuck
+    (result, grid')
+        | blocked
+        = (Blocked, grid)
 
-    grid'
-        | Just pop <- pop       = pop
-        | Just _ <- shift_in    = shifted_in
-        | Prune <- cmd, changed = pruned
-        | Guess <- cmd          = first_guess
-        | otherwise            = grid
+        | complete
+        = (Complete, grid)
+
+        | changed
+        = (Progress, pruned)
+
+        | otherwise
+        = (Stuck, first_guess)
 
     blocked = void || not safe
     void = any (== conflicted) grid
     safe = allGroups consistent masks
     complete = and singles
-
-    shifted_in = snd $ mapAccumR step shift_in grid
-      where
-        step shift_in cell = case shift_in of
-            Nothing -> (Nothing, cell)
-            Just shift_in -> (Just cell, shift_in)
 
     (singles, first_guess, next_guess) = expand grid
     pruned = apply <$> group_masks <*> singles <*> grid
@@ -97,22 +85,58 @@ solve cmd shift_in pop grid = (result, grid', next_guess)
     group_masks = foldGroups masks
     changed = pruned /= grid
 
-    maskOf single = if single then cellMask else mempty
-    apply mask single = if single then id else act mask 
+    maskOf single cell = if single then cellMask cell else mempty
+    apply mask single cell = if single then cell else act mask cell
 
+shiftIn :: (KnownNat n, KnownNat m) => Maybe a -> Grid n m a -> Grid n m (Maybe a)
+shiftIn shift_in = snd . mapAccumR shift shift_in
+  where
+    shift shift_in cell = case shift_in of
+        Nothing -> (Nothing, Nothing)
+        Just shift_in -> (Just cell, Just shift_in)
+
+commit :: SolverCmd -> SolverResult -> Maybe (Cell n m) -> Maybe (Cell n m) -> Cell n m -> Maybe (Cell n m)
+commit cmd result pop shifted solved
+    | Just pop <- pop
+    = Just pop
+
+    | Just shifted <- shifted
+    = Just shifted
+
+    | Prune <- cmd, Progress <- result
+    = Just solved
+
+    | Guess <- cmd, Stuck <- result
+    = Just solved
+
+    | otherwise
+    = Nothing
+
+commit'
+    :: (KnownNat n, KnownNat m)
+    => SolverCmd
+    -> SolverResult
+    -> Maybe (Sudoku n m)
+    -> Grid n m (Maybe (Cell n m))
+    -> Sudoku n m
+    -> Grid n m (Maybe (Cell n m))
+commit' cmd result pop shifted solved = commit cmd result <$> sequenceA pop <*> shifted <*> solved
+    
 solver
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
     => Signal dom SolverCmd
-    -> Signal dom (Maybe (Cell n m))
     -> Signal dom (Maybe (Sudoku n m))
+    -> Signal dom (Maybe (Cell n m))
     -> ( Signal dom SolverResult
        , Signal dom (Cell n m)
        , Signal dom (Sudoku n m)
        )
-solver cmd shift_in pop = (result, headGrid cells, next_guess)
+solver cmd pop shift_in = (result, headGrid cells, next_guess)
   where
-    cells = pure (register wild) <*> cells'
-    cells' = unbundle grid'
+    cells = pure (regMaybe wild) <*> cells'
 
     grid = bundle cells
-    (result, grid', next_guess) = unbundle $ solve <$> cmd <*> shift_in <*> pop <*> grid
+    (result, grid', next_guess) = unbundle $ solve <$> grid
+
+    cells' = unbundle $ commit' <$> cmd <*> result <*> pop <*> shifted <*> grid'
+    shifted = shiftIn <$> shift_in <*> grid
