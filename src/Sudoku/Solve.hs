@@ -9,7 +9,7 @@ module Sudoku.Solve
 
     , solver
     , SolverCmd(..)
-    , SolverResult(..)
+    , Result(..)
     ) where
 
 import Clash.Prelude hiding (mapAccumR)
@@ -35,14 +35,13 @@ data SolverCmd
     = Idle
     | Prune
     | Guess
-    deriving (Generic, NFDataX, Eq, Show)
 
-data SolverResult
+data Result
     = Blocked
     | Complete
     | Progress
     | Stuck
-    deriving (Generic, NFDataX, Eq, Show)
+    deriving (Generic, NFDataX)
 
 expand :: (KnownNat n, KnownNat m) => Sudoku n m -> (Grid n m Bool, Sudoku n m, Sudoku n m)
 expand = funzip3 . snd . mapAccumR guess False
@@ -57,7 +56,7 @@ expand = funzip3 . snd . mapAccumR guess False
         (first_guess, next_guess) = splitCell cell
         single = next_guess == conflicted
 
-solve :: (KnownNat n, KnownNat m) => Sudoku n m -> (SolverResult, Sudoku n m, Sudoku n m)
+solve :: (KnownNat n, KnownNat m) => Sudoku n m -> (Result, Sudoku n m, Sudoku n m)
 solve grid = (result, grid', next_guess)
   where
     (result, grid')
@@ -95,7 +94,7 @@ shiftIn shift_in = snd . mapAccumR shift shift_in
         Nothing -> (Nothing, Nothing)
         Just shift_in -> (Just cell, Just shift_in)
 
-commit :: SolverCmd -> SolverResult -> Maybe (Cell n m) -> Maybe (Cell n m) -> Cell n m -> Maybe (Cell n m)
+commit :: SolverCmd -> Result -> Maybe (Cell n m) -> Maybe (Cell n m) -> Cell n m -> Maybe (Cell n m)
 commit cmd result pop shifted solved
     | Just pop <- pop
     = Just pop
@@ -115,7 +114,7 @@ commit cmd result pop shifted solved
 commit'
     :: (KnownNat n, KnownNat m)
     => SolverCmd
-    -> SolverResult
+    -> Result
     -> Maybe (Sudoku n m)
     -> Grid n m (Maybe (Cell n m))
     -> Sudoku n m
@@ -127,7 +126,7 @@ solver
     => Signal dom SolverCmd
     -> Signal dom (Maybe (Sudoku n m))
     -> Signal dom (Maybe (Cell n m))
-    -> ( Signal dom SolverResult
+    -> ( Signal dom Result
        , Signal dom (Cell n m)
        , Signal dom (Sudoku n m)
        )

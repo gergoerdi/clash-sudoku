@@ -27,14 +27,14 @@ expand = funzip3 . snd . mapAccumR guess False
 
 data Result n m
     = Blocked
-    | Complete (Sudoku n m)
+    | Complete
     | Progress (Sudoku n m)
     | Stuck (Sudoku n m) (Sudoku n m)
 
 solve :: (KnownNat n, KnownNat m) => Sudoku n m -> Result n m
 solve grid
     | blocked   = Blocked
-    | complete  = Complete grid
+    | complete  = Complete
     | changed   = Progress pruned
     | otherwise = Stuck grid1 grid2
   where
@@ -58,16 +58,26 @@ solve grid
 
 type Stack n m = [Sudoku n m]
 
-sudoku :: forall n m f. (Alternative f, KnownNat n, KnownNat m) => Sudoku n m -> f (Sudoku n m)
-sudoku = go emptyStack
+sudoku' :: (Alternative f, KnownNat n, KnownNat m) => Sudoku n m -> f (Sudoku n m)
+sudoku' = go 
   where
-    go stack grid = case solve grid of
-        Complete solution -> pure solution
-        Progress grid' -> go stack grid'
+    go grid = case solve grid of
+        Complete  -> pure grid
+        Progress grid' -> go grid'
+        Blocked -> empty
+        Stuck grid1 grid2 -> go grid1 <|> go grid2
+
+sudoku :: (Alternative f, KnownNat n, KnownNat m) => Sudoku n m -> f (Sudoku n m)
+sudoku grid = go (grid, emptyStack)
+  where
+    go (grid, stack) = case solve grid of
+        Complete -> pure grid
+        Progress grid' -> go (grid', stack)
         Blocked -> case pop stack of
+            Just (grid', stack') -> go (grid', stack')
             Nothing -> empty
-            Just (top, stack') -> go stack' top
-        Stuck grid1 grid2 -> go (push grid2 stack) grid1
+            -- >>= go
+        Stuck grid1 grid2 -> go (grid1, push grid2 stack)
 
     emptyStack = []
     push x xs = x:xs
