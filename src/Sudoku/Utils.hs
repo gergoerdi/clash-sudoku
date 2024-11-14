@@ -16,13 +16,6 @@ countPredChecked x = x' <$ guard (not underflow)
 enable :: (Applicative f, Alternative g) => f Bool -> f a -> f (g a)
 enable en x = mux en (pure <$> x) (pure empty)
 
-infixl 4 .<$>., .<*>.
-(.<$>.) :: (Applicative f, Applicative g) => (a -> b) -> f (g a) -> f (g b)
-(.<$>.) f = liftA ((<$>) f)
-
-(.<*>.) :: (Applicative f, Applicative g) => f (g (a -> b)) -> f (g a) -> f (g b)
-(.<*>.) = liftA2 (<*>)
-
 funzip3 :: (Functor f) => f (a, b, c) -> (f a, f b, f c)
 funzip3 xyzs = ((\(x, y, z) -> x) <$> xyzs, (\(x, y, z) -> y) <$> xyzs, (\(x, y, z) -> z) <$> xyzs)
 
