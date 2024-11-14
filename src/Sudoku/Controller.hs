@@ -59,7 +59,7 @@ controller
 controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
   where
     (shift_in', shift_out, in_ack, solver_cmd, stack_cmd) =
-        mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Progress result)
+        mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Blocked result)
 
     lines = \case
         Consume shift_in -> (shift_in, Nothing, Ack True, Idle, Nothing)
@@ -93,10 +93,10 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
             Complete -> do
                 put $ ShiftOutCycleCount True (countSucc cnt) 0
                 pure $ Solve Idle
-            Progress -> do
+            Progress{} -> do
                 put $ Busy (countSucc cnt) sp
                 pure $ Solve Prune
-            Stuck -> do
+            Stuck{} -> do
                 put $ WaitPush (countSucc cnt) (sp + 1)
                 pure $ Stack $ Write sp
         ShiftOutCycleCount solved cnt i -> do

@@ -1,5 +1,5 @@
-{-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
-{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, LambdaCase #-}
+{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 module Sudoku.Solve
     ( Sudoku
     , Solvable
@@ -35,13 +35,14 @@ data SolverCmd
     = Idle
     | Prune
     | Guess
+    deriving (Eq)
 
-data Result
+data Result a
     = Blocked
     | Complete
-    | Progress
-    | Stuck
-    deriving (Generic, NFDataX)
+    | Progress a
+    | Stuck a
+    deriving (Generic, NFDataX, Functor, Foldable, Traversable)
 
 expand :: (KnownNat n, KnownNat m) => Sudoku n m -> (Grid n m Bool, Sudoku n m, Sudoku n m)
 expand = funzip3 . snd . mapAccumR guess False
@@ -56,21 +57,14 @@ expand = funzip3 . snd . mapAccumR guess False
         (first_guess, next_guess) = splitCell cell
         single = next_guess == conflicted
 
-solve :: (KnownNat n, KnownNat m) => Sudoku n m -> (Result, Sudoku n m, Sudoku n m)
-solve grid = (result, grid', next_guess)
+solve :: (KnownNat n, KnownNat m) => Sudoku n m -> (Result (Sudoku n m), Sudoku n m)
+solve grid = (result, next_guess)
   where
-    (result, grid')
-        | blocked
-        = (Blocked, grid)
-
-        | complete
-        = (Complete, grid)
-
-        | changed
-        = (Progress, pruned)
-
-        | otherwise
-        = (Stuck, first_guess)
+    result
+      | blocked   = Blocked
+      | complete  = Complete
+      | changed   = Progress pruned
+      | otherwise = Stuck first_guess
 
     blocked = void || not safe
     void = any (== conflicted) grid
@@ -94,19 +88,19 @@ shiftIn shift_in = snd . mapAccumR shift shift_in
         Nothing -> (Nothing, Nothing)
         Just shift_in -> (Just cell, Just shift_in)
 
-commit :: SolverCmd -> Result -> Maybe (Cell n m) -> Maybe (Cell n m) -> Cell n m -> Maybe (Cell n m)
-commit cmd result pop shifted solved
+commit :: (KnownNat n, KnownNat m) => SolverCmd -> Result (Cell n m) -> Maybe (Cell n m) -> Maybe (Cell n m) -> Maybe (Cell n m)
+commit cmd result pop shifted
     | Just pop <- pop
     = Just pop
 
     | Just shifted <- shifted
     = Just shifted
 
-    | Prune <- cmd, Progress <- result
-    = Just solved
+    | Prune <- cmd, Progress pruned <- result
+    = Just pruned
 
-    | Guess <- cmd, Stuck <- result
-    = Just solved
+    | Guess <- cmd, Stuck first_guess <- result
+    = Just first_guess
 
     | otherwise
     = Nothing
@@ -114,19 +108,18 @@ commit cmd result pop shifted solved
 commit'
     :: (KnownNat n, KnownNat m)
     => SolverCmd
-    -> Result
+    -> Result (Sudoku n m)
     -> Maybe (Sudoku n m)
     -> Grid n m (Maybe (Cell n m))
-    -> Sudoku n m
     -> Grid n m (Maybe (Cell n m))
-commit' cmd result pop shifted solved = commit cmd result <$> sequenceA pop <*> shifted <*> solved
-    
+commit' cmd result pop shifted = commit cmd <$> sequenceA result <*> sequenceA pop <*> shifted
+
 solver
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
     => Signal dom SolverCmd
     -> Signal dom (Maybe (Sudoku n m))
     -> Signal dom (Maybe (Cell n m))
-    -> ( Signal dom Result
+    -> ( Signal dom (Result (Sudoku n m))
        , Signal dom (Cell n m)
        , Signal dom (Sudoku n m)
        )
@@ -135,7 +128,7 @@ solver cmd pop shift_in = (result, headGrid cells, next_guess)
     cells = pure (regMaybe wild) <*> cells'
 
     grid = bundle cells
-    (result, grid', next_guess) = unbundle $ solve <$> grid
+    (result, next_guess) = unbundle $ solve <$> grid
 
-    cells' = unbundle $ commit' <$> cmd <*> result <*> pop <*> shifted <*> grid'
+    cells' = unbundle $ commit' <$> cmd <*> result <*> pop <*> shifted
     shifted = shiftIn <$> shift_in <*> grid
