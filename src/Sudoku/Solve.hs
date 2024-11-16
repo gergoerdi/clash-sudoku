@@ -7,7 +7,6 @@ module Sudoku.Solve
     , consistent
 
     , solver
-    , SolverCmd(..)
     , Result(..)
     ) where
 
@@ -29,12 +28,6 @@ consistent = not . bitsOverlap . fmap maskBits
 
 bitsOverlap :: (KnownNat n, KnownNat k) => Vec k (BitVector n) -> Bool
 bitsOverlap = any (hasOverflowed . sum . map toOverflowing) . transpose . map bv2v
-
-data SolverCmd
-    = Idle
-    | Prune
-    | Guess
-    deriving (Eq)
 
 data Result n m
     = Blocked
@@ -88,22 +81,22 @@ shiftIn shift_in = snd . mapAccumR shift shift_in
         Just shift_in -> (Just cell, Just shift_in)
 
 commit
-    :: SolverCmd
+    :: Bool
     -> Result n m
     -> Maybe (Sudoku n m)
     -> Maybe (Grid n m (Cell n m))
     -> Maybe (Grid n m (Cell n m))
-commit cmd result pop shifted
+commit en result pop shifted
     | Just pop <- pop
     = Just pop
 
     | Just shifted <- shifted
     = Just shifted
 
-    | Prune <- cmd, Progress pruned <- result
+    | Progress pruned <- result, en
     = Just pruned
 
-    | Guess <- cmd, Stuck first_guess <- result
+    | Stuck first_guess <- result, en
     = Just first_guess
 
     | otherwise
@@ -111,19 +104,19 @@ commit cmd result pop shifted
 
 solver
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
-    => Signal dom SolverCmd
+    => Signal dom Bool
     -> Signal dom (Maybe (Sudoku n m))
     -> Signal dom (Maybe (Cell n m))
     -> ( Signal dom (Result n m)
        , Signal dom (Cell n m)
        , Signal dom (Sudoku n m)
        )
-solver cmd pop shift_in = (result, headGrid cells, next_guess)
+solver en pop shift_in = (result, headGrid cells, next_guess)
   where
     cells = pure (regMaybe wild) <*> cells'
 
     grid = bundle cells
     (result, next_guess) = unbundle $ solve <$> grid
 
-    cells' = unbundle $ sequenceA <$> (commit <$> cmd <*> result <*> pop <*> shifted)
+    cells' = unbundle $ sequenceA <$> (commit <$> en <*> result <*> pop <*> shifted)
     shifted = sequenceA <$> (shiftIn <$> shift_in <*> grid)

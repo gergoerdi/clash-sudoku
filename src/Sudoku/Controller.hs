@@ -75,7 +75,7 @@ push = do
 
 data Control n m
     = Consume (Maybe (Cell n m))
-    | Solve SolverCmd
+    | Solve Bool
     | Stack (MemCmd (StackDepth n m))
     | Produce Bool (Either Word8 (Cell n m))
 
@@ -89,13 +89,13 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
     (shift_in', shift_out, in_ack, solver_cmd, stack_cmd) =
         mealySB step
             (St{ phase = ShiftIn @n @m 0, cnt = undefined, sp = undefined })
-            (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Blocked result)
+            (Df.dataToMaybe <$> shift_in, out_ack, head_cell, result)
 
     lines = \case
-        Consume shift_in -> (shift_in, Nothing, Ack True, Idle, Nothing)
-        Solve cmd -> (Nothing, Nothing, Ack False, cmd, Nothing)
-        Stack mem -> (Nothing, Nothing, Ack False, Guess, Just mem)
-        Produce proceed output -> (shift_in, Just output, Ack False, Idle, Nothing)
+        Consume shift_in -> (shift_in, Nothing, Ack True, False, Nothing)
+        Solve en -> (Nothing, Nothing, Ack False, en, Nothing)
+        Stack mem -> (Nothing, Nothing, Ack False, True, Just mem)
+        Produce proceed output -> (shift_in, Just output, Ack False, False, Nothing)
           where
             shift_in = if proceed then Just conflicted else Nothing
 
@@ -105,23 +105,23 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
             pure $ Consume shift_in
         Start -> do
             put St{ phase = Busy, cnt = countMin, sp = 0 }
-            pure $ Solve Prune
+            pure $ Solve True
         WaitPop -> tick do
             modify $ goto Busy
-            pure $ Solve Prune
+            pure $ Solve True
         Busy -> tick $ case result of
             Blocked -> pop >>= \case
                 Nothing -> do
                     modify $ goto $ ShiftOutCycleCount False 0
-                    pure $ Solve Idle
+                    pure $ Solve False
                 Just sp'-> do
                     modify $ goto WaitPop
                     pure $ Stack $ Read sp'
             Complete -> do
                 modify $ goto $ ShiftOutCycleCount True 0
-                pure $ Solve Idle
+                pure $ Solve False
             Progress{} -> do
-                pure $ Solve Prune
+                pure $ Solve True
             Stuck{} -> do
                 sp <- push
                 pure $ Stack $ Write sp
