@@ -31,7 +31,7 @@ type StackPtr n m = Index (StackDepth n m)
 type CellIndex n m = Index ((n * m) * (m * n))
 
 data MemCmd n
-    = Read (Index n)
+    = Read
     | Write (Index n)
 
 data Phase n m
@@ -86,20 +86,23 @@ controller
     -> (Signal dom Ack, Signal dom (Df.Data (Either Word8 (Cell n m))))
 controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
   where
-    (shift_in', shift_out, in_ack, solver_cmd, stack_cmd) =
+    (shift_in', shift_out, in_ack, solver_cmd, stack_cmd, stack_addr) =
         mealySB step
             (St{ phase = ShiftIn @n @m 0, cnt = undefined, sp = undefined })
             (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Blocked result)
 
-    lines = \case
-        Consume shift_in -> (shift_in, Nothing, Ack True, Idle, Nothing)
-        Solve cmd -> (Nothing, Nothing, Ack False, cmd, Nothing)
-        Stack mem -> (Nothing, Nothing, Ack False, Guess, Just mem)
-        Produce proceed output -> (shift_in, Just output, Ack False, Idle, Nothing)
-          where
-            shift_in = if proceed then Just conflicted else Nothing
+    lines body = do
+        ctl <- body
+        sp <- gets sp
+        pure $ case ctl of
+            Consume shift_in -> (shift_in, Nothing, Ack True, Idle, Nothing, sp)
+            Solve cmd -> (Nothing, Nothing, Ack False, cmd, Nothing, sp)
+            Stack mem -> (Nothing, Nothing, Ack False, Guess, Just mem, sp)
+            Produce proceed output -> (shift_in, Just output, Ack False, Idle, Nothing, sp)
+              where
+                shift_in = if proceed then Just conflicted else Nothing
 
-    step (shift_in, out_ack, head_cell, result) = fmap lines $ gets phase >>= \case
+    step (shift_in, out_ack, head_cell, result) = lines $ gets phase >>= \case
         ShiftIn i -> do
             when (isJust shift_in) $ modify $ goto $ maybe Start ShiftIn $ countSuccChecked i
             pure $ Consume shift_in
@@ -116,7 +119,7 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
                     pure $ Solve Idle
                 Just sp'-> do
                     modify $ goto WaitPop
-                    pure $ Stack $ Read sp'
+                    pure $ Stack Read
             Complete -> do
                 modify $ goto $ ShiftOutCycleCount True 0
                 pure $ Solve Idle
@@ -153,12 +156,13 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
     (result, head_cell, next_guesses) = solver solver_cmd popped shift_in'
 
     popped = enable (delay False rd) $
-        blockRamU NoClearOnReset (SNat @(StackDepth n m)) undefined sp (packWrite <$> sp <*> wr)
+        blockRamU NoClearOnReset (SNat @(StackDepth n m)) undefined addr (packWrite <$> addr <*> wr)
       where
-        (sp, rd, wr) = unbundle $ do
+        (addr, rd, wr) = unbundle $ do
             stack_cmd <- stack_cmd
             next_guesses <- next_guesses
+            addr <- stack_addr
             pure $ case stack_cmd of
-                Nothing -> (0, False, Nothing)
-                Just (Read sp) -> (sp, True, Nothing)
-                Just (Write sp) -> (sp, False, Just next_guesses)
+                Nothing -> (addr, False, Nothing)
+                Just Read -> (addr, True, Nothing)
+                Just (Write addr') -> (addr', False, Just next_guesses)
