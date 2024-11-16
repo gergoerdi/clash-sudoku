@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase, MultiWayIf, ApplicativeDo #-}
+{-# LANGUAGE LambdaCase, MultiWayIf, ApplicativeDo, BlockArguments #-}
 module Sudoku.Controller where
 
 import Clash.Prelude
@@ -6,7 +6,7 @@ import Clash.Class.Counter
 
 import Data.Maybe
 import Control.Monad
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Data.Word
 
 import Protocols
@@ -27,22 +27,51 @@ showDigit :: Digit -> Word8
 showDigit n = ascii '0' + fromIntegral n
 
 type StackDepth n m = ((n * m) * (m * n))
+type StackPtr n m = Index (StackDepth n m)
 type CellIndex n m = Index ((n * m) * (m * n))
 
 data MemCmd n
     = Read (Index n)
     | Write (Index n)
 
-data St n m
+data Phase n m
     = ShiftIn (CellIndex n m)
     | Start
-    | Busy     (Cycles n m) (Index (StackDepth n m))
-    | WaitPop  (Cycles n m) (Index (StackDepth n m))
-    | ShiftOutCycleCount Bool (Cycles n m) (Index (CyclesWidth n m))
+    | Busy
+    | WaitPop
+    | ShiftOutCycleCount Bool (Index (CyclesWidth n m))
     | ShiftOutCycleCountFinished Bool
     | ShiftOutSolved (CellIndex n m)
     | ShiftOutFailed
-    deriving (Generic, NFDataX, Show, Eq)
+    deriving (Generic, NFDataX)
+
+data St n m = St
+    { phase :: Phase n m
+    , cnt :: Cycles n m
+    , sp :: StackPtr n m
+    }
+    deriving (Generic, NFDataX)
+
+goto :: Phase n m -> St n m -> St n m
+goto phase st = st{ phase = phase }
+
+tick :: State (St n m) a -> State (St n m) a
+tick body = do
+    modify \st@St{ cnt = cnt } -> st{ cnt = countSucc cnt }
+    body
+
+pop :: (Solvable n m) => State (St n m) (Maybe (StackPtr n m))
+pop = do
+    sp <- gets sp
+    let sp' = countPredChecked sp
+    modify \st@St{ sp = sp } -> st{ sp = fromMaybe sp sp' }
+    pure sp'
+
+push :: (Solvable n m) => State (St n m) (StackPtr n m)
+push = do
+    sp <- gets sp
+    modify \st -> st{ sp = sp + 1 }
+    pure sp
 
 data Control n m
     = Consume (Maybe (Cell n m))
@@ -58,7 +87,9 @@ controller
 controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
   where
     (shift_in', shift_out, in_ack, solver_cmd, stack_cmd) =
-        mealySB step (ShiftIn @n @m 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Blocked result)
+        mealySB step
+            (St{ phase = ShiftIn @n @m 0, cnt = undefined, sp = undefined })
+            (Df.dataToMaybe <$> shift_in, out_ack, head_cell, register Blocked result)
 
     lines = \case
         Consume shift_in -> (shift_in, Nothing, Ack True, Idle, Nothing)
@@ -68,53 +99,55 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
           where
             shift_in = if proceed then Just conflicted else Nothing
 
-    step (shift_in, out_ack, head_cell, result) = fmap lines $ get >>= \case
+    step (shift_in, out_ack, head_cell, result) = fmap lines $ gets phase >>= \case
         ShiftIn i -> do
-            when (isJust shift_in) $ put $ maybe Start ShiftIn $ countSuccChecked i
+            when (isJust shift_in) $ modify $ goto $ maybe Start ShiftIn $ countSuccChecked i
             pure $ Consume shift_in
         Start -> do
-            put $ Busy countMin 0
+            put St{ phase = Busy, cnt = countMin, sp = 0 }
             pure $ Solve Prune
-        WaitPop cnt sp -> do
-            put $ Busy (countSucc cnt) sp
+        WaitPop -> tick do
+            modify $ goto Busy
             pure $ Solve Prune
-        Busy cnt sp -> case result of
-            Blocked -> case countPredChecked sp of
+        Busy -> tick $ case result of
+            Blocked -> pop >>= \case
                 Nothing -> do
-                    put $ ShiftOutCycleCount False (countSucc cnt) 0
+                    modify $ goto $ ShiftOutCycleCount False 0
                     pure $ Solve Idle
                 Just sp'-> do
-                    put $ WaitPop (countSucc cnt) sp'
+                    modify $ goto WaitPop
                     pure $ Stack $ Read sp'
             Complete -> do
-                put $ ShiftOutCycleCount True (countSucc cnt) 0
+                modify $ goto $ ShiftOutCycleCount True 0
                 pure $ Solve Idle
             Progress{} -> do
-                put $ Busy (countSucc cnt) sp
                 pure $ Solve Prune
             Stuck{} -> do
-                put $ Busy (countSucc cnt) (sp + 1)
+                sp <- push
                 pure $ Stack $ Write sp
-        ShiftOutCycleCount solved cnt i -> do
-            let cnt' = cnt `rotateLeftS` SNat @1
-            wait out_ack $ maybe (ShiftOutCycleCountFinished solved) (ShiftOutCycleCount solved cnt') $ countSuccChecked i
+        ShiftOutCycleCount solved i -> do
+            cnt <- gets cnt
+            wait out_ack \st@St{ cnt = cnt } -> st
+                { cnt = cnt `rotateLeftS` SNat @1
+                , phase = maybe (ShiftOutCycleCountFinished solved) (ShiftOutCycleCount solved) $ countSuccChecked i
+                }
             pure $ Produce False $ Left $ showDigit $ head cnt
         ShiftOutCycleCountFinished solved -> do
-            wait out_ack $ if solved then ShiftOutSolved 0 else ShiftOutFailed
+            wait out_ack $ goto $ if solved then ShiftOutSolved 0 else ShiftOutFailed
             pure $ Produce False $ Left $ ascii '@'
         ShiftOutFailed -> do
-            wait out_ack $ ShiftIn 0
+            wait out_ack $ goto $ ShiftIn 0
             pure $ Produce False $ Right conflicted
         ShiftOutSolved i -> do
-            proceed <- wait out_ack $ maybe (ShiftIn 0) ShiftOutSolved $ countSuccChecked i
+            proceed <- wait out_ack $ goto $ maybe (ShiftIn 0) ShiftOutSolved $ countSuccChecked i
             pure $ Produce proceed $ Right head_cell
 
-    wait ack s' = do
+    wait ack f = do
         s <- get
-        let (proceed, s'') = case ack of
-                Ack True -> (True, s')
+        let (proceed, s') = case ack of
+                Ack True -> (True, f s)
                 Ack False -> (False, s)
-        put s''
+        put s'
         pure proceed
 
     (result, head_cell, next_guesses) = solver solver_cmd popped shift_in'
