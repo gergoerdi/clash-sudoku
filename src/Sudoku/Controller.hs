@@ -153,12 +153,12 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
     (result, head_cell, next_guesses) = solver solver_cmd popped shift_in'
 
     popped = enable (delay False rd) $
-        blockRamU NoClearOnReset (SNat @(StackDepth n m)) undefined sp (packWrite <$> sp <*> wr)
+        blockRamU NoClearOnReset (SNat @(StackDepth n m)) undefined addr (packWrite <$> addr <*> wr)
       where
-        (sp, rd, wr) = unbundle $ do
+        (addr, rd, wr) = unbundle $ do
             stack_cmd <- stack_cmd
             next_guesses <- next_guesses
             pure $ case stack_cmd of
-                Nothing -> (0, False, Nothing)
-                Just (Read sp) -> (sp, True, Nothing)
-                Just (Write sp) -> (sp, False, Just next_guesses)
+                Nothing -> (undefined, False, Nothing)
+                Just (Read addr) -> (addr, True, Nothing)
+                Just (Write addr) -> (addr, False, Just next_guesses)
