@@ -35,10 +35,9 @@ data MemCmd n
 
 data St n m
     = ShiftIn (CellIndex n m)
-    | Settle   (Cycles n m) (Index (StackDepth n m))
+    | Start
     | Busy     (Cycles n m) (Index (StackDepth n m))
     | WaitPop  (Cycles n m) (Index (StackDepth n m))
-    | WaitPush (Cycles n m) (Index (StackDepth n m))
     | ShiftOutCycleCount Bool (Cycles n m) (Index (CyclesWidth n m))
     | ShiftOutCycleCountFinished Bool
     | ShiftOutSolved (CellIndex n m)
@@ -64,23 +63,20 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
     lines = \case
         Consume shift_in -> (shift_in, Nothing, Ack True, Idle, Nothing)
         Solve cmd -> (Nothing, Nothing, Ack False, cmd, Nothing)
-        Stack cmd -> (Nothing, Nothing, Ack False, Idle, Just cmd)
+        Stack mem -> (Nothing, Nothing, Ack False, Guess, Just mem)
         Produce proceed output -> (shift_in, Just output, Ack False, Idle, Nothing)
           where
             shift_in = if proceed then Just conflicted else Nothing
 
     step (shift_in, out_ack, head_cell, result) = fmap lines $ get >>= \case
         ShiftIn i -> do
-            when (isJust shift_in) $ put $ maybe (Settle countMin 0) ShiftIn $ countSuccChecked i
+            when (isJust shift_in) $ put $ maybe Start ShiftIn $ countSuccChecked i
             pure $ Consume shift_in
-        Settle cnt sp -> do
-            put $ Busy (countSucc cnt) sp
+        Start -> do
+            put $ Busy countMin 0
             pure $ Solve Prune
-        WaitPush cnt sp -> do
-            put $ Busy (countSucc cnt) sp
-            pure $ Solve Guess
         WaitPop cnt sp -> do
-            put $ Settle (countSucc cnt) sp
+            put $ Busy (countSucc cnt) sp
             pure $ Solve Prune
         Busy cnt sp -> case result of
             Blocked -> case countPredChecked sp of
@@ -97,7 +93,7 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
                 put $ Busy (countSucc cnt) sp
                 pure $ Solve Prune
             Stuck{} -> do
-                put $ WaitPush (countSucc cnt) (sp + 1)
+                put $ Busy (countSucc cnt) (sp + 1)
                 pure $ Stack $ Write sp
         ShiftOutCycleCount solved cnt i -> do
             let cnt' = cnt `rotateLeftS` SNat @1
