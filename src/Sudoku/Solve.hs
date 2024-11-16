@@ -1,5 +1,4 @@
 {-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, LambdaCase #-}
-{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 module Sudoku.Solve
     ( Sudoku
     , Solvable
@@ -37,12 +36,12 @@ data SolverCmd
     | Guess
     deriving (Eq)
 
-data Result a
+data Result n m
     = Blocked
     | Complete
-    | Progress a
-    | Stuck a
-    deriving (Generic, NFDataX, Functor, Foldable, Traversable)
+    | Progress (Sudoku n m)
+    | Stuck (Sudoku n m)
+    deriving (Generic, NFDataX)
 
 expand :: (KnownNat n, KnownNat m) => Sudoku n m -> (Grid n m Bool, Sudoku n m, Sudoku n m)
 expand = funzip3 . snd . mapAccumR guess False
@@ -57,7 +56,7 @@ expand = funzip3 . snd . mapAccumR guess False
         (first_guess, next_guess) = splitCell cell
         single = next_guess == conflicted
 
-solve :: (KnownNat n, KnownNat m) => Sudoku n m -> (Result (Sudoku n m), Sudoku n m)
+solve :: (KnownNat n, KnownNat m) => Sudoku n m -> (Result n m, Sudoku n m)
 solve grid = (result, next_guess)
   where
     result
@@ -88,7 +87,12 @@ shiftIn shift_in = snd . mapAccumR shift shift_in
         Nothing -> (Nothing, Nothing)
         Just shift_in -> (Just cell, Just shift_in)
 
-commit :: (KnownNat n, KnownNat m) => SolverCmd -> Result (Cell n m) -> Maybe (Cell n m) -> Maybe (Cell n m) -> Maybe (Cell n m)
+commit
+    :: SolverCmd
+    -> Result n m
+    -> Maybe (Sudoku n m)
+    -> Maybe (Grid n m (Cell n m))
+    -> Maybe (Grid n m (Cell n m))
 commit cmd result pop shifted
     | Just pop <- pop
     = Just pop
@@ -105,21 +109,12 @@ commit cmd result pop shifted
     | otherwise
     = Nothing
 
-commit'
-    :: (KnownNat n, KnownNat m)
-    => SolverCmd
-    -> Result (Sudoku n m)
-    -> Maybe (Sudoku n m)
-    -> Grid n m (Maybe (Cell n m))
-    -> Grid n m (Maybe (Cell n m))
-commit' cmd result pop shifted = commit cmd <$> sequenceA result <*> sequenceA pop <*> shifted
-
 solver
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
     => Signal dom SolverCmd
     -> Signal dom (Maybe (Sudoku n m))
     -> Signal dom (Maybe (Cell n m))
-    -> ( Signal dom (Result (Sudoku n m))
+    -> ( Signal dom (Result n m)
        , Signal dom (Cell n m)
        , Signal dom (Sudoku n m)
        )
@@ -130,5 +125,5 @@ solver cmd pop shift_in = (result, headGrid cells, next_guess)
     grid = bundle cells
     (result, next_guess) = unbundle $ solve <$> grid
 
-    cells' = unbundle $ commit' <$> cmd <*> result <*> pop <*> shifted
-    shifted = shiftIn <$> shift_in <*> grid
+    cells' = unbundle $ sequenceA <$> (commit <$> cmd <*> result <*> pop <*> shifted)
+    shifted = sequenceA <$> (shiftIn <$> shift_in <*> grid)
