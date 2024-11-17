@@ -76,7 +76,7 @@ shiftIn shift_in = sequenceA . snd . mapAccumR shift shift_in
         Just shift_in -> (Just cell, Just shift_in)
 
 commit :: Maybe (Sudoku n m) -> Maybe (Sudoku n m) -> Bool -> Result n m -> Maybe (Sudoku n m)
-commit popped shifted en result = popped <|> shifted <|> solved
+commit shifted popped en result = shifted <|> popped <|> solved
   where
     solved
         | Progress pruned <- result, en   = Just pruned
@@ -99,4 +99,4 @@ solver en popped shift_in = (result, headGrid cells, next_guess)
     grid = bundle cells
     shifted = shiftIn <$> shift_in <*> grid
     (result, next_guess) = unbundle $ solve <$> grid
-    cells' = unbundle . fmap sequenceA $ commit <$> popped <*> shifted <*> en <*> result
+    cells' = unbundle . fmap sequenceA $ commit <$> shifted <*> popped <*> en <*> result
