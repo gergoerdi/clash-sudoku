@@ -108,7 +108,7 @@ solver
        )
 solver en pop shift_in = (result, headGrid cells, next_guess)
   where
-    cells = pure (regMaybe wild) <*> cells'
+    cells = regMaybe wild <$> cells'
 
     grid = bundle cells
     (result, next_guess) = unbundle $ solve <$> grid
