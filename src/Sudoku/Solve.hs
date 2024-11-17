@@ -48,10 +48,10 @@ solve :: (KnownNat n, KnownNat m) => Sudoku n m -> (Result n m, Sudoku n m)
 solve grid = (result, next_guess)
   where
     result
-      | blocked   = Blocked
-      | complete  = Complete
-      | changed   = Progress pruned
-      | otherwise = Stuck first_guess
+        | blocked   = Blocked
+        | complete  = Complete
+        | changed   = Progress pruned
+        | otherwise = Stuck first_guess
 
     blocked = void || not safe
     void = any (== conflicted) grid
