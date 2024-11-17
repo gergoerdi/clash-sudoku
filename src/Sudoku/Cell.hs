@@ -3,7 +3,9 @@
 module Sudoku.Cell where
 
 import Clash.Prelude
+import Clash.Num.Overflowing
 import Format (ascii)
+import Sudoku.Utils
 
 import Data.Word (Word8)
 import Data.Monoid.Action
@@ -88,3 +90,6 @@ instance (KnownNat n, KnownNat m) => Action (Mask n m) (Cell n m) where
 
 cellMask :: (KnownNat n, KnownNat m) => Cell n m -> Mask n m
 cellMask = Mask . cellBits
+
+bitsOverlap :: (KnownNat n, KnownNat k) => Vec k (BitVector n) -> Bool
+bitsOverlap = any (hasOverflowed . sum . map toOverflowing) . transpose . map bv2v

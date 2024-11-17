@@ -3,7 +3,7 @@ module Sudoku.Pure.Step2_3 where
 
 import Clash.Prelude hiding (mapAccumR)
 
-import Sudoku.Solve (Solvable, Sudoku, bitsOverlap)
+import Sudoku.Solve (Solvable, Sudoku)
 import Sudoku.Cell
 import Sudoku.Grid
 

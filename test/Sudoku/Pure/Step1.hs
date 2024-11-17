@@ -6,7 +6,7 @@ module Sudoku.Pure.Step1 where
 
 import Clash.Prelude
 
-import Sudoku.Solve (Solvable, Sudoku, bitsOverlap)
+import Sudoku.Solve (Solvable, Sudoku)
 import Sudoku.Cell
 import Sudoku.Grid
 

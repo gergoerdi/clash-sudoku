@@ -3,7 +3,6 @@ module Sudoku.Solve
     ( Sudoku
     , Solvable
 
-    , bitsOverlap
     , consistent
 
     , solver
@@ -11,7 +10,6 @@ module Sudoku.Solve
     ) where
 
 import Clash.Prelude hiding (mapAccumR)
-import Clash.Num.Overflowing
 
 import Sudoku.Utils
 import Sudoku.Grid
@@ -26,16 +24,6 @@ type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
 consistent :: (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Bool
 consistent = not . bitsOverlap . fmap maskBits
 
-bitsOverlap :: (KnownNat n, KnownNat k) => Vec k (BitVector n) -> Bool
-bitsOverlap = any (hasOverflowed . sum . map toOverflowing) . transpose . map bv2v
-
-data Result n m
-    = Blocked
-    | Complete
-    | Progress (Sudoku n m)
-    | Stuck (Sudoku n m)
-    deriving (Generic, NFDataX)
-
 expand :: (KnownNat n, KnownNat m) => Sudoku n m -> (Grid n m Bool, Sudoku n m, Sudoku n m)
 expand = funzip3 . snd . mapAccumR guess False
   where
@@ -48,6 +36,13 @@ expand = funzip3 . snd . mapAccumR guess False
       where
         (first_guess, next_guess) = splitCell cell
         single = next_guess == conflicted
+
+data Result n m
+    = Blocked
+    | Complete
+    | Progress (Sudoku n m)
+    | Stuck (Sudoku n m)
+    deriving (Generic, NFDataX)
 
 solve :: (KnownNat n, KnownNat m) => Sudoku n m -> (Result n m, Sudoku n m)
 solve grid = (result, next_guess)

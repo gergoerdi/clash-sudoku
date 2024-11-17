@@ -4,7 +4,7 @@ module Sudoku.Pure.Step2_7v where
 
 import Clash.Prelude hiding (mapAccumR)
 
-import Sudoku.Solve (Sudoku, bitsOverlap)
+import Sudoku.Solve (Sudoku)
 import Sudoku.Cell
 import Sudoku.Grid
 import Sudoku.Utils

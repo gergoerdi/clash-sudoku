@@ -4,7 +4,7 @@ module Sudoku.Pure.Step2_9 where
 
 import Clash.Prelude hiding (lift)
 
-import Sudoku.Solve (Solvable, Sudoku, bitsOverlap)
+import Sudoku.Solve (Solvable, Sudoku)
 import Sudoku.Cell
 import Sudoku.Grid
 
