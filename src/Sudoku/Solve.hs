@@ -75,14 +75,13 @@ shiftIn shift_in = snd . mapAccumR shift shift_in
         Nothing -> (Nothing, Nothing)
         Just shift_in -> (Just cell, Just shift_in)
 
-commit
-    :: Bool
-    -> Result n m
-    -> Maybe (Sudoku n m)
-commit en = \case
-    Progress pruned   | en -> Just pruned
-    Stuck first_guess | en -> Just first_guess
-    _                      -> Nothing
+commit :: Maybe (Sudoku n m) -> Maybe (Sudoku n m) -> Bool -> Result n m -> Maybe (Sudoku n m)
+commit popped shifted en result = popped <|> shifted <|> solved
+  where
+    solved
+        | Progress pruned <- result, en   = Just pruned
+        | Stuck first_guess <- result, en = Just first_guess
+        | otherwise                       = Nothing
 
 solver
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
@@ -99,8 +98,5 @@ solver en popped shift_in = (result, headGrid cells, next_guess)
 
     grid = bundle cells
     shifted = fmap sequenceA $ shiftIn <$> shift_in <*> grid
-
     (result, next_guess) = unbundle $ solve <$> grid
-    solved = commit <$> en <*> result
-
-    cells' = unbundle . fmap sequenceA $ popped .<|>. shifted .<|>. solved
+    cells' = unbundle . fmap sequenceA $ commit <$> popped <*> shifted <*> en <*> result
