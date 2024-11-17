@@ -68,8 +68,8 @@ solve grid = (result, next_guess)
     maskOf single cell = if single then cellMask cell else mempty
     apply mask single cell = if single then cell else act mask cell
 
-shiftIn :: (KnownNat n, KnownNat m) => Maybe a -> Grid n m a -> Grid n m (Maybe a)
-shiftIn shift_in = snd . mapAccumR shift shift_in
+shiftIn :: (KnownNat n, KnownNat m) => Maybe a -> Grid n m a -> Maybe (Grid n m a)
+shiftIn shift_in = sequenceA . snd . mapAccumR shift shift_in
   where
     shift shift_in cell = case shift_in of
         Nothing -> (Nothing, Nothing)
@@ -97,6 +97,6 @@ solver en popped shift_in = (result, headGrid cells, next_guess)
     cells = regMaybe wild <$> cells'
 
     grid = bundle cells
-    shifted = fmap sequenceA $ shiftIn <$> shift_in <*> grid
+    shifted = shiftIn <$> shift_in <*> grid
     (result, next_guess) = unbundle $ solve <$> grid
     cells' = unbundle . fmap sequenceA $ commit <$> popped <*> shifted <*> en <*> result
