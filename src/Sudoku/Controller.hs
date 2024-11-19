@@ -86,7 +86,7 @@ controller
     -> (Signal dom Ack, Signal dom (Df.Data (Either Word8 (Cell n m))))
 controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
   where
-    (shift_in', shift_out, in_ack, solver_cmd, stack_cmd) =
+    (shift_in', shift_out, in_ack, solver_en, stack_cmd) =
         mealySB step
             (St{ phase = ShiftIn @n @m 0, cnt = undefined, sp = undefined })
             (Df.dataToMaybe <$> shift_in, out_ack, head_cell, result)
@@ -150,7 +150,7 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
         put s'
         pure proceed
 
-    (result, head_cell, next_guesses) = solver solver_cmd popped shift_in'
+    (result, head_cell, next_guesses) = solver shift_in' popped solver_en
 
     popped = enable (delay False rd) $
         blockRamU NoClearOnReset (SNat @(StackDepth n m)) undefined addr (packWrite <$> addr <*> wr)

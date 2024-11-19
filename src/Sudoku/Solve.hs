@@ -17,6 +17,7 @@ import Sudoku.Cell
 
 import Data.Monoid.Action
 import Data.Traversable (mapAccumR)
+import Data.Maybe
 
 type Sudoku n m = Grid n m (Cell n m)
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
@@ -68,7 +69,7 @@ solve grid = (result, next_guess)
     maskOf single cell = if single then cellMask cell else mempty
     apply mask single cell = if single then cell else act mask cell
 
-shiftIn :: (KnownNat n, KnownNat m) => Maybe a -> Grid n m a -> Maybe (Grid n m a)
+shiftIn :: (Traversable f) => Maybe a -> f a -> Maybe (f a)
 shiftIn shift_in = sequenceA . snd . mapAccumR shift shift_in
   where
     shift shift_in cell = case shift_in of
@@ -85,18 +86,19 @@ commit shifted popped en result = shifted <|> popped <|> solved
 
 solver
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
-    => Signal dom Bool
+    => Signal dom (Maybe (Cell n m))
     -> Signal dom (Maybe (Sudoku n m))
-    -> Signal dom (Maybe (Cell n m))
+    -> Signal dom Bool
     -> ( Signal dom (Result n m)
        , Signal dom (Cell n m)
        , Signal dom (Sudoku n m)
        )
-solver en popped shift_in = (result, headGrid cells, next_guess)
+solver shift_in popped en = (result, headGrid cells, next_guess)
   where
-    cells = regMaybe wild <$> cells'
+    cells = register wild <$> cells'
+    cells' = unbundle $ fromMaybe <$> grid <*> grid'
 
     grid = bundle cells
     shifted = shiftIn <$> shift_in <*> grid
     (result, next_guess) = unbundle $ solve <$> grid
-    cells' = unbundle . fmap sequenceA $ commit <$> shifted <*> popped <*> en <*> result
+    grid' = commit <$> shifted <*> popped <*> en <*> result
