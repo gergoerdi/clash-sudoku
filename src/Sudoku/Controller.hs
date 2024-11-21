@@ -81,11 +81,11 @@ data Control n m
     | Stack (MemCmd (StackDepth n m))
     | Produce Bool (Either Word8 (Cell n m))
 
+type Serial dom a b = (Signal dom (Df.Data a), Signal dom Ack) -> (Signal dom Ack, Signal dom (Df.Data b))
+
 controller
-    :: forall n m dom k. (Solvable n m)
-    => (HiddenClockResetEnable dom)
-    => (Signal dom (Df.Data (Cell n m)), Signal dom Ack)
-    -> (Signal dom Ack, Signal dom (Df.Data (Either Word8 (Cell n m))))
+    :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
+    => Serial dom (Cell n m) (Either Word8 (Cell n m))
 controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
   where
     (shift_in', shift_out, in_ack, solver_en, stack_cmd) =
