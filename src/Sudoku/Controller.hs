@@ -36,7 +36,6 @@ data MemCmd n
 
 data Phase n m
     = ShiftIn (CellIndex n m)
-    | Start
     | Busy
     | WaitPop
     | ShiftOutCycleCount Bool (Index (CyclesWidth n m))
@@ -51,6 +50,9 @@ data St n m = St
     , sp :: StackPtr n m
     }
     deriving (Generic, NFDataX)
+
+reset :: (KnownNat n, KnownNat m) => Phase n m -> St n m
+reset phase = St{ phase = phase, cnt = countMin, sp = 0 }
 
 goto :: Phase n m -> St n m -> St n m
 goto phase st = st{ phase = phase }
@@ -88,7 +90,7 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
   where
     (shift_in', shift_out, in_ack, solver_en, stack_cmd) =
         mealySB step
-            (St{ phase = ShiftIn @n @m 0, cnt = undefined, sp = undefined })
+            (St{ phase = ShiftIn @n @m 0, cnt = countMin, sp = 0 })
             (Df.dataToMaybe <$> shift_in, out_ack, head_cell, result)
 
     lines = \case
@@ -101,11 +103,8 @@ controller (shift_in, out_ack) = (in_ack, Df.maybeToData <$> shift_out)
 
     step (shift_in, out_ack, head_cell, result) = fmap lines $ gets phase >>= \case
         ShiftIn i -> do
-            when (isJust shift_in) $ modify $ goto $ maybe Start ShiftIn $ countSuccChecked i
+            when (isJust shift_in) $ put $ reset $ maybe Busy ShiftIn $ countSuccChecked i
             pure $ Consume shift_in
-        Start -> do
-            put St{ phase = Busy, cnt = countMin, sp = 0 }
-            pure $ Solve True
         WaitPop -> tick do
             modify $ goto Busy
             pure $ Solve True
