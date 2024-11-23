@@ -2,6 +2,7 @@
 module Sudoku.Controller where
 
 import Clash.Prelude
+import Clash.Class.Counter
 
 import Control.Monad.State.Strict
 
@@ -58,6 +59,9 @@ data Control n m
     | Stack (MemCmd (StackDepth n m))
     | Produce Bool (Cell n m)
 
+next :: (Counter a) => (a -> s) -> a -> s -> s
+next cons i after = maybe after cons $ countSuccChecked i
+
 control
     :: (Solvable n m)
     => (Maybe (Cell n m), Ack, Cell n m, Result n m)
@@ -67,7 +71,7 @@ control (shift_in, out_ack, head_cell, result) = get >>= \case
         Nothing -> do
             pure WaitForIO
         Just shift_in -> do
-            put $ maybe (Busy 0) ShiftIn $ countSuccChecked i
+            put $ next ShiftIn i (Busy 0)
             pure $ Consume shift_in
     WaitPop sp -> do
         put $ Busy sp
@@ -93,7 +97,7 @@ control (shift_in, out_ack, head_cell, result) = get >>= \case
         wait out_ack $ put $ ShiftIn 0
         pure $ Produce False $ conflicted
     ShiftOutSolved i -> do
-        proceed <- wait out_ack $ put $ maybe (ShiftIn 0) ShiftOutSolved $ countSuccChecked i
+        proceed <- wait out_ack $ put $ next ShiftOutSolved i (ShiftIn 0)
         pure $ Produce proceed $ head_cell
   where
     wait ack act = do
