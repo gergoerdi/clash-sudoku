@@ -24,8 +24,9 @@ controller (shift_in, out_ack) = (in_ack, shift_out)
         mealySB (fmap lines . control) (ShiftIn 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, result)
 
     lines = \case
+        WaitForIO -> (Nothing, Df.NoData, Ack False, False, Nothing)
         Consume shift_in -> (Just shift_in, Df.NoData, Ack True, False, Nothing)
-        Solve enable_solver -> (Nothing, Df.NoData, Ack False, enable_solver, Nothing)
+        Solve -> (Nothing, Df.NoData, Ack False, True, Nothing)
         Stack mem_cmd -> (Nothing, Df.NoData, Ack False, True, Just mem_cmd)
         Produce proceed output -> (shift_in, Df.Data output, Ack False, False, Nothing)
           where
@@ -51,8 +52,9 @@ data St n m
     deriving (Generic, NFDataX)
 
 data Control n m
-    = Consume (Cell n m)
-    | Solve Bool
+    = WaitForIO
+    | Consume (Cell n m)
+    | Solve
     | Stack (MemCmd (StackDepth n m))
     | Produce Bool (Cell n m)
 
@@ -63,27 +65,27 @@ control
 control (shift_in, out_ack, head_cell, result) = get >>= \case
     ShiftIn i -> case shift_in of
         Nothing -> do
-            pure $ Solve False
+            pure WaitForIO
         Just shift_in -> do
             put $ maybe (Busy 0) ShiftIn $ countSuccChecked i
             pure $ Consume shift_in
     WaitPop sp -> do
         put $ Busy sp
-        pure $ Solve True
+        pure Solve
     Busy sp -> case result of
         Blocked
             | sp == 0 -> do
                   put ShiftOutFailed
-                  pure $ Solve False
+                  pure WaitForIO
             | otherwise -> do
                   let sp' = sp - 1
                   put $ WaitPop sp'
                   pure $ Stack $ Read sp'
         Complete -> do
             put $ ShiftOutSolved 0
-            pure $ Solve False
+            pure WaitForIO
         Progress{} -> do
-            pure $ Solve True
+            pure Solve
         Stuck{} -> do
             put $ Busy (sp + 1)
             pure $ Stack $ Write sp
