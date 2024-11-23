@@ -22,7 +22,7 @@ controller
 controller (shift_in, out_ack) = (in_ack, shift_out)
   where
     (shift_in', shift_out, in_ack, enable_solver, stack_cmd) =
-        mealySB (fmap lines . control) (ShiftIn 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, result)
+        mealySB (fmap lines . control) (ShiftIn 0) (shift_in, out_ack, head_cell, result)
 
     lines = \case
         WaitForIO -> (Nothing, Df.NoData, Ack False, False, Nothing)
@@ -64,13 +64,13 @@ next cons i after = maybe after cons $ countSuccChecked i
 
 control
     :: (Solvable n m)
-    => (Maybe (Cell n m), Ack, Cell n m, Result n m)
+    => (Df.Data (Cell n m), Ack, Cell n m, Result n m)
     -> State (St n m) (Control n m)
 control (shift_in, out_ack, head_cell, result) = get >>= \case
     ShiftIn i -> case shift_in of
-        Nothing -> do
+        Df.NoData -> do
             pure WaitForIO
-        Just shift_in -> do
+        Df.Data shift_in -> do
             put $ next ShiftIn i (Busy 0)
             pure $ Consume shift_in
     WaitPop sp -> do
