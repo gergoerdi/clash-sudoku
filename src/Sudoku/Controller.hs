@@ -3,8 +3,6 @@ module Sudoku.Controller where
 
 import Clash.Prelude
 
-import Data.Maybe
-import Control.Monad
 import Control.Monad.State.Strict
 
 import Protocols
@@ -26,7 +24,7 @@ controller (shift_in, out_ack) = (in_ack, shift_out)
         mealySB (fmap lines . control) (ShiftIn 0) (Df.dataToMaybe <$> shift_in, out_ack, head_cell, result)
 
     lines = \case
-        Consume shift_in -> (shift_in, Df.NoData, Ack True, False, Nothing)
+        Consume shift_in -> (Just shift_in, Df.NoData, Ack True, False, Nothing)
         Solve enable_solver -> (Nothing, Df.NoData, Ack False, enable_solver, Nothing)
         Stack mem_cmd -> (Nothing, Df.NoData, Ack False, True, Just mem_cmd)
         Produce proceed output -> (shift_in, Df.Data output, Ack False, False, Nothing)
@@ -53,7 +51,7 @@ data St n m
     deriving (Generic, NFDataX)
 
 data Control n m
-    = Consume (Maybe (Cell n m))
+    = Consume (Cell n m)
     | Solve Bool
     | Stack (MemCmd (StackDepth n m))
     | Produce Bool (Cell n m)
@@ -63,9 +61,12 @@ control
     => (Maybe (Cell n m), Ack, Cell n m, Result n m)
     -> State (St n m) (Control n m)
 control (shift_in, out_ack, head_cell, result) = get >>= \case
-    ShiftIn i -> do
-        when (isJust shift_in) $ put $ maybe (Busy 0) ShiftIn $ countSuccChecked i
-        pure $ Consume shift_in
+    ShiftIn i -> case shift_in of
+        Nothing -> do
+            pure $ Solve False
+        Just shift_in -> do
+            put $ maybe (Busy 0) ShiftIn $ countSuccChecked i
+            pure $ Consume shift_in
     WaitPop sp -> do
         put $ Busy sp
         pure $ Solve True
