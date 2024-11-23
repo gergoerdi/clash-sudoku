@@ -19,9 +19,6 @@ enable en x = mux en (pure <$> x) (pure empty)
 funzip3 :: (Functor f) => f (a, b, c) -> (f a, f b, f c)
 funzip3 xyzs = ((\(x, y, z) -> x) <$> xyzs, (\(x, y, z) -> y) <$> xyzs, (\(x, y, z) -> z) <$> xyzs)
 
-packWrite :: addr -> Maybe val -> Maybe (addr, val)
-packWrite addr val = (addr,) <$> val
-
 instance SaturatingNum Bit where
     satAdd mode = unpack .: satAdd mode `on` pack
     satSub mode = unpack .: satSub mode `on` pack
