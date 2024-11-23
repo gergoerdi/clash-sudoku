@@ -88,18 +88,19 @@ control (shift_in, out_ack, head_cell, result) = get >>= \case
             put $ Busy (sp + 1)
             pure $ Stack $ Write sp
     ShiftOutFailed -> do
-        wait out_ack $ ShiftIn 0
+        wait out_ack $ put $ ShiftIn 0
         pure $ Produce False $ conflicted
     ShiftOutSolved i -> do
-        proceed <- wait out_ack $ maybe (ShiftIn 0) ShiftOutSolved $ countSuccChecked i
+        proceed <- wait out_ack $ put $ maybe (ShiftIn 0) ShiftOutSolved $ countSuccChecked i
         pure $ Produce proceed $ head_cell
   where
-    wait ack s' = do
-        s <- get
-        let (proceed, s'') = case ack of
-                Ack True -> (True, s')
-                Ack False -> (False, s)
-        put s''
+    wait ack act = do
+        s0 <- get
+        s <- act *> get
+        let (proceed, s') = case ack of
+                Ack True -> (True, s)
+                Ack False -> (False, s0)
+        put s'
         pure proceed
 
 stack
