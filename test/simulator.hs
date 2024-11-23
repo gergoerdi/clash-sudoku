@@ -1,4 +1,5 @@
 {-# LANGUAGE BlockArguments, LambdaCase, ViewPatterns, BangPatterns #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Main where
 
@@ -10,7 +11,6 @@ import Protocols (Ack(..))
 import Data.Char (chr)
 import qualified Data.List as L
 import qualified Clash.Sized.Vector as V
-import Data.Word
 import Control.Arrow.Transformer.Automaton
 import Control.Monad (guard)
 
@@ -36,27 +36,6 @@ showGrid =
 instance (Textual n m) => Show (Sudoku n m) where
     show = showGrid
 
-model_decodeSerial :: Int -> [Bit] -> [Word8]
-model_decodeSerial stretch = wait
-  where
-    wait [] = []
-    wait bs@(b:bs')
-      | b == low = start bs
-      | otherwise = wait bs'
-
-    start bs
-      | (bs, bs') <- L.splitAt stretch bs
-      = dataBits 8 0 bs'
-
-    dataBits 0 x bs = x : end bs
-    dataBits n x bs
-      | (bs, bs') <- L.splitAt stretch bs
-      , let x' = x `shiftR` 1
-            x'' = if L.all (== high) bs then x' `setBit` 7 else x'
-      = dataBits (n - 1) x'' bs'
-
-    end bs = wait bs
-
 sim_board :: forall n m. (Solvable n m, Textual n m) => Sudoku n m -> String
 sim_board =
     fmap (chr . fromIntegral) .
@@ -65,9 +44,11 @@ sim_board =
 
 sim_topEntity :: Sudoku 3 3 -> String
 sim_topEntity =
-    fmap (chr . fromIntegral) . model_decodeSerial 16 .
-    simulate @System (hideClockResetEnable $ \clk rst _en -> topEntity clk rst) .
-    encodeSerials 16 . fmap ascii . showGrid @3 @3
+    fmap (chr . fromIntegral) .
+    simSerial dataRate (hideClockResetEnable \clk rst _en -> topEntity clk rst) .
+    fmap ascii . showGrid @3 @3
+  where
+    dataRate = 9_600
 
 solve :: forall n m. (Solvable n m, Textual n m) => Sudoku n m -> (Int, Maybe (Sudoku n m))
 solve = start (signalAutomaton @System $ bundle . controller @n @m . unbundle) . toList . embed flatGrid
