@@ -18,7 +18,8 @@ import Format
 
 type GridFormat n m = ((((Forward :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n
 type SolutionFormat n m = (If '!' "Unsolvable" (GridFormat n m)) :++ "\r\n"
-type OutputFormat n m = SolutionFormat n m
+type WithTiming fmt = Wait :++ "Cycles: " :++ Until '@' Forward :++ "\r\n" :++ fmt
+type OutputFormat n m = WithTiming (SolutionFormat n m)
 
 board
     :: forall dom. (HiddenClockResetEnable dom)
@@ -27,7 +28,7 @@ board
 board n m =
     Df.mapMaybe parseCell |>
     Circuit (controller @n @m) |>
-    Df.map showCell |>
+    Df.map (either id showCell) |>
     format (OutputFormat n m)
 
 topEntity
