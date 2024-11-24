@@ -49,7 +49,7 @@ data St n m
     | Busy (StackPtr n m)
     | WaitPop (StackPtr n m)
     | ShiftOutSolved (CellIndex n m)
-    | ShiftOutFailed
+    | ShiftOutUnsolvable
     deriving (Generic, NFDataX)
 
 data Control n m
@@ -79,7 +79,7 @@ control (shift_in, out_ack, head_cell, result) = get >>= \case
     Busy sp -> case result of
         Blocked
             | sp == 0 -> do
-                  put ShiftOutFailed
+                  put ShiftOutUnsolvable
                   pure WaitForIO
             | otherwise -> do
                   let sp' = sp - 1
@@ -93,7 +93,7 @@ control (shift_in, out_ack, head_cell, result) = get >>= \case
         Stuck{} -> do
             put $ Busy (sp + 1)
             pure $ Stack $ Write sp
-    ShiftOutFailed -> do
+    ShiftOutUnsolvable -> do
         wait out_ack $ put $ ShiftIn 0
         pure $ Produce False $ conflicted
     ShiftOutSolved i -> do

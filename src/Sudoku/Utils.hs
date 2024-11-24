@@ -3,15 +3,8 @@
 module Sudoku.Utils where
 
 import Clash.Prelude
-import Clash.Class.Counter.Internal
 import Data.Function (on)
 import Data.Composition
-import Control.Monad (guard)
-
-countPredChecked :: Counter a => a -> Maybe a
-countPredChecked x = x' <$ guard (not underflow)
-  where
-    (underflow, x') = countPredOverflow x
 
 enable :: (Applicative f, Alternative g) => f Bool -> f a -> f (g a)
 enable en x = mux en (pure <$> x) (pure empty)
