@@ -1,15 +1,11 @@
 {-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ApplicativeDo #-}
 {-# OPTIONS -Wunused-binds #-}
 module Sudoku.Pure6b {-(nice, solve4)-} where
 
 import Prelude
 import Data.List
 import qualified Sudoku.Pure.Utils as U
-
-import Clash.Prelude (KnownNat)
-import qualified Clash.Sized.Vector as V
 
 import qualified Sudoku.Grid as Grid
 import Sudoku.Cell

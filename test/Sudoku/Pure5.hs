@@ -1,22 +1,12 @@
 {-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ApplicativeDo #-}
 module Sudoku.Pure5 where
 
 import Prelude
--- -- import Clash.Prelude hiding (fold, concatMap, toList, minimum, length)
--- import Prelude
-
--- import Sudoku.Solve (Solvable)
 import qualified Sudoku.Grid as Grid
 import Sudoku.Cell
 import Data.Char (chr, ord)
 
--- import Data.Bits
--- -- import Data.Monoid (All(..))
--- import Data.Monoid.Action
-import Data.Foldable (fold, toList, minimum, length)
--- import Control.Monad.State.Strict
 import Data.Maybe
 import Sudoku.Pure.Utils
 

@@ -1,10 +1,6 @@
-{-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards, LambdaCase #-}
-{-# LANGUAGE ApplicativeDo #-}
 module Sudoku.Pure.Utils where
 
--- import Clash.Prelude hiding (fold, concatMap, toList, minimum, length)
-import Prelude
-import Clash.Prelude (KnownNat)
+import Clash.Prelude hiding (fold, concatMap, toList, minimum, length)
 import qualified Clash.Sized.Vector as V
 
 import qualified Sudoku.Grid as Grid

@@ -1,6 +1,5 @@
 {-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ApplicativeDo #-}
 {-# OPTIONS -Wunused-binds #-}
 module Sudoku.Pure6 (nice, solve4) where
 

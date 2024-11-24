@@ -1,5 +1,4 @@
 {-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
-{-# LANGUAGE ApplicativeDo #-}
 module Sudoku.Pure3b where
 
 import Clash.Prelude hiding (fold)

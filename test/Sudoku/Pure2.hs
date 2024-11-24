@@ -1,5 +1,4 @@
 {-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
-{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE RecursiveDo #-}
 module Sudoku.Pure2 where
 

@@ -1,5 +1,3 @@
-{-# LANGUAGE BlockArguments, ViewPatterns, MultiWayIf, RecordWildCards #-}
-{-# LANGUAGE ApplicativeDo #-}
 module Sudoku.Pure where
 
 import Clash.Prelude
