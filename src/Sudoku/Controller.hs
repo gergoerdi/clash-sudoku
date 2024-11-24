@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase, MultiWayIf, ApplicativeDo, BlockArguments #-}
+{-# LANGUAGE LambdaCase, MultiWayIf, BlockArguments #-}
 module Sudoku.Controller where
 
 import Clash.Prelude
@@ -116,10 +116,9 @@ stack
     -> Signal dom (Maybe a)
 stack cmd push = enable (delay False rd) $ blockRamU NoClearOnReset (SNat @sz) undefined addr wr
   where
-    (addr, rd, wr) = unbundle $ do
-        cmd <- cmd
-        push <- push
-        pure $ case cmd of
-            Nothing -> (undefined, False, Nothing)
-            Just (Read addr) -> (addr, True, Nothing)
-            Just (Write addr) -> (undefined, False, Just (addr, push))
+    (addr, rd, wr) = unbundle $ toRam <$> cmd <*> push
+
+    toRam cmd push = case cmd of
+        Nothing -> (undefined, False, Nothing)
+        Just (Read addr) -> (addr, True, Nothing)
+        Just (Write addr) -> (undefined, False, Just (addr, push));
