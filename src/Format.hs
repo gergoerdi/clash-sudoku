@@ -24,13 +24,11 @@ import Format.Internal
 import Format.SymbolAt
 
 import Clash.Class.Counter
-import Clash.Class.Counter.Internal
 import Protocols
 import qualified Protocols.Df as Df
 import Data.Proxy
 import Data.Char (ord)
 import Data.Word
-import Control.Monad (guard)
 import Data.Maybe
 
 ascii :: Char -> Word8
@@ -40,10 +38,8 @@ ascii c
   where
     code = ord c
 
-countSuccChecked :: Counter a => a -> Maybe a
-countSuccChecked x = x' <$ guard (not overflow)
-  where
-    (overflow, x') = countSuccOverflow x
+countSuccChecked :: (Counter a) => a -> Maybe a
+countSuccChecked = countSucc . Just
 
 -- | Consume one token of input and forward it to the output
 data Forward
