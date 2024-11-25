@@ -5,6 +5,7 @@ import Clash.Prelude
 import Clash.Class.Counter
 
 import Control.Monad.State.Strict
+import Data.Maybe
 
 import Protocols
 import qualified Protocols.Df as Df
@@ -114,11 +115,13 @@ stack
     => Signal dom (Maybe (MemCmd sz))
     -> Signal dom a
     -> Signal dom (Maybe a)
-stack cmd push = enable (delay False rd) $ blockRamU NoClearOnReset (SNat @sz) undefined addr wr
+stack cmd push = enable enable_rd rd
   where
-    (addr, rd, wr) = unbundle $ toRam <$> cmd <*> push
+    (rd_addr, wr) = unbundle $ toRam <$> cmd <*> push
+    enable_rd = delay False $ isJust <$> rd_addr
+    rd = blockRamU NoClearOnReset (SNat @sz) undefined (fromMaybe undefined <$> rd_addr) wr
 
     toRam cmd push = case cmd of
-        Nothing -> (undefined, False, Nothing)
-        Just (Read addr) -> (addr, True, Nothing)
-        Just (Write addr) -> (undefined, False, Just (addr, push));
+        Nothing -> (Nothing, Nothing)
+        Just (Read addr) -> (Just addr, Nothing)
+        Just (Write addr) -> (Nothing, Just (addr, push))
