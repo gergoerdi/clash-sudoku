@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TupleSections, NumericUnderscores #-}
 {-# LANGUAGE RequiredTypeArguments #-}
 module Sudoku where
 
@@ -30,11 +30,13 @@ board n m =
     Df.map showCell |>
     format (OutputFormat n m)
 
+createDomain vXilinxSystem{vName="Dom100", vPeriod = hzToPeriod 100_000_000}
+
 topEntity
-    :: "CLK_100MHZ" ::: Clock System
-    -> "RESET"      ::: Reset System
-    -> "RX"         ::: Signal System Bit
-    -> "TX"         ::: Signal System Bit
+    :: "CLK_100MHZ" ::: Clock Dom100
+    -> "RESET"      ::: Reset Dom100
+    -> "RX"         ::: Signal Dom100 Bit
+    -> "TX"         ::: Signal Dom100 Bit
 topEntity clk rst = withClockResetEnable clk rst enableGen $
     snd . toSignals (serialize (SNat @9600) (board 3 3)) . (, pure ())
 
