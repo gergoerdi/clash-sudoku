@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections, NumericUnderscores #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RequiredTypeArguments #-}
 module Sudoku where
 
@@ -38,6 +38,6 @@ topEntity
     -> "RX"         ::: Signal Dom100 Bit
     -> "TX"         ::: Signal Dom100 Bit
 topEntity clk rst = withClockResetEnable clk rst enableGen $
-    snd . toSignals (serialize (SNat @9600) (board 3 3)) . (, pure ())
+    serialize (SNat @9600) (board 3 3)
 
 makeTopEntity 'topEntity
