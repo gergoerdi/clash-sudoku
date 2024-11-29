@@ -21,7 +21,7 @@ type SolutionFormat n m = (If '!' "Unsolvable" (GridFormat n m)) :++ "\r\n"
 type OutputFormat n m = SolutionFormat n m
 
 board
-    :: forall dom. (HiddenClockResetEnable dom)
+    :: (HiddenClockResetEnable dom)
     => forall n m -> (Solvable n m, Textual n m)
     => Circuit (Df dom Word8) (Df dom Word8)
 board n m =
@@ -38,6 +38,6 @@ topEntity
     -> "RX"         ::: Signal Dom100 Bit
     -> "TX"         ::: Signal Dom100 Bit
 topEntity clk rst = withClockResetEnable clk rst enableGen $
-    serialize (SNat @9600) (board 3 3)
+    serialize 9600 (board 3 3)
 
 makeTopEntity 'topEntity

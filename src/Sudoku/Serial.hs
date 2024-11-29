@@ -1,5 +1,6 @@
 {-# LANGUAGE BlockArguments, TupleSections #-}
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE RequiredTypeArguments #-}
 {-# OPTIONS -fplugin=Protocols.Plugin #-}
 module Sudoku.Serial where
 
@@ -33,12 +34,12 @@ uncircuit :: Circuit (CSignal dom a) (CSignal dom b) -> Signal dom a -> Signal d
 uncircuit c = snd . toSignals c . (, pure ())
 
 serialize
-    :: (HiddenClockResetEnable dom, ValidBaud dom baud, BitPack a, BitSize a ~ 8, BitPack b, BitSize b ~ 8)
-    => SNat baud
-    -> Circuit (Df dom a) (Df dom b)
+    :: (HiddenClockResetEnable dom, BitPack a, BitSize a ~ 8, BitPack b, BitSize b ~ 8)
+    => forall baud -> (KnownNat baud, ValidBaud dom baud)
+    => Circuit (Df dom a) (Df dom b)
     -> Signal dom Bit
     -> Signal dom Bit
 serialize baud par_circuit = uncircuit $ circuit \rx -> do
-    (in_byte, tx) <- uartDf baud -< (out_byte, rx)
+    (in_byte, tx) <- uartDf (SNat @baud) -< (out_byte, rx)
     out_byte <- Df.map pack <| par_circuit <| Df.map unpack <| buffer -< in_byte
     idC -< tx
