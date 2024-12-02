@@ -41,13 +41,12 @@ splitCell (Cell c) = (Cell last, Cell rest)
     last = lastBit c
     rest = c .&. complement last
 
-type Textual n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, n * m <= (9 + 26))
-
 decodeOneHot :: forall n. (KnownNat n, 1 <= n) => BitVector n -> Index n
 decodeOneHot = fold @(n - 1) (.|.) . zipWith mask (reverse indicesI) . bv2v
   where
     mask i sel = if bitToBool sel then i else 0
 
+type Textual n m = (KnownNat n, KnownNat m, 1 <= n * m, n * m <= (9 + 26))
 
 showCell :: (Textual n m) => Cell n m -> Word8
 showCell x

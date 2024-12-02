@@ -15,11 +15,11 @@ import Sudoku.Cell
 import Sudoku.Solve
 import Format
 
-type Serial dom a b = (Signal dom (Df.Data a), Signal dom Ack) -> (Signal dom Ack, Signal dom (Df.Data b))
+type Stream dom a b = (Signal dom (Df.Data a), Signal dom Ack) -> (Signal dom Ack, Signal dom (Df.Data b))
 
 controller
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
-    => Serial dom (Cell n m) (Cell n m)
+    => Stream dom (Cell n m) (Cell n m)
 controller (shift_in, out_ack) = (in_ack, shift_out)
   where
     (shift_in', shift_out, in_ack, enable_solver, stack_cmd) =

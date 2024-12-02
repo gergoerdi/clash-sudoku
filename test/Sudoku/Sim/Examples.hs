@@ -37,6 +37,18 @@ Just grid0 = readGrid . unlines $
     , "9 _ _  _ _ _  _ _ _"
     ]
 
+irregular :: Sudoku 3 2
+Just irregular = readGrid . unlines $
+    [ "1 _ _  _ _ 6"
+    , "_ _ _  _ _ _"
+    , ""
+    , "_ 1 _  _ _ _"
+    , "_ _ _  _ _ _"
+    , ""
+    , "2 5 _  _ _ _"
+    , "_ _ _  _ _ _"
+    ]
+
 grid1 :: Sudoku 3 3
 Just grid1 = readGrid . unlines $
     [ "0 2 0  9 0 8  0 0 0"

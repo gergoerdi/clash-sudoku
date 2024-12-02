@@ -1,9 +1,11 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RequiredTypeArguments #-}
+{-# LANGUAGE BlockArguments #-}
 module Sudoku where
 
 import Clash.Prelude hiding (lift)
 import Clash.Annotations.TH
+import Clash.Class.Counter
 
 import Data.Word
 
@@ -20,9 +22,11 @@ type GridFormat n m = ((((Forward :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :
 type SolutionFormat n m = (If '!' "Unsolvable" (GridFormat n m)) :++ "\r\n"
 type OutputFormat n m = SolutionFormat n m
 
+type Formattable n m = (1 <= n, 1 <= m)
+
 board
     :: (HiddenClockResetEnable dom)
-    => forall n m -> (Solvable n m, Textual n m)
+    => forall n m -> (Solvable n m, Textual n m, Formattable n m)
     => Circuit (Df dom Word8) (Df dom Word8)
 board n m =
     Df.mapMaybe parseCell |>

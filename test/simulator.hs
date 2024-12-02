@@ -26,17 +26,17 @@ import Sudoku.Sim.Serial
 import Sudoku.Sim.Examples
 import Text.Printf
 
-showGrid :: forall n m. (Textual n m) => Sudoku n m -> String
+showGrid :: forall n m. (Textual n m, Formattable n m) => Sudoku n m -> String
 showGrid =
     fmap (chr . fromIntegral) .
     formatModel (GridFormat n m) .
     fmap showCell .
     toList . embed flatGrid
 
-instance (Textual n m) => Show (Sudoku n m) where
+instance (Textual n m, Formattable n m) => Show (Sudoku n m) where
     show = showGrid
 
-sim_board :: forall n m. (Solvable n m, Textual n m) => Sudoku n m -> String
+sim_board :: forall n m. (Solvable n m, Textual n m, Formattable n m) => Sudoku n m -> String
 sim_board =
     fmap (chr . fromIntegral) .
     simulateCSE @System (exposeClockResetEnable (board n m)) .
@@ -50,7 +50,7 @@ sim_topEntity =
   where
     dataRate = 9_600
 
-solve :: forall n m. (Solvable n m, Textual n m) => Sudoku n m -> (Int, Maybe (Sudoku n m))
+solve :: forall n m. (Solvable n m, Textual n m, Formattable n m) => Sudoku n m -> (Int, Maybe (Sudoku n m))
 solve = start (signalAutomaton @System $ bundle . controller @n @m . unbundle) . toList . embed flatGrid
   where
     start (Automaton step) xs = load sim xs
