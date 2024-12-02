@@ -51,11 +51,6 @@ boxs = rowMajorOrder . imap rowMajorOrder . grid
 foldGroups :: (KnownNat n, KnownNat m, Monoid a) => Grid n m a -> Grid n m a
 foldGroups = foldBy rows <> foldBy cols <> foldBy boxs
   where
-    foldBy
-        :: (KnownNat n, KnownNat m, Monoid a)
-        => Grouping n m
-        -> Grid n m a
-        -> Grid n m a
     foldBy grouping = project grouping . fmap (repeat . fold) . embed grouping
 
 allGroups :: (KnownNat n, KnownNat m) => (Group n m a -> Bool) -> Grid n m a -> Bool
