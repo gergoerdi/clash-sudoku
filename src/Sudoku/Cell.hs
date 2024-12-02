@@ -24,9 +24,9 @@ conflicted = Cell zeroBits
 given :: (KnownNat n, KnownNat m) => Index (n * m) -> Cell n m
 given i = Cell (bit $ fromIntegral i)
 
-givenFromIntegral :: forall a n m. (KnownNat n, KnownNat m, Integral a) => a -> Maybe (Cell n m)
+givenFromIntegral :: forall n m a. (KnownNat n, KnownNat m, Integral a) => a -> Maybe (Cell n m)
 givenFromIntegral x
-    | x <= fromIntegral (maxBound :: Index (n * m))
+    | x < snatToNum (SNat @(n * m))
     = Just $ given . fromIntegral $ x
 
     | otherwise
@@ -43,13 +43,11 @@ splitCell (Cell c) = (Cell last, Cell rest)
 
 type Textual n m = (KnownNat n, KnownNat m, 1 <= n, 1 <= m, 1 <= n * m, n * m <= (9 + 26))
 
-decodeOneHot :: (KnownNat n, 1 <= n) => BitVector n -> Index n
-decodeOneHot = unpack . collapseBits . fmap pack . zipWith mask indicesI . reverse . bv2v
+decodeOneHot :: forall n. (KnownNat n, 1 <= n) => BitVector n -> Index n
+decodeOneHot = fold @(n - 1) (.|.) . zipWith mask (reverse indicesI) . bv2v
   where
-    mask i en = if bitToBool en then i else 0
+    mask i sel = if bitToBool sel then i else 0
 
-    collapseBits :: (KnownNat n, KnownNat m) => Vec n (BitVector m) -> BitVector m
-    collapseBits = bitCoerce . fmap reduceOr . transpose . fmap bv2v
 
 showCell :: (Textual n m) => Cell n m -> Word8
 showCell x
