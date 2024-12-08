@@ -9,6 +9,7 @@ module Format
     , Drop
     , Wait
     , (:*)
+    , type (*:)
     , (:++)
     , If
     , Until
@@ -70,7 +71,11 @@ instance Format Wait where
     format1_ _ _ = Dynamic \x -> Transition False Nothing Nothing
 
 -- | Repetition
+infix 7 :*
 data a :* (rep :: Nat)
+
+infix 7 *:
+type n *: fmt = fmt :* n
 
 instance (Format fmt, KnownNat rep, 1 <= rep) => Format (fmt :* rep) where
     type State (fmt :* rep) = (Index rep, State fmt)
@@ -83,6 +88,7 @@ instance (Format fmt, KnownNat rep, 1 <= rep) => Format (fmt :* rep) where
         repeat = (, start fmt) <$> countSuccChecked i
 
 -- | Concatenation
+infix 6 :++
 data a :++ b
 
 instance (Format a, Format b) => Format (a :++ b) where

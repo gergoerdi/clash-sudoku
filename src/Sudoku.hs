@@ -1,6 +1,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RequiredTypeArguments #-}
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE PolyKinds #-}
 module Sudoku where
 
 import Clash.Prelude hiding (lift)
@@ -18,8 +19,12 @@ import Sudoku.Solve (Solvable)
 import Sudoku.Serial
 import Format
 
-type GridFormat n m = ((((Forward :++ " ") :* n :++ " ") :* m :++ "\r\n") :* m :++ "\r\n") :* n
-type SolutionFormat n m = (If '!' "Unsolvable" (GridFormat n m)) :++ "\r\n"
+type HSep fmt = fmt :++ " "
+type VSep fmt = fmt :++ "\r\n"
+
+-- type GridFormat n m = n *: VSep (m *: VSep ("| " :++ m *: (HSep Forward :* n :++ "| ")))
+type GridFormat n m = n *: VSep (m *: VSep (m *: HSep (n *: HSep Forward)))
+type SolutionFormat n m = If '!' (VSep "Unsolvable") (GridFormat n m)
 type OutputFormat n m = SolutionFormat n m
 
 type Formattable n m = (1 <= n, 1 <= m)
