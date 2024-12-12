@@ -27,7 +27,7 @@ formatModel fmt = go begin
       where
         next = fromMaybe begin
         output = maybe id (:)
-        produce (Transition consume mb_y s') cs' = output mb_y $ go (next s') (if consume then cs' else cs)
+        produce (Transition (Compand consume mb_y) s') cs' = output mb_y $ go (next s') (if consume then cs' else cs)
 
 prop_format :: forall fmt -> (Format fmt) => H.Property
 prop_format fmt =

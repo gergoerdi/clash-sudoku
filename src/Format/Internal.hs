@@ -17,13 +17,14 @@ data Dep a b
     deriving (Functor)
 
 -- | A transition to a new state @s@, potentially consuming the input and potentially producing output @b@
-data Transition s b = Transition Bool (Maybe b) s
+data Transition s output = Transition output s
     deriving (Functor)
 
 instance Bifunctor Transition where
-    bimap f g (Transition consume output next) = Transition consume (g <$> output) (f next)
+    bimap f g (Transition output next) = Transition (g output) (f next)
 
-type Format1 a s b = Dep a (Transition (Maybe s) b)
+data Compand b = Compand Bool (Maybe b)
+type Format1 a s b = Dep a (Transition (Maybe s) (Compand b))
 
 mapState :: (Maybe s -> Maybe s') -> Format1 a s b -> Format1 a s' b
 mapState = fmap . first
