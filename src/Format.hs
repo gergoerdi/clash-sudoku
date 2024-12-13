@@ -49,7 +49,7 @@ instance Format Forward where
     type State Forward = ()
 
     start_ _ = ()
-    format1_ _ _ = Dynamic \x -> Step True (Just x) Nothing
+    transition_ _ _ = Dynamic \x -> Step True (Just x) Nothing
 
 -- | Consume one token of input without producing any output
 data Drop
@@ -58,7 +58,7 @@ instance Format Drop where
     type State Drop = ()
 
     start_ _ = ()
-    format1_ _ _ = Dynamic \x -> Step True Nothing Nothing
+    transition_ _ _ = Dynamic \x -> Step True Nothing Nothing
 
 -- | Wait until new input is available, without consuming it
 data Wait
@@ -67,7 +67,7 @@ instance Format Wait where
     type State Wait = ()
 
     start_ _ = ()
-    format1_ _ _ = Dynamic \x -> Step False Nothing Nothing
+    transition_ _ _ = Dynamic \x -> Step False Nothing Nothing
 
 -- | Repetition
 infix 7 :*
@@ -81,7 +81,7 @@ instance (Format fmt, KnownNat rep, 1 <= rep) => Format (fmt :* rep) where
 
     start_ _ = (countMin, start fmt)
 
-    format1_ _ (i, s) = mapState (maybe repeat continue) $ format1 fmt s
+    transition_ _ (i, s) = mapState (maybe repeat continue) $ transition fmt s
       where
         continue s' = Just (i, s')
         repeat = (, start fmt) <$> countSuccChecked i
@@ -95,9 +95,9 @@ instance (Format a, Format b) => Format (a :++ b) where
 
     start_ _ = Left (start a)
 
-    format1_ _ = either
-      (mapState (Just . maybe (Right $ start b) Left) . format1 a)
-      (mapState (fmap Right) . format1 b)
+    transition_ _ = either
+      (mapState (Just . maybe (Right $ start b) Left) . transition a)
+      (mapState (fmap Right) . transition b)
 
 -- | Literal
 instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Format sep where
@@ -105,7 +105,7 @@ instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength se
 
     start_ _ = countMin
 
-    format1_ _ i = Static $ Step False (Just char) (countSuccChecked i)
+    transition_ _ i = Static $ Step False (Just char) (countSuccChecked i)
       where
         char = ascii $ noDeDup $ symbolAt sep i
 
@@ -116,7 +116,7 @@ instance (Format fmt) => Format (Loop fmt) where
     type State (Loop fmt) = State fmt
 
     start_ _ = start fmt
-    format1_ _ = mapState (Just . fromMaybe (start fmt)) . format1 fmt
+    transition_ _ = mapState (Just . fromMaybe (start fmt)) . transition fmt
 
 -- | Branch
 data If (ch :: Char) thn els
@@ -132,14 +132,14 @@ instance (KnownChar ch, Format thn, Format els) => Format (If ch thn els) where
 
     start_ _ = Decide
 
-    format1_ _ = \case
+    transition_ _ = \case
         Decide -> Dynamic \x ->
             if x == ascii ch then
                 Step True Nothing (Just $ Then $ start thn)
             else
                 Step False Nothing (Just $ Else $ start els)
-        Then s -> mapState (Then <$>) $ format1 thn s
-        Else s -> mapState (Else <$>) $ format1 els s
+        Then s -> mapState (Then <$>) $ transition thn s
+        Else s -> mapState (Else <$>) $ transition els s
       where
         ch = charVal (Proxy @ch)
 
@@ -156,14 +156,14 @@ instance (KnownChar ch, Format fmt) => Format (Until ch fmt) where
 
     start_ _ = Checking
 
-    format1_ _ = \case
+    transition_ _ = \case
         Checking -> Dynamic \x ->
             if x == ascii ch then
                 Step True Nothing Nothing
             else
                 Step False Nothing (Just $ Looping $ start fmt)
         Looping s ->
-            mapState (Just . maybe Checking Looping) $ format1 fmt s
+            mapState (Just . maybe Checking Looping) $ transition fmt s
       where
         ch = charVal (Proxy @ch)
 
@@ -172,10 +172,12 @@ format
     :: forall dom. (HiddenClockResetEnable dom)
     => forall fmt -> (Format fmt)
     => Circuit (Df dom Word8) (Df dom Word8)
-format fmt = Df.compander (start fmt, True) \(s, ready) x ->
+format fmt = Df.compander (Just $ start fmt, True) \(s, ready) x ->
     let wait_for_next_input = ((s, True), Nothing, True)
         proceed (Step consume y s') = ((s', ready && not consume), y, False)
-    in case transition fmt s of
-        Static step -> proceed step
-        Dynamic f | ready -> proceed (f x)
-        _ -> wait_for_next_input
+    in case s of
+        Nothing -> wait_for_next_input
+        Just s -> case transition fmt s of
+            Static step -> proceed step
+            Dynamic f | ready -> proceed (f x)
+            _ -> wait_for_next_input

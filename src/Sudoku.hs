@@ -25,7 +25,7 @@ type VSep fmt = fmt :++ "\r\n"
 -- type GridFormat n m = n *: VSep (m *: VSep ("| " :++ m *: (HSep Forward :* n :++ "| ")))
 type GridFormat n m = n *: VSep (m *: VSep (m *: HSep (n *: HSep Forward)))
 type SolutionFormat n m = If '!' (VSep "Unsolvable") (GridFormat n m)
-type OutputFormat n m = SolutionFormat n m
+type OutputFormat n m = Loop (SolutionFormat n m)
 
 type Formattable n m = (1 <= n, 1 <= m)
 

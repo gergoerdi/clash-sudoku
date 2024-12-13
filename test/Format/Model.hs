@@ -7,7 +7,6 @@ import Format
 import Format.Internal
 
 import Data.Word
-import Data.Maybe
 
 import qualified Protocols.Hedgehog as H
 import qualified Hedgehog as H
@@ -15,15 +14,15 @@ import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
 formatModel :: forall fmt -> (Format fmt) => [Word8] -> [Word8]
-formatModel fmt = go begin
+formatModel fmt = go (Just $ start fmt)
   where
-    begin = start fmt
-
-    go s xs = case transition fmt s of
-        Static step -> proceed step
-        Dynamic f
-            | (x:_) <- xs -> proceed (f x)
-            | otherwise -> []
+    go s xs = case s of
+        Nothing -> []
+        Just s -> case transition fmt s of
+            Static step -> proceed step
+            Dynamic f
+                | (x:_) <- xs -> proceed (f x)
+                | otherwise -> []
       where
         output = maybe id (:)
         proceed (Step consume mb_y s') = output mb_y $ go s' xs'

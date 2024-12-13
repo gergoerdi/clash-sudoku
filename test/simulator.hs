@@ -36,11 +36,11 @@ showGrid =
 instance (Textual n m, Formattable n m) => Show (Sudoku n m) where
     show = showGrid
 
-sim_board :: forall n m. (Solvable n m, Textual n m, Formattable n m) => Sudoku n m -> String
+sim_board :: forall n m. (Solvable n m, Textual n m, Formattable n m) => [Sudoku n m] -> String
 sim_board =
     fmap (chr . fromIntegral) .
     simulateCSE @System (exposeClockResetEnable (board n m)) .
-    fmap ascii . showGrid
+    fmap ascii . L.concatMap showGrid
 
 sim_topEntity :: Sudoku 3 3 -> String
 sim_topEntity =
