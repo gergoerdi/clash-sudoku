@@ -49,7 +49,6 @@ instance Format Forward where
     type State Forward = ()
 
     start_ _ = ()
-
     format1_ _ _ = Dynamic \x -> Step True (Just x) Nothing
 
 -- | Consume one token of input without producing any output
@@ -97,8 +96,8 @@ instance (Format a, Format b) => Format (a :++ b) where
     start_ _ = Left (start a)
 
     format1_ _ = either
-      (mapState (maybe (Just . Right $ start b) (Just . Left)) . format1 a)
-      (mapState (maybe Nothing (Just . Right)) . format1 b)
+      (mapState (Just . maybe (Right $ start b) Left) . format1 a)
+      (mapState (fmap Right) . format1 b)
 
 -- | Literal
 instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Format sep where
@@ -175,8 +174,8 @@ format
     => Circuit (Df dom Word8) (Df dom Word8)
 format fmt = Df.compander (start fmt, True) \(s, ready) x ->
     let wait_for_next_input = ((s, True), Nothing, True)
-        transition (Step consume y s') = ((fromMaybe (start fmt) s', ready && not consume), y, False)
-    in case format1 fmt s of
-        Static step -> transition step
-        Dynamic f | ready -> transition (f x)
+        proceed (Step consume y s') = ((s', ready && not consume), y, False)
+    in case transition fmt s of
+        Static step -> proceed step
+        Dynamic f | ready -> proceed (f x)
         _ -> wait_for_next_input
