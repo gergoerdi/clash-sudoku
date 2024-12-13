@@ -1,6 +1,6 @@
 {-# LANGUAGE BlockArguments, TupleSections, LambdaCase #-}
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, PolyKinds #-}
-{-# LANGUAGE RequiredTypeArguments #-}
+{-# LANGUAGE RequiredTypeArguments, StandaloneDeriving #-}
 module Format
     ( Format
     , format
@@ -17,6 +17,7 @@ module Format
     , Loop
 
     , ascii
+    , asciiVal
     , countSuccChecked
     ) where
 
@@ -24,6 +25,7 @@ import Clash.Prelude
 
 import Format.Internal
 import Format.SymbolAt
+import Format.Cond
 
 import Clash.Class.Counter
 import Protocols
@@ -32,13 +34,6 @@ import Data.Proxy
 import Data.Char (ord)
 import Data.Word
 import Data.Maybe
-
-ascii :: Char -> Word8
-ascii c
-    | code <= 0x7f = fromIntegral code
-    | otherwise = clashCompileError "Not an ASCII code point"
-  where
-    code = ord c
 
 countSuccChecked :: (Counter a) => a -> Maybe a
 countSuccChecked = countSucc . Just
@@ -120,71 +115,50 @@ instance (Format fmt) => Format (Loop fmt) where
     transition_ _ = mapState (Just . fromMaybe (start fmt)) . transition fmt
 
 -- | Branch
-data If (ch :: Char) thn els
+data If c thn els
 
 data IfState thn els
     = Decide
-    | Then thn
-    | Else els
-    deriving (Generic, NFDataX, Show)
+    | Then (State thn)
+    | Else (State els)
+    deriving (Generic)
 
-instance (KnownChar ch, Format thn, Format els) => Format (If ch thn els) where
-    type State (If ch thn els) = IfState (State thn) (State els)
+deriving instance (NFDataX (State thn), NFDataX (State els)) => NFDataX (IfState thn els)
+deriving instance (Show (State thn), Show (State els)) => Show (IfState thn els)
+
+branch :: (a -> Maybe s) -> Transition a s b
+branch p = Dynamic \x -> Step False Nothing $ p x
+
+instance (Cond c, Format thn, Format els) => Format (If c thn els) where
+    type State (If c thn els) = IfState thn els
 
     start_ _ = Decide
 
     transition_ _ = \case
-        Decide -> Dynamic \x ->
-            if x == ascii ch then
-                Step True Nothing (Just $ Then $ start thn)
-            else
-                Step False Nothing (Just $ Else $ start els)
+        Decide -> branch \x -> Just $ if cond c x then Then (start thn) else Else (start els)
         Then s -> mapState (Then <$>) $ transition thn s
         Else s -> mapState (Else <$>) $ transition els s
-      where
-        ch = charVal (Proxy @ch)
 
 -- | Branch
-data Until (ch :: Char) fmt
+data Until c fmt
 
 data UntilState fmt
     = Checking
-    | Looping fmt
-    deriving (Generic, NFDataX, Show)
+    | Looping (State fmt)
+    deriving (Generic)
 
-instance (KnownChar ch, Format fmt) => Format (Until ch fmt) where
-    type State (Until ch fmt) = UntilState (State fmt)
+deriving instance (NFDataX (State fmt)) => NFDataX (UntilState fmt)
+deriving instance (Show (State fmt)) => Show (UntilState fmt)
 
-    start_ _ = Checking
-
-    transition_ _ = \case
-        Checking -> Dynamic \x ->
-            if x == ascii ch then
-                Step True Nothing Nothing
-            else
-                Step False Nothing (Just $ Looping $ start fmt)
-        Looping s ->
-            mapState (Just . maybe Checking Looping) $ transition fmt s
-      where
-        ch = charVal (Proxy @ch)
-
-data While (ch :: Char) fmt
-
-instance (KnownChar ch, Format fmt) => Format (While ch fmt) where
-    type State (While ch fmt) = UntilState (State fmt)
+instance (Cond c, Format fmt) => Format (Until c fmt) where
+    type State (Until c fmt) = UntilState fmt
 
     start_ _ = Checking
-
     transition_ _ = \case
-        Checking -> Dynamic \x ->
-            if x == ascii ch then
-                Step True Nothing (Just $ Looping $ start fmt)
-            else
-                Step False Nothing Nothing
-        Looping s ->
-            mapState (Just . maybe Checking Looping) $ transition fmt s
-      where
-        ch = charVal (Proxy @ch)
+        Checking -> branch \x -> if cond c x then Nothing else Just $ Looping $ start fmt
+        Looping s -> mapState (Just . maybe Checking Looping) $ transition fmt s
+
+type While c = Until (Not c)
 
 {-# INLINE format #-}
 format
