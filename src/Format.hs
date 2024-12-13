@@ -13,6 +13,7 @@ module Format
     , (:++)
     , If
     , Until
+    , While
     , Loop
 
     , ascii
@@ -87,7 +88,7 @@ instance (Format fmt, KnownNat rep, 1 <= rep) => Format (fmt :* rep) where
         repeat = (, start fmt) <$> countSuccChecked i
 
 -- | Concatenation
-infix 6 :++
+infixl 6 :++
 data a :++ b
 
 instance (Format a, Format b) => Format (a :++ b) where
@@ -162,6 +163,24 @@ instance (KnownChar ch, Format fmt) => Format (Until ch fmt) where
                 Step True Nothing Nothing
             else
                 Step False Nothing (Just $ Looping $ start fmt)
+        Looping s ->
+            mapState (Just . maybe Checking Looping) $ transition fmt s
+      where
+        ch = charVal (Proxy @ch)
+
+data While (ch :: Char) fmt
+
+instance (KnownChar ch, Format fmt) => Format (While ch fmt) where
+    type State (While ch fmt) = UntilState (State fmt)
+
+    start_ _ = Checking
+
+    transition_ _ = \case
+        Checking -> Dynamic \x ->
+            if x == ascii ch then
+                Step True Nothing (Just $ Looping $ start fmt)
+            else
+                Step False Nothing Nothing
         Looping s ->
             mapState (Just . maybe Checking Looping) $ transition fmt s
       where
