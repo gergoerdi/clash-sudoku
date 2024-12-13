@@ -20,14 +20,17 @@ formatModel fmt = go begin
     begin = start fmt
 
     go s cs = case format1 fmt s of
-        Static step -> produce step cs
+        Static step -> transition step
         Dynamic step
-            | (c:cs') <- cs -> produce (step c) cs'
+            | (c:_) <- cs -> transition (step c)
             | otherwise -> []
       where
         next = fromMaybe begin
         output = maybe id (:)
-        produce (Transition (Compand consume mb_y) s') cs' = output mb_y $ go (next s') (if consume then cs' else cs)
+        transition (Step consume mb_y s') = output mb_y $ go (next s') cs'
+          where
+            cs' | consume, (_:cs') <- cs = cs'
+                | otherwise = cs
 
 prop_format :: forall fmt -> (Format fmt) => H.Property
 prop_format fmt =

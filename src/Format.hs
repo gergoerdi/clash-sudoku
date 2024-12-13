@@ -50,7 +50,7 @@ instance Format Forward where
 
     start_ _ = ()
 
-    format1_ _ _ = Dynamic \x -> Transition (Compand True (Just x)) Nothing
+    format1_ _ _ = Dynamic \x -> Step True (Just x) Nothing
 
 -- | Consume one token of input without producing any output
 data Drop
@@ -59,7 +59,7 @@ instance Format Drop where
     type State Drop = ()
 
     start_ _ = ()
-    format1_ _ _ = Dynamic \x -> Transition (Compand True Nothing) Nothing
+    format1_ _ _ = Dynamic \x -> Step True Nothing Nothing
 
 -- | Wait until new input is available, without consuming it
 data Wait
@@ -68,7 +68,7 @@ instance Format Wait where
     type State Wait = ()
 
     start_ _ = ()
-    format1_ _ _ = Dynamic \x -> Transition (Compand False Nothing) Nothing
+    format1_ _ _ = Dynamic \x -> Step False Nothing Nothing
 
 -- | Repetition
 infix 7 :*
@@ -106,7 +106,7 @@ instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength se
 
     start_ _ = countMin
 
-    format1_ _ i = Static $ Transition (Compand False (Just char)) (countSuccChecked i)
+    format1_ _ i = Static $ Step False (Just char) (countSuccChecked i)
       where
         char = ascii $ noDeDup $ symbolAt sep i
 
@@ -136,9 +136,9 @@ instance (KnownChar ch, Format thn, Format els) => Format (If ch thn els) where
     format1_ _ = \case
         Decide -> Dynamic \x ->
             if x == ascii ch then
-                Transition (Compand True Nothing) (Just $ Then $ start thn)
+                Step True Nothing (Just $ Then $ start thn)
             else
-                Transition (Compand False Nothing) (Just $ Else $ start els)
+                Step False Nothing (Just $ Else $ start els)
         Then s -> mapState (Then <$>) $ format1 thn s
         Else s -> mapState (Else <$>) $ format1 els s
       where
@@ -160,9 +160,9 @@ instance (KnownChar ch, Format fmt) => Format (Until ch fmt) where
     format1_ _ = \case
         Checking -> Dynamic \x ->
             if x == ascii ch then
-                Transition (Compand True Nothing) Nothing
+                Step True Nothing Nothing
             else
-                Transition (Compand False Nothing) (Just $ Looping $ start fmt)
+                Step False Nothing (Just $ Looping $ start fmt)
         Looping s ->
             mapState (Just . maybe Checking Looping) $ format1 fmt s
       where
@@ -173,12 +173,10 @@ format
     :: forall dom. (HiddenClockResetEnable dom)
     => forall fmt -> (Format fmt)
     => Circuit (Df dom Word8) (Df dom Word8)
-format fmt = Df.compander (begin, True) \(s, ready) x ->
-    let next_input = ((s, True), Nothing, True)
-        produce (Transition (Compand consume y) s') = ((fromMaybe begin s', ready && not consume), y, False)
+format fmt = Df.compander (start fmt, True) \(s, ready) x ->
+    let wait_for_next_input = ((s, True), Nothing, True)
+        transition (Step consume y s') = ((fromMaybe (start fmt) s', ready && not consume), y, False)
     in case format1 fmt s of
-        Dynamic step | not ready -> next_input
-        Static step -> produce step
-        Dynamic step -> produce (step x)
-  where
-    begin = start fmt
+        Static step -> transition step
+        Dynamic f | ready -> transition (f x)
+        _ -> wait_for_next_input
