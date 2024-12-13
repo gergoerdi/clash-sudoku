@@ -31,8 +31,15 @@ class Cond c where
 cond :: forall c -> (Cond c) => Word8 -> Bool
 cond c = cond_ (Proxy @c)
 
+-- | Matches the input exactly
 instance (KnownChar ch) => Cond ch where
     cond_ _ = (== asciiVal ch)
+
+-- | Matches if any of the characters match the input
+instance (KnownSymbol s) => Cond s where
+    cond_ _ = (`elem` cs)
+      where
+        cs = fmap ascii $ symbolVal (Proxy @s)
 
 data Not cond
 
