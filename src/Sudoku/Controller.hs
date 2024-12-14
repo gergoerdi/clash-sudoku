@@ -147,7 +147,7 @@ control (shift_in, out_ack, head_cell, result) = gets phase >>= \case
         pure $ Produce False $ Left $ showDigit $ head cnt
     ShiftOutCycleCountFinished solved -> do
         wait out_ack $ goto $ if solved then ShiftOutSolved 0 else ShiftOutUnsolvable
-        pure $ Produce False $ Left $ ascii '@'
+        pure $ Produce False $ Left $ ascii '#'
     ShiftOutUnsolvable -> do
         wait out_ack $ goto $ ShiftIn 0
         pure $ Produce False $ Right conflicted
