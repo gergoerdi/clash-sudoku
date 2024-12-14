@@ -25,7 +25,9 @@ type VSep fmt = fmt :++ "\r\n"
 -- type GridFormat n m = n *: VSep (m *: VSep ("| " :++ m *: (HSep Forward :* n :++ "| ")))
 type GridFormat n m = n *: VSep (m *: VSep (m *: HSep (n *: HSep Forward)))
 type SolutionFormat n m = If '!' (Drop :++ VSep "Unsolvable.") ("Solution:\r\n" :++ GridFormat n m)
-type OutputFormat n m = SolutionFormat n m
+type Number = While '0' Drop :++ Until '@' Forward :++ Drop
+type WithTiming fmt = Wait :++ "Cycles: " :++ Number :++ ".\r\n" :++ fmt
+type OutputFormat n m = WithTiming (SolutionFormat n m)
 
 type Formattable n m = (1 <= n, 1 <= m)
 
@@ -36,7 +38,7 @@ board
 board n m =
     Df.mapMaybe parseCell |>
     Circuit (controller @n @m) |>
-    Df.map showCell |>
+    Df.map (either id showCell) |>
     format (Loop (OutputFormat n m))
 
 createDomain vXilinxSystem{vName="Dom100", vPeriod = hzToPeriod 100_000_000}
