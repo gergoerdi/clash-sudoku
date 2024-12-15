@@ -30,12 +30,12 @@ controller (shift_in, out_ack) = (in_ack, shift_out)
 
     lines = \case
         WaitForIO -> (Nothing, Df.NoData, Ack False, False, Nothing)
-        Consume shift_in -> (Just shift_in, Df.NoData, Ack True, False, Nothing)
+        Consume cell_in -> (Just cell_in, Df.NoData, Ack True, False, Nothing)
         Solve -> (Nothing, Df.NoData, Ack False, True, Nothing)
         Stack mem_cmd -> (Nothing, Df.NoData, Ack False, True, Just mem_cmd)
-        Produce proceed output -> (shift_in, Df.Data output, Ack False, False, Nothing)
+        Produce proceed cell_out -> (cell_in, Df.Data cell_out, Ack False, False, Nothing)
           where
-            shift_in = if proceed then Just conflicted else Nothing
+            cell_in = if proceed then Just conflicted else Nothing
 
     (result, head_cell, pushed) = solver shift_in' popped enable_solver
     popped = stack stack_cmd pushed
