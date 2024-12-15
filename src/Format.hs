@@ -5,6 +5,8 @@ module Format
     ( Format
     , format
 
+    , compander'
+
     , Print
     , Drop
     , Wait
@@ -21,7 +23,7 @@ module Format
     , countSuccChecked
     ) where
 
-import Clash.Prelude
+import Clash.Prelude hiding (Const)
 
 import Format.Internal
 import Format.SymbolAt
@@ -35,6 +37,17 @@ import Data.Char (ord)
 import Data.Word
 import Data.Maybe
 
+compander'
+    :: (HiddenClockResetEnable dom, NFDataX s)
+    => s
+    -> (s -> i :- (s, Maybe o, Bool))
+    -> Circuit (Df dom i) (Df dom o)
+compander' s0 step = Df.compander (s0, True) \(s, ready) x -> case step s of
+    Const (s', y, consume) -> ((s', ready && not consume), y, False)
+    Varying f
+        | ready, (s', y , consume) <- f x -> ((s', not consume), y, False)
+        | otherwise -> ((s, True), Nothing, True)
+
 countSuccChecked :: (Counter a) => a -> Maybe a
 countSuccChecked = countSucc . Just
 
@@ -45,7 +58,7 @@ instance Format Print where
     type State Print = ()
 
     start_ _ = ()
-    transition_ _ _ = Dynamic \x -> Step True (Just x) Nothing
+    transition_ _ _ = Varying \x -> (Nothing, Just x, True)
 
 -- | Consume one token of input without producing any output
 data Drop
@@ -54,7 +67,7 @@ instance Format Drop where
     type State Drop = ()
 
     start_ _ = ()
-    transition_ _ _ = Dynamic \x -> Step True Nothing Nothing
+    transition_ _ _ = Varying \x -> (Nothing, Nothing, True)
 
 -- | Wait until new input is available, without consuming it
 data Wait
@@ -63,7 +76,7 @@ instance Format Wait where
     type State Wait = ()
 
     start_ _ = ()
-    transition_ _ _ = Dynamic \x -> Step False Nothing Nothing
+    transition_ _ _ = Varying \x -> (Nothing, Nothing, False)
 
 -- | Repetition
 infix 7 :*
@@ -101,7 +114,7 @@ instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength se
 
     start_ _ = countMin
 
-    transition_ _ i = Static $ Step False (Just char) (countSuccChecked i)
+    transition_ _ i = Const (countSuccChecked i, Just char, False)
       where
         char = ascii $ noDeDup $ symbolAt sep i
 
@@ -126,8 +139,8 @@ data IfState thn els
 deriving instance (NFDataX (State thn), NFDataX (State els)) => NFDataX (IfState thn els)
 deriving instance (Show (State thn), Show (State els)) => Show (IfState thn els)
 
-branch :: (a -> Maybe s) -> Transition a s b
-branch p = Dynamic \x -> Step False Nothing $ p x
+branch :: (a -> s) -> Transition a s b
+branch p = Varying \x -> (p x, Nothing, False)
 
 instance (Cond c, Format thn, Format els) => Format (If c thn els) where
     type State (If c thn els) = IfState thn els
@@ -165,12 +178,6 @@ format
     :: forall dom. (HiddenClockResetEnable dom)
     => forall fmt -> (Format fmt)
     => Circuit (Df dom Word8) (Df dom Word8)
-format fmt = Df.compander (Just $ start fmt, True) \(s, ready) x ->
-    let wait_for_next_input = ((s, True), Nothing, True)
-        proceed (Step consume y s') = ((s', ready && not consume), y, False)
-    in case s of
-        Nothing -> wait_for_next_input
-        Just s -> case transition fmt s of
-            Static step -> proceed step
-            Dynamic f | ready -> proceed (f x)
-            _ -> wait_for_next_input
+format fmt = compander' (Just $ start fmt) \case
+    Nothing -> Varying \_ -> (Nothing, Nothing, True)
+    Just s -> transition fmt s

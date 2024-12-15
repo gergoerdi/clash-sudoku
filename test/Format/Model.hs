@@ -1,7 +1,7 @@
 {-# LANGUAGE RequiredTypeArguments #-}
 module Format.Model where
 
-import Clash.Prelude
+import Clash.Prelude hiding (Const)
 
 import Format
 import Format.Internal
@@ -19,13 +19,13 @@ formatModel fmt = go (Just $ start fmt)
     go s xs = case s of
         Nothing -> []
         Just s -> case transition fmt s of
-            Static step -> proceed step
-            Dynamic f
+            Const step -> proceed step
+            Varying f
                 | (x:_) <- xs -> proceed (f x)
                 | otherwise -> []
       where
         output = maybe id (:)
-        proceed (Step consume mb_y s') = output mb_y $ go s' xs'
+        proceed (s', mb_y, consume) = output mb_y $ go s' xs'
           where
             xs' | consume, (_:xs') <- xs = xs'
                 | otherwise = xs

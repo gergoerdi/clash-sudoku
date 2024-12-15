@@ -10,32 +10,26 @@ import Data.Word
 import Data.Proxy
 
 -- | A @b@ value that potentially depends on an @a@ parameter
-data a :~> b
-    = Static b
-    | Dynamic (a -> b)
+data a :- b
+    = Const b
+    | Varying (a -> b)
     deriving (Functor)
-infixr 0 :~>
-
-data Step b s = Step
-    Bool -- ^ Consume input?
-    (Maybe b) -- ^ Produce output?
-    s -- ^ Next state
-    deriving (Functor)
+infixr 0 :-
 
 -- | A state transition of a @compander@ with internal state @s@, input @a@ and output @b@
-type Transition a s b = a :~> Step b (Maybe s)
+type Transition i s o = i :- (s, Maybe o, Bool)
 
-mapState :: (Maybe s -> Maybe s') -> Transition a s b -> Transition a s' b
-mapState = fmap . fmap
+mapState :: (s -> s') -> Transition i s o -> Transition i s' o
+mapState f = fmap \(s, y, consume) -> (f s, y, consume)
 
 class (NFDataX (State fmt)) => Format (fmt :: k) where
     type State fmt
 
     start_ :: proxy fmt -> State fmt
-    transition_ :: proxy fmt -> State fmt -> Transition Word8 (State fmt) Word8
+    transition_ :: proxy fmt -> State fmt -> Transition Word8 (Maybe (State fmt)) Word8
 
 start :: forall fmt -> (Format fmt) => State fmt
 start fmt = start_ (Proxy @fmt)
 
-transition :: forall fmt -> (Format fmt) => State fmt -> Transition Word8 (State fmt) Word8
+transition :: forall fmt -> (Format fmt) => State fmt -> Transition Word8 (Maybe (State fmt)) Word8
 transition fmt = transition_ (Proxy @fmt)
