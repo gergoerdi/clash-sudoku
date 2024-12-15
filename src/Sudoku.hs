@@ -22,10 +22,10 @@ import Format
 type HSep fmt = fmt :++ " "
 type VSep fmt = fmt :++ "\r\n"
 
--- type GridFormat n m = n *: VSep (m *: VSep ("| " :++ m *: (HSep Forward :* n :++ "| ")))
-type GridFormat n m = n *: VSep (m *: VSep (m *: HSep (n *: HSep Forward)))
+-- type GridFormat n m = n *: VSep (m *: VSep ("| " :++ m *: (HSep Print :* n :++ "| ")))
+type GridFormat n m = n *: VSep (m *: VSep (m *: HSep (n *: HSep Print)))
 type SolutionFormat n m = If '!' (Drop :++ VSep "Unsolvable.") ("Solution:\r\n" :++ GridFormat n m)
-type Number = While '0' Drop :++ Until '#' Forward :++ Drop
+type Number = While '0' Drop :++ Until '#' Print :++ Drop
 type WithTiming fmt = Wait :++ "Cycles: " :++ Number :++ ".\r\n" :++ fmt
 type OutputFormat n m = WithTiming (SolutionFormat n m)
 

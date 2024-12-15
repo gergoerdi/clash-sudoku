@@ -5,7 +5,7 @@ module Format
     ( Format
     , format
 
-    , Forward
+    , Print
     , Drop
     , Wait
     , (:*)
@@ -39,10 +39,10 @@ countSuccChecked :: (Counter a) => a -> Maybe a
 countSuccChecked = countSucc . Just
 
 -- | Consume one token of input and forward it to the output
-data Forward
+data Print
 
-instance Format Forward where
-    type State Forward = ()
+instance Format Print where
+    type State Print = ()
 
     start_ _ = ()
     transition_ _ _ = Dynamic \x -> Step True (Just x) Nothing
