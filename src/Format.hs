@@ -40,7 +40,7 @@ import Data.Maybe
 compander'
     :: (HiddenClockResetEnable dom, NFDataX s)
     => s
-    -> (s -> i :- (s, Maybe o, Bool))
+    -> (s -> Transition i s (Maybe o))
     -> Circuit (Df dom i) (Df dom o)
 compander' s0 step = Df.compander (s0, True) \(s, ready) x -> case step s of
     Const (s', y, consume) -> ((s', ready && not consume), y, False)
@@ -146,7 +146,7 @@ data IfState thn els
 deriving instance (NFDataX (State thn), NFDataX (State els)) => NFDataX (IfState thn els)
 deriving instance (Show (State thn), Show (State els)) => Show (IfState thn els)
 
-branch :: (a -> s) -> Transition a s b
+branch :: (i -> s) -> Transition i s (Maybe o)
 branch p = Varying \x -> (p x, Nothing, False)
 
 instance (Cond c, Format thn, Format els) => Format (If c thn els) where
