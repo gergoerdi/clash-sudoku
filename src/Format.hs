@@ -80,20 +80,20 @@ instance Format Wait where
 
 -- | Repetition
 infix 7 :*
-data a :* (rep :: Nat)
+data a :* (n :: Nat)
 
 infix 7 *:
 type n *: fmt = fmt :* n
 
-instance (Format fmt, KnownNat rep, 1 <= rep) => Format (fmt :* rep) where
-    type State (fmt :* rep) = (Index rep, State fmt)
+instance (Format fmt, KnownNat n, 1 <= n) => Format (fmt :* n) where
+    type State (fmt :* n) = (State fmt, Index n)
 
-    start_ _ = (countMin, start fmt)
+    start_ _ = (start fmt, 0)
 
-    transition_ _ (i, s) = mapState (maybe repeat continue) $ transition fmt s
+    transition_ _ (s, i) = mapState (maybe repeat continue) $ transition fmt s
       where
-        continue s' = Just (i, s')
-        repeat = (, start fmt) <$> countSuccChecked i
+        continue s' = Just (s', i)
+        repeat = (start fmt,) <$> countSuccChecked i
 
 -- | Concatenation
 infixl 6 :++
