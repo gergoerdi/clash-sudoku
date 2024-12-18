@@ -116,14 +116,13 @@ instance (KnownChar ch) => Format ch where
     transition_ _ _ = Const (Nothing, Just $ asciiVal ch, False)
 
 -- | String literal
-instance (IndexableSymbol str, KnownNat (SymbolLength str), 1 <= SymbolLength str) => Format str where
+instance (SymbolVec str, KnownNat (SymbolLength str), 1 <= SymbolLength str) => Format str where
     type State str = Index (SymbolLength str)
 
-    start_ _ = countMin
-
-    transition_ _ i = Const (countSuccChecked i, Just char, False)
+    start_ _ = 0
+    transition_ _ = \i -> Const (countSuccChecked i, Just (s !! i), False)
       where
-        char = ascii $ noDeDup $ symbolAt str i
+        s = symbolVec str
 
 -- | Loop
 data Loop fmt

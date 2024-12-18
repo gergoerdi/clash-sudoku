@@ -1,34 +1,29 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE RequiredTypeArguments #-}
-module Format.SymbolAt (SymbolLength, IndexableSymbol, symbolAt) where
+module Format.SymbolAt (SymbolLength, SymbolVec, symbolVec) where
 
 import Clash.Prelude
 import Data.Proxy
+import Format.Cond
+import Data.Word
 
-class (KnownNat (SymbolLength' s)) => IndexableSymbol' (s :: Maybe (Char, Symbol)) where
+class (KnownNat (SymbolLength' s)) => SymbolVec' (s :: Maybe (Char, Symbol)) where
     type SymbolLength' s :: Nat
 
-    symbolAt_ :: proxy s -> Index (SymbolLength' s) -> Char
+    symbolVec' :: Proxy s -> Vec (SymbolLength' s) Word8
 
-instance IndexableSymbol' Nothing where
+instance SymbolVec' Nothing where
     type SymbolLength' Nothing = 0
 
-    symbolAt_ _ i = errorX "impossible"
+    symbolVec' _ = Nil
 
-instance (IndexableSymbol s, KnownChar c) => IndexableSymbol' (Just '(c, s)) where
+instance (SymbolVec s, KnownChar c) => SymbolVec' (Just '(c, s)) where
     type SymbolLength' (Just '(c, s)) = 1 + SymbolLength s
 
-    {-# INLINE symbolAt_ #-}
-    symbolAt_ _ i
-        | i == 0
-        = charVal (Proxy @c)
-
-        | otherwise
-        = symbolAt s (fromIntegral (i - 1))
+    symbolVec' _ = asciiVal c :> symbolVec s
 
 type SymbolLength s = SymbolLength' (UnconsSymbol s)
-type IndexableSymbol s = IndexableSymbol' (UnconsSymbol s)
+type SymbolVec s = SymbolVec' (UnconsSymbol s)
 
-{-# INLINE symbolAt #-}
-symbolAt :: forall s -> (IndexableSymbol s) => Index (SymbolLength s) -> Char
-symbolAt s = symbolAt_ (Proxy @(UnconsSymbol s))
+symbolVec :: forall s -> SymbolVec s => Vec (SymbolLength s) Word8
+symbolVec s = symbolVec' (Proxy @(UnconsSymbol s))
