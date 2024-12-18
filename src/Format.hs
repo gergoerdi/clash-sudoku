@@ -108,15 +108,22 @@ instance (Format a, Format b) => Format (a :++ b) where
       (mapState (Just . maybe (Right $ start b) Left) . transition a)
       (mapState (fmap Right) . transition b)
 
--- | Literal
-instance (IndexableSymbol sep, KnownNat (SymbolLength sep), 1 <= SymbolLength sep) => Format sep where
-    type State sep = Index (SymbolLength sep)
+-- | Character literal
+instance (KnownChar ch) => Format ch where
+    type State ch = ()
+
+    start_ _ = ()
+    transition_ _ _ = Const (Nothing, Just $ asciiVal ch, False)
+
+-- | String literal
+instance (IndexableSymbol str, KnownNat (SymbolLength str), 1 <= SymbolLength str) => Format str where
+    type State str = Index (SymbolLength str)
 
     start_ _ = countMin
 
     transition_ _ i = Const (countSuccChecked i, Just char, False)
       where
-        char = ascii $ noDeDup $ symbolAt sep i
+        char = ascii $ noDeDup $ symbolAt str i
 
 -- | Loop
 data Loop fmt
