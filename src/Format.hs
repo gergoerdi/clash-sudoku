@@ -1,6 +1,6 @@
 {-# LANGUAGE BlockArguments, TupleSections, LambdaCase #-}
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, PolyKinds #-}
-{-# LANGUAGE RequiredTypeArguments, StandaloneDeriving #-}
+{-# LANGUAGE RequiredTypeArguments #-}
 module Format
     ( Format
     , format
@@ -32,8 +32,6 @@ import Format.Cond
 import Clash.Class.Counter
 import Protocols
 import qualified Protocols.Df as Df
-import Data.Proxy
-import Data.Char (ord)
 import Data.Word
 import Data.Maybe
 
@@ -138,18 +136,15 @@ data If c thn els
 
 data IfState thn els
     = Decide
-    | Then (State thn)
-    | Else (State els)
-    deriving (Generic)
-
-deriving instance (NFDataX (State thn), NFDataX (State els)) => NFDataX (IfState thn els)
-deriving instance (Show (State thn), Show (State els)) => Show (IfState thn els)
+    | Then thn
+    | Else els
+    deriving (Generic, NFDataX, Show)
 
 branch :: (i -> s) -> Transition i s (Maybe o)
 branch p = Varying \x -> (p x, Nothing, False)
 
 instance (Cond c, Format thn, Format els) => Format (If c thn els) where
-    type State (If c thn els) = IfState thn els
+    type State (If c thn els) = IfState (State thn) (State els)
 
     start_ _ = Decide
 
@@ -163,14 +158,11 @@ data Until c fmt
 
 data UntilState fmt
     = Checking
-    | Looping (State fmt)
-    deriving (Generic)
-
-deriving instance (NFDataX (State fmt)) => NFDataX (UntilState fmt)
-deriving instance (Show (State fmt)) => Show (UntilState fmt)
+    | Looping fmt
+    deriving (Generic, NFDataX, Show)
 
 instance (Cond c, Format fmt) => Format (Until c fmt) where
-    type State (Until c fmt) = UntilState fmt
+    type State (Until c fmt) = UntilState (State fmt)
 
     start_ _ = Checking
     transition_ _ = \case

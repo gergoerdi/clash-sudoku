@@ -5,7 +5,7 @@ module Sudoku.Cell where
 import Clash.Prelude
 import Clash.Num.Overflowing
 import Format (ascii)
-import Sudoku.Utils
+import Sudoku.Utils ()
 
 import Data.Word (Word8)
 import Data.Monoid.Action

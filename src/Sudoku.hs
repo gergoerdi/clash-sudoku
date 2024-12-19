@@ -6,7 +6,6 @@ module Sudoku where
 
 import Clash.Prelude hiding (lift)
 import Clash.Annotations.TH
-import Clash.Class.Counter
 
 import Data.Word
 
