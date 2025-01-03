@@ -14,7 +14,7 @@ single :: (Solvable n m) => Cell n m -> Bool
 single cell = popCount (cellBits cell) == 1
 
 choices :: (Solvable n m) => Cell n m -> [Cell n m]
-choices cell = [ given i | i <- [minBound..maxBound], cellBits cell ! i == 1 ]
+choices cell = [ given i | i <- [minBound..maxBound], cell `canBe` i ]
 
 expand :: (Solvable n m) => Sudoku n m -> [Sudoku n m]
 expand = sequenceA . snd . mapAccumR guess False
@@ -38,13 +38,13 @@ sudoku grid
     void = any (== conflicted) grid
     safe = allGroups consistent masks
     complete = and is_singles
-    
+
     consistent = not . bitsOverlap . fmap maskBits
 
     is_singles = single <$> grid
     masks = maskOf <$> is_singles <*> grid
     group_masks = foldGroups masks
-    
+
     pruned = apply <$> is_singles <*> group_masks <*> grid
     changed = pruned /= grid
 

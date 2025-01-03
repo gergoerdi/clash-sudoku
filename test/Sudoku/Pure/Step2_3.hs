@@ -14,7 +14,7 @@ single :: (KnownNat n, KnownNat m) => Cell n m -> Bool
 single cell = popCount (cellBits cell) == 1
 
 choices :: (KnownNat n, KnownNat m) => Cell n m -> [Cell n m]
-choices cell = [ given i | i <- [minBound..maxBound], cellBits cell ! i == 1 ]
+choices cell = [ given i | i <- [minBound..maxBound], cell `canBe` i ]
 
 expand :: (KnownNat n, KnownNat m) => Sudoku n m -> [Sudoku n m]
 expand = sequenceA . snd . mapAccumR guess False
@@ -41,12 +41,12 @@ sudoku grid
     void = any (== conflicted) grid
     safe = allGroups consistent grid
     complete = all single grid
-    
+
     pruned = apply <$> group_masks <*> grid
     changed = pruned /= grid
 
     masks = maskOf <$> grid
     group_masks = foldGroups masks
-    
+
     maskOf cell = if single cell then cellMask cell else mempty
     apply mask cell = if single cell then cell else act mask cell

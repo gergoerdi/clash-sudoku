@@ -14,7 +14,7 @@ single :: (KnownNat n, KnownNat m) => Cell n m -> Bool
 single cell = popCount (cellBits cell) == 1
 
 choices :: (KnownNat n, KnownNat m) => Cell n m -> [Cell n m]
-choices cell = [ given i | i <- [minBound..maxBound], cellBits cell ! i == 1 ]
+choices cell = [ given i | i <- [minBound..maxBound], cell `canBe` i ]
 
 expand :: (KnownNat n, KnownNat m) => Sudoku n m -> [Sudoku n m]
 expand = sequenceA . snd . mapAccumR guess1 False

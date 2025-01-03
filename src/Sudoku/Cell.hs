@@ -15,6 +15,9 @@ newtype Cell n m = Cell{ cellBits :: BitVector (n * m) }
     deriving anyclass (NFDataX)
     deriving newtype (Eq, Show, Ord)
 
+canBe :: (KnownNat n, KnownNat m) => Cell n m -> Index (n * m) -> Bool
+Cell c `canBe` i = c ! i == 1
+
 wild :: (KnownNat n, KnownNat m) => Cell n m
 wild = Cell oneBits
 
