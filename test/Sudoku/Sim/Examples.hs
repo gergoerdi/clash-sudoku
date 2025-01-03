@@ -1,13 +1,18 @@
 module Sudoku.Sim.Examples where
 
-import Clash.Prelude hiding (lift)
+import Clash.Prelude hiding (lift, (.))
 import qualified Clash.Sized.Vector as V
+import Control.Category ((.))
 
+import Sudoku.Matrix
 import Sudoku.Grid
 import Sudoku.Solve (Sudoku)
 import Sudoku.Cell
 import Sudoku.Iso
 import Format (ascii)
+
+flatGrid :: (KnownNat n, KnownNat m) => Grid n m a <-> Vec (n * m * m * n) a
+flatGrid = iconcat . rows
 
 readGrid :: forall n m. (Textual n m) => String -> Maybe (Sudoku n m)
 readGrid = go []

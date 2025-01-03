@@ -25,13 +25,10 @@ instance (KnownNat n, KnownNat m) => Bundle (Grid n m a) where
     unbundle = Grid . fmap unbundle . unbundle . fmap getGrid
 
 instance (KnownNat n, KnownNat m) => Traversable (Grid n m) where
-    traverse f = fmap (project flatGrid) . traverse f . embed flatGrid
-
-flatGrid :: (KnownNat n, KnownNat m) => Grid n m a <-> Vec (n * m * m * n) a
-flatGrid = iconcat . rows
+    traverse f = fmap (project rows) . traverse (traverse f) . embed rows
 
 headGrid :: forall n m a. (KnownNat n, KnownNat m, 1 <= n * m * m * n) => Grid n m a -> a
-headGrid = head @(n * m * m * n - 1) . embed flatGrid
+headGrid = head @(n * m * m * n - 1) . embed (iconcat . rows)
 
 grid :: Grid n m a <-> Matrix n m (Matrix m n a)
 grid = icoerce
