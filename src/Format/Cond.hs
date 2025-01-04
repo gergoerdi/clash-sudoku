@@ -1,4 +1,5 @@
 {-# LANGUAGE PolyKinds, RequiredTypeArguments #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Format.Cond
     ( Cond(..)
     , cond
@@ -25,23 +26,33 @@ ascii c
 asciiVal :: forall ch -> (KnownChar ch) => Word8
 asciiVal ch = ascii $ charVal (Proxy @ch)
 
-class Cond c where
-    cond_ :: proxy c -> Word8 -> Bool
+class Cond a c where
+    cond_ :: proxy c -> a -> Bool
 
-cond :: forall c -> (Cond c) => Word8 -> Bool
+cond :: forall c -> (Cond a c) => a -> Bool
 cond c = cond_ (Proxy @c)
 
 -- | Matches the input exactly
-instance (KnownChar ch) => Cond ch where
+instance (KnownChar ch) => Cond Word8 ch where
     cond_ _ = (== asciiVal ch)
 
+-- | Matches the input exactly
+instance (KnownChar ch) => Cond Char ch where
+    cond_ _ = (== charVal (Proxy @ch))
+
 -- | Matches if any of the characters match the input
-instance (KnownSymbol s) => Cond s where
+instance (KnownSymbol s) => Cond Char s where
+    cond_ _ = (`elem` cs)
+      where
+        cs = symbolVal (Proxy @s)
+
+-- | Matches if any of the characters match the input
+instance (KnownSymbol s) => Cond Word8 s where
     cond_ _ = (`elem` cs)
       where
         cs = fmap ascii $ symbolVal (Proxy @s)
 
 data Not cond
 
-instance (Cond c) => Cond (Not c) where
+instance (Cond a c) => Cond a (Not c) where
     cond_ _ = not . cond c

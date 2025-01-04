@@ -22,14 +22,18 @@ type Transition i s o = i :- (s, o, Bool)
 mapState :: (s -> s') -> Transition i s o -> Transition i s' o
 mapState f = fmap \(s, y, consume) -> (f s, y, consume)
 
-class (NFDataX (State fmt)) => Format (fmt :: k) where
+mapOutput :: (o -> o') -> Transition i s o -> Transition i s o'
+mapOutput f = fmap \(s, y, consume) -> (s, f y, consume)
+
+class NFDataX (State fmt) => FormatState (fmt :: k) where
     type State fmt
-
     start_ :: proxy fmt -> State fmt
-    transition_ :: proxy fmt -> State fmt -> Transition Word8 (Maybe (State fmt)) (Maybe Word8)
 
-start :: forall fmt -> (Format fmt) => State fmt
+class FormatState fmt => Format a b (fmt :: k) where
+    transition_ :: proxy fmt -> State fmt -> Transition a (Maybe (State fmt)) (Maybe b)
+
+start :: forall fmt -> (FormatState fmt) => State fmt
 start fmt = start_ (Proxy @fmt)
 
-transition :: forall fmt -> (Format fmt) => State fmt -> Transition Word8 (Maybe (State fmt)) (Maybe Word8)
+transition :: forall fmt -> (Format a b fmt) => State fmt -> Transition a (Maybe (State fmt)) (Maybe b)
 transition fmt = transition_ (Proxy @fmt)

@@ -1,4 +1,5 @@
 {-# LANGUAGE RequiredTypeArguments #-}
+{-# LANGUAGE PolyKinds #-}
 module Format.Model where
 
 import Clash.Prelude hiding (Const)
@@ -13,7 +14,7 @@ import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
-formatModel :: forall fmt -> (Format fmt) => [Word8] -> [Word8]
+formatModel :: forall (fmt :: k) -> Format a b fmt => [a] -> [b]
 formatModel fmt = go (Just $ start fmt)
   where
     go s xs = case s of
@@ -30,12 +31,12 @@ formatModel fmt = go (Just $ start fmt)
             xs' | consume, (_:xs') <- xs = xs'
                 | otherwise = xs
 
-prop_format :: forall fmt -> (Format fmt) => H.Property
+prop_format :: forall fmt -> (Format Word8 Word8 fmt) => H.Property
 prop_format fmt =
     H.idWithModelSingleDomain
       H.defExpectOptions
       gen_input
-      (\_ _ _ -> formatModel fmt)
+      (\_ _ _ -> formatModel @_ @Word8 @Word8 fmt)
       (exposeClockResetEnable @System $ format fmt)
   where
     gen_input :: H.Gen [Word8]
