@@ -132,7 +132,9 @@ instance (SymbolVec str, KnownNat (SymbolLength str), 1 <= SymbolLength str) => 
         s = symbolVec str
 
 instance (SymbolVec str, KnownNat (SymbolLength str), 1 <= SymbolLength str) => Format a Word8 str where
-    transition_ s = mapOutput (fmap ascii) . transition_ s
+    transition_ _ = \i -> Const (countSuccChecked i, Just (s !! i), False)
+      where
+        s = smap (\_ -> ascii) $ symbolVec str
 
 -- | Loop
 data Loop fmt
