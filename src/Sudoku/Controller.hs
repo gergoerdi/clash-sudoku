@@ -126,8 +126,8 @@ control (shift_in, out_ack, head_cell, result) = gets phase >>= \case
     Busy -> tick $ case result of
         Blocked -> pop >>= \case
             Nothing -> do
-                  goto $ ShiftOutCycleCount False 0
-                  pure WaitForIO
+                goto $ ShiftOutCycleCount False 0
+                pure WaitForIO
             Just sp -> do
                 goto WaitPop
                 pure $ Stack $ Read sp
