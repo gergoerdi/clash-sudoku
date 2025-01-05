@@ -31,13 +31,12 @@ formatModel fmt = go (Just $ start fmt)
             xs' | consume, (_:xs') <- xs = xs'
                 | otherwise = xs
 
-prop_format :: forall fmt -> (Format Word8 Word8 fmt) => H.Property
+prop_format :: forall fmt -> (Format Char Char fmt) => H.Property
 prop_format fmt =
     H.idWithModelSingleDomain
       H.defExpectOptions
       gen_input
-      (\_ _ _ -> formatModel @_ @Word8 @Word8 fmt)
+      (\_ _ _ -> formatModel @_ @Char @Char fmt)
       (exposeClockResetEnable @System $ format fmt)
   where
-    gen_input :: H.Gen [Word8]
-    gen_input = Gen.list (Range.linear 0 100) (ascii <$> Gen.alpha)
+    gen_input = Gen.list (Range.linear 0 100) Gen.ascii

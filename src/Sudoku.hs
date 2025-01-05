@@ -17,6 +17,7 @@ import Sudoku.Controller
 import Sudoku.Solve (Solvable)
 import Sudoku.Serial
 import Format
+import Data.Char
 
 type HSep fmt = fmt :++ " "
 type VSep fmt = fmt :++ "\r\n"
@@ -37,8 +38,9 @@ board
 board n m =
     Df.mapMaybe parseCell |>
     Circuit (controller @n @m) |>
-    Df.map (either id showCell) |>
-    format (Loop (OutputFormat n m))
+    Df.map (either (chr . fromIntegral) showCell) |>
+    format (Loop (OutputFormat n m)) |>
+    Df.map (fromIntegral . ord)
 
 createDomain vXilinxSystem{vName="Dom100", vPeriod = hzToPeriod 100_000_000}
 

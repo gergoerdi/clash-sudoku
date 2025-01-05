@@ -18,9 +18,7 @@ cellvals = "123456789"
 blank = (== '_')
 
 fromGrid' :: Grid.Grid 3 3 (Cell 3 3) -> Board
-fromGrid' = (getCompose . fmap fromCell . Compose) . fromGrid
-  where
-    fromCell = chr . fromIntegral . showCell
+fromGrid' = (getCompose . fmap showCell . Compose) . fromGrid
 
 toGrid' :: Board -> Grid.Grid 3 3 (Cell 3 3)
 toGrid' = toGrid . getCompose . fmap toCell . Compose

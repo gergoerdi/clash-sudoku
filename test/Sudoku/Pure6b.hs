@@ -15,9 +15,7 @@ import Data.Maybe
 import Control.Monad.State.Strict
 
 fromGrid' :: Grid.Grid 3 3 (Cell 3 3) -> Board
-fromGrid' = fmap fromCell . Compose . U.fromGrid
-  where
-    fromCell = chr . fromIntegral . showCell
+fromGrid' = fmap showCell . Compose . U.fromGrid
 
 toGrid' :: Board -> Grid.Grid 3 3 (Cell 3 3)
 toGrid' = fmap toCell . U.toGrid . getCompose

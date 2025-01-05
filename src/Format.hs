@@ -118,9 +118,6 @@ instance (KnownChar ch) => FormatState ch where
 instance (KnownChar ch) => Format a Char ch where
     transition_ _ _ = Const (Nothing, Just $ charVal (Proxy @ch), False)
 
-instance (KnownChar ch) => Format a Word8 ch where
-    transition_ ch = mapOutput (fmap ascii) . transition_ ch
-
 -- | String literal
 instance (SymbolVec str, KnownNat (SymbolLength str), 1 <= SymbolLength str) => FormatState str where
     type State str = Index (SymbolLength str)
@@ -130,11 +127,6 @@ instance (SymbolVec str, KnownNat (SymbolLength str), 1 <= SymbolLength str) => 
     transition_ _ = \i -> Const (countSuccChecked i, Just (s !! i), False)
       where
         s = symbolVec str
-
-instance (SymbolVec str, KnownNat (SymbolLength str), 1 <= SymbolLength str) => Format a Word8 str where
-    transition_ _ = \i -> Const (countSuccChecked i, Just (s !! i), False)
-      where
-        s = smap (\_ -> ascii) $ symbolVec str
 
 -- | Loop
 data Loop fmt

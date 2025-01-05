@@ -22,9 +22,6 @@ type Transition i s o = i :- (s, o, Bool)
 mapState :: (s -> s') -> Transition i s o -> Transition i s' o
 mapState f = fmap \(s, y, consume) -> (f s, y, consume)
 
-mapOutput :: (o -> o') -> Transition i s o -> Transition i s o'
-mapOutput f = fmap \(s, y, consume) -> (s, f y, consume)
-
 class NFDataX (State fmt) => FormatState (fmt :: k) where
     type State fmt
     start_ :: proxy fmt -> State fmt
