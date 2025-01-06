@@ -93,12 +93,11 @@ solver
        , Signal dom (Cell n m)
        , Signal dom (Sudoku n m)
        )
-solver shift_in popped en = (result, headGrid cells, next_guess)
+solver cell_in popped en = (result, cell_out, pushed)
   where
-    cells = register wild <$> cells'
-    cells' = unbundle $ fromMaybe <$> grid <*> grid'
+    grid = regMaybe (pure wild) grid'
+    cell_out = headGrid <$> grid
 
-    grid = bundle cells
-    shifted = shiftIn <$> shift_in <*> grid
-    (result, next_guess) = unbundle $ solve <$> grid
+    shifted = shiftIn <$> cell_in <*> grid
+    (result, pushed) = unbundle $ solve <$> grid
     grid' = commit <$> shifted <*> popped <*> en <*> result
