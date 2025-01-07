@@ -69,20 +69,20 @@ solve grid = (result, next_guess)
     maskOf single cell = if single then cellMask cell else mempty
     apply mask single cell = if single then cell else act mask cell
 
-shiftIn :: (Traversable f) => Maybe a -> f a -> Maybe (f a)
-shiftIn shift_in = sequenceA . snd . mapAccumR shift shift_in
+shiftIn :: (Traversable f) => a -> f a -> f a
+shiftIn shift_in = snd . mapAccumR shift shift_in
   where
-    shift shift_in cell = case shift_in of
-        Nothing -> (Nothing, Nothing)
-        Just shift_in -> (Just cell, Just shift_in)
+    shift shift_in cell = (cell, shift_in)
 
-commit :: Maybe (Sudoku n m) -> Maybe (Sudoku n m) -> Bool -> Result n m -> Maybe (Sudoku n m)
-commit shifted popped en result = shifted <|> popped <|> solved
-  where
-    solved
-        | Progress pruned <- result, en   = Just pruned
-        | Stuck first_guess <- result, en = Just first_guess
-        | otherwise                       = Nothing
+commit
+    :: (KnownNat n, KnownNat m)
+    => Maybe (Cell n m) -> Maybe (Sudoku n m) -> Bool -> Result n m -> Sudoku n m -> Sudoku n m
+commit cell_in popped en result grid
+    | Just cell <- cell_in             = shiftIn cell grid
+    | Just popped <- popped            = popped
+    | Progress pruned <- result, en    = pruned
+    | Stuck first_guess <- result, en  = first_guess
+    | otherwise                        = grid
 
 solver
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
@@ -95,9 +95,8 @@ solver
        )
 solver cell_in popped en = (result, cell_out, pushed)
   where
-    grid = regMaybe (pure wild) grid'
+    grid = register (pure wild) grid'
     cell_out = headGrid <$> grid
 
-    shifted = shiftIn <$> cell_in <*> grid
     (result, pushed) = unbundle $ solve <$> grid
-    grid' = commit <$> shifted <*> popped <*> en <*> result
+    grid' = commit <$> cell_in <*> popped <*> en <*> result <*> grid
