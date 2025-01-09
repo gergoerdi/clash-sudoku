@@ -18,7 +18,6 @@ import Sudoku.Cell
 import Data.Monoid.Action
 import Data.Traversable (mapAccumR)
 import Data.Maybe
-import Control.Arrow (first, second)
 
 type Sudoku n m = Grid n m (Cell n m)
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
@@ -43,18 +42,16 @@ data Result n m
     = Blocked
     | Complete
     | Progress (Sudoku n m)
-    | Stuck (Sudoku n m)
+    | Stuck (Sudoku n m) (Sudoku n m)
     deriving (Generic, NFDataX)
 
-solve :: (KnownNat n, KnownNat m) => Sudoku n m -> (Result n m, Sudoku n m)
-solve grid = (result, next_guess)
+solve :: (KnownNat n, KnownNat m) => Sudoku n m -> Result n m
+solve grid
+    | blocked   = Blocked
+    | complete  = Complete
+    | changed   = Progress pruned
+    | otherwise = Stuck first_guess next_guess
   where
-    result
-        | blocked   = Blocked
-        | complete  = Complete
-        | changed   = Progress pruned
-        | otherwise = Stuck first_guess
-
     blocked = void || not safe
     void = any (== conflicted) grid
     safe = allGroups consistent masks
@@ -76,7 +73,7 @@ shiftIn shift_in = snd . mapAccumR shift shift_in
     shift shift_in cell = (cell, shift_in)
 
 type StackPtr n m = Index (n * m * m * n)
-type StackCmd n m = MemCmd (n * m * m * n)
+type StackCmd n m = MemCmd (n * m * m * n) (Sudoku n m)
 
 stepSolver
     :: (Solvable n m)
@@ -93,7 +90,7 @@ stepSolver popped result grid sp
               | otherwise -> let sp' = sp - 1 in (grid, sp', Just (Read sp'), Nothing)
           Complete -> (grid, sp, Nothing, Just True)
           Progress pruned -> (pruned, sp, Nothing, Nothing)
-          Stuck first_guess -> (first_guess, sp + 1, Just (Write sp), Nothing)
+          Stuck first_guess next_guess -> (first_guess, sp + 1, Just (Write sp next_guess), Nothing)
 
 loadOrStepSolver
     :: (Solvable n m)
@@ -121,26 +118,25 @@ solver cell_in en = (cell_out, done)
     sp = register 0 sp'
     cell_out = headGrid <$> grid
 
-    (result, pushed) = unbundle $ solve <$> grid
+    result = solve <$> grid
     (grid', sp', stack_cmd, done) = unbundle $
         loadOrStepSolver <$> cell_in <*> en <*> popped <*> result <*> grid <*> sp
 
-    popped = ram @(n * m * m * n) stack_cmd pushed
+    popped = ram @(n * m * m * n) stack_cmd
 
-data MemCmd n = Write (Index n) | Read (Index n)
+data MemCmd n a = Write (Index n) a | Read (Index n)
 
 ram
     :: forall n dom a. (HiddenClockResetEnable dom, KnownNat n, 1 <= n, NFDataX a)
-    => Signal dom (Maybe (MemCmd n))
-    -> Signal dom a
+    => Signal dom (Maybe (MemCmd n a))
     -> Signal dom (Maybe a)
-ram cmd x = enable enable_rd rd
+ram cmd = enable enable_rd rd
   where
-    (rd_addr, wr) = unbundle $ interpret <$> x <*> cmd
+    (rd_addr, wr) = unbundle $ interpret <$> cmd
     enable_rd = delay False $ isJust <$> rd_addr
     rd = blockRamU NoClearOnReset (SNat @n) undefined (fromMaybe undefined <$> rd_addr) wr
 
-    interpret x = \case
+    interpret = \case
         Nothing -> (Nothing, Nothing)
         Just (Read addr) -> (Just addr, Nothing)
-        Just (Write addr) -> (Nothing, Just (addr, x))
+        Just (Write addr x) -> (Nothing, Just (addr, x))
