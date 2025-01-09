@@ -7,6 +7,7 @@ module Sudoku.Solve
     , consistent
 
     , solver
+    , Result(..)
     ) where
 
 import Clash.Prelude hiding (mapAccumR)
@@ -38,14 +39,14 @@ expand = funzip3 . snd . mapAccumR guess False
         (first_guess, next_guess) = splitCell cell
         single = next_guess == conflicted
 
-data Result n m
+data Step n m
     = Blocked
     | Complete
     | Progress (Sudoku n m)
     | Stuck (Sudoku n m) (Sudoku n m)
     deriving (Generic, NFDataX)
 
-solve :: (KnownNat n, KnownNat m) => Sudoku n m -> Result n m
+solve :: (KnownNat n, KnownNat m) => Sudoku n m -> Step n m
 solve grid
     | blocked   = Blocked
     | complete  = Complete
@@ -75,54 +76,63 @@ shiftIn shift_in = snd . mapAccumR shift shift_in
 type StackPtr n m = Index (n * m * m * n)
 type StackCmd n m = MemCmd (n * m * m * n) (Sudoku n m)
 
-stepSolver
+data Result
+    = Solved
+    | Unsolvable
+    deriving (Generic, NFDataX, Show)
+
+data Transition s r
+    = Continue s
+    | Result r
+
+step
     :: (Solvable n m)
     => Maybe (Sudoku n m)
-    -> Result n m
     -> Sudoku n m
     -> StackPtr n m
-    -> (Sudoku n m, StackPtr n m, Maybe (StackCmd n m), Maybe Bool)
-stepSolver popped result grid sp
-    | Just popped <- popped = (popped, sp, Nothing, Nothing)
-    | otherwise = case result of
-          Blocked
-              | sp == 0 -> (grid, sp, Nothing, Just False)
-              | otherwise -> let sp' = sp - 1 in (grid, sp', Just (Read sp'), Nothing)
-          Complete -> (grid, sp, Nothing, Just True)
-          Progress pruned -> (pruned, sp, Nothing, Nothing)
-          Stuck first_guess next_guess -> (first_guess, sp + 1, Just (Write sp next_guess), Nothing)
+    -> Transition (Sudoku n m, StackPtr n m, Maybe (StackCmd n m)) Result
+step stack_rd grid sp = case solve grid of
+    _ | Just popped <- stack_rd -> Continue (popped, sp, Nothing)
+    Blocked
+        | sp == 0 -> Result Unsolvable
+        | otherwise -> Continue (grid, sp', Just (Read sp'))
+      where
+        sp' = sp - 1
+    Complete -> Result Solved
+    Progress pruned -> Continue (pruned, sp, Nothing)
+    Stuck guess1 guess2 -> Continue (guess1, sp + 1, Just (Write sp guess2))
 
-loadOrStepSolver
+loadOrStep
     :: (Solvable n m)
     => Maybe (Cell n m)
     -> Bool
     -> Maybe (Sudoku n m)
-    -> Result n m
     -> Sudoku n m
     -> StackPtr n m
-    -> (Sudoku n m, StackPtr n m, Maybe (StackCmd n m), Maybe Bool)
-loadOrStepSolver cell_in en popped result grid sp
-    | Just cell_in <- cell_in = (shiftIn cell_in grid, 0, Nothing, Nothing)
-    | not en = (grid, sp, Nothing, Nothing)
-    | otherwise = stepSolver popped result grid sp
+    -> Transition (Sudoku n m, StackPtr n m, Maybe (StackCmd n m)) Result
+loadOrStep cell_in en stack_rd grid sp
+    | Just cell_in <- cell_in = Continue (shiftIn cell_in grid, 0, Nothing)
+    | not en = Continue (grid, sp, Nothing)
+    | otherwise = step stack_rd grid sp
 
 solver :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
-  => Signal dom (Maybe (Cell n m))
-  -> Signal dom Bool
-  -> ( Signal dom (Cell n m)
-    , Signal dom (Maybe Bool)
-    )
-solver cell_in en = (cell_out, done)
+    => Signal dom (Maybe (Cell n m))
+    -> Signal dom Bool
+    -> ( Signal dom (Cell n m)
+      , Signal dom (Maybe Result)
+      )
+solver cell_in en = (cell_out, result)
   where
     grid = register (pure wild) grid'
     sp = register 0 sp'
     cell_out = headGrid <$> grid
+    stack_rd = ram stack_cmd
 
-    result = solve <$> grid
-    (grid', sp', stack_cmd, done) = unbundle $
-        loadOrStepSolver <$> cell_in <*> en <*> popped <*> result <*> grid <*> sp
+    (grid', sp', stack_cmd, result) = unbundle $ update <$> cell_in <*> en <*> stack_rd <*> grid <*> sp
 
-    popped = ram @(n * m * m * n) stack_cmd
+    update cell_in en stack_rd grid sp = case loadOrStep cell_in en stack_rd grid sp of
+        Continue (grid', sp', stack_cmd) -> (grid', sp', stack_cmd, Nothing)
+        Result result -> (grid, sp, Nothing, Just result)
 
 data MemCmd n a = Write (Index n) a | Read (Index n)
 
