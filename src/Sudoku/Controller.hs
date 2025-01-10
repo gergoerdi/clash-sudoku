@@ -83,9 +83,10 @@ control (shift_in, out_ack, head_cell, result) = get >>= {-(\x -> traceShowM x >
             put $ next ShiftIn i (Busy countMin)
             pure $ Consume shift_in
     Busy cnt -> do
+        let cnt' = countSucc cnt
         put $ case result of
-            Nothing -> Busy (countSucc cnt)
-            Just result -> ShiftOutCycleCount result cnt 0
+            Nothing -> Busy cnt'
+            Just result -> ShiftOutCycleCount result cnt' 0
         pure Solve
     ShiftOutCycleCount result cnt i -> do
         let cnt' = cnt `rotateLeftS` d1
