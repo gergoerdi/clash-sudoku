@@ -13,7 +13,7 @@ import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
-formatModel :: forall fmt -> (Format fmt) => [Word8] -> [Word8]
+formatModel :: (Format fmt) => fmt -> [Word8] -> [Word8]
 formatModel fmt = go (Just $ start fmt)
   where
     go s xs = case s of
@@ -30,7 +30,7 @@ formatModel fmt = go (Just $ start fmt)
             xs' | consume, (_:xs') <- xs = xs'
                 | otherwise = xs
 
-prop_format :: forall fmt -> (Format fmt) => H.Property
+prop_format :: (Format fmt) => fmt -> H.Property
 prop_format fmt =
     H.idWithModelSingleDomain
       H.defExpectOptions

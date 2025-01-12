@@ -17,19 +17,13 @@ data a :- b
 infixr 0 :-
 
 -- | A state transition of a @compander@ with internal state @s@, input @a@ and output @b@
-type Transition i s o = i :- (s, o, Bool)
+type Transition s i o = i :- (s, o, Bool)
 
-mapState :: (s -> s') -> Transition i s o -> Transition i s' o
+mapState :: (s -> s') -> Transition s i o -> Transition s' i o
 mapState f = fmap \(s, y, consume) -> (f s, y, consume)
 
-class (NFDataX (State fmt)) => Format (fmt :: k) where
+class (NFDataX (State fmt)) => Format fmt where
     type State fmt
 
-    start_ :: proxy fmt -> State fmt
-    transition_ :: proxy fmt -> State fmt -> Transition Word8 (Maybe (State fmt)) (Maybe Word8)
-
-start :: forall fmt -> (Format fmt) => State fmt
-start fmt = start_ (Proxy @fmt)
-
-transition :: forall fmt -> (Format fmt) => State fmt -> Transition Word8 (Maybe (State fmt)) (Maybe Word8)
-transition fmt = transition_ (Proxy @fmt)
+    start :: fmt -> State fmt
+    transition :: fmt -> State fmt -> Transition (Maybe (State fmt)) Word8 (Maybe Word8)
