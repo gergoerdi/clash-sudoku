@@ -29,7 +29,7 @@ import Text.Printf
 showGrid :: forall n m. (Textual n m, Formattable n m) => Sudoku n m -> String
 showGrid =
     fmap (chr . fromIntegral) .
-    formatModel (GridFormat n m) .
+    formatModel (gridFormat @n @m) .
     fmap showCell .
     toList . embed flatGrid
 

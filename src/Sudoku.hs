@@ -1,7 +1,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RequiredTypeArguments #-}
 {-# LANGUAGE BlockArguments #-}
-{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE PartialTypeSignatures #-} {-# OPTIONS -Wno-partial-type-signatures #-}
 module Sudoku where
 
 import Clash.Prelude hiding (lift)
@@ -18,15 +18,21 @@ import Sudoku.Solve (Solvable)
 import Sudoku.Serial
 import Format
 
-type HSep fmt = fmt :++ " "
-type VSep fmt = fmt :++ "\r\n"
+eol = str "\r\n"
 
--- type GridFormat n m = n *: VSep (m *: VSep ("| " :++ m *: (HSep Print :* n :++ "| ")))
-type GridFormat n m = n *: VSep (m *: VSep (m *: HSep (n *: HSep Print)))
-type SolutionFormat n m = If '!' (Drop :++ VSep "Unsolvable.") ("Solution:\r\n" :++ GridFormat n m)
-type Number = While '0' Drop :++ Until '#' Print :++ Drop
-type WithTiming fmt = Wait :++ "Cycles: " :++ Number :++ ".\r\n" :++ fmt
-type OutputFormat n m = WithTiming (SolutionFormat n m)
+outputFormat :: forall n m. _
+outputFormat = Wait :++ cycles :++ solution :++ eol
+  where
+    cycles = str "Cycles: " :++ number :++ str "." :++ eol
+    solution = If (== ascii '!') (Drop :++ str "Unsolvable.") (str "Solution:\r\n" :++ grid)
+    number = while (== ascii '0') Drop :++ Until (== ascii '#') Print :++ Drop
+    grid = gridFormat @n @m
+
+gridFormat :: forall n m. _
+gridFormat = n *: vsep (m *: vsep (m *: hsep (n *: hsep Print)))
+  where
+    vsep fmt = fmt :++ eol
+    hsep fmt = fmt :++ Chr (ascii ' ')
 
 type Formattable n m = (1 <= n, 1 <= m)
 
@@ -38,7 +44,7 @@ board n m =
     Df.mapMaybe parseCell |>
     Circuit (controller @n @m) |>
     Df.map (either id showCell) |>
-    format (Loop (OutputFormat n m))
+    format (Loop (outputFormat @n @m))
 
 createDomain vXilinxSystem{vName="Dom100", vPeriod = hzToPeriod 100_000_000}
 
