@@ -31,7 +31,6 @@ import Format.SymbolAt
 import Clash.Class.Counter
 import Protocols
 import qualified Protocols.Df as Df
-import Data.Word
 import Data.Maybe
 
 compander'
@@ -129,7 +128,7 @@ instance (SymbolVec sym, KnownNat (SymbolLength sym), 1 <= SymbolLength sym) => 
     type State (Str sym) = Index (SymbolLength sym)
     start _ = 0
 
-instance (o ~ Word8, SymbolVec sym, KnownNat (SymbolLength sym), 1 <= SymbolLength sym) => Format i o (Str sym) where
+instance (o ~ Char, SymbolVec sym, KnownNat (SymbolLength sym), 1 <= SymbolLength sym) => Format i o (Str sym) where
     transition _ = \i -> Const (countSuccChecked i, Just (s !! i), False)
       where
         s = symbolVec sym

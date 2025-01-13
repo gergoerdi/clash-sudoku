@@ -13,12 +13,13 @@ import qualified Protocols.Df as Df
 import Sudoku.Cell
 import Sudoku.Solve
 import Format
+import Data.Char (chr, ord)
 
 type Stream dom a b = (Signal dom (Df.Data a), Signal dom Ack) -> (Signal dom Ack, Signal dom (Df.Data b))
 
 controller
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
-    => Stream dom (Cell n m) (Either Word8 (Cell n m))
+    => Stream dom (Cell n m) (Either Char (Cell n m))
 controller (shift_in, out_ack) = (in_ack, shift_out)
   where
     (shift_in', shift_out, in_ack, enable_solver) =
@@ -42,8 +43,8 @@ type BCD n = Vec n Digit
 type CyclesWidth (n :: Nat) (m :: Nat) = 6 -- TODO
 type Cycles n m = BCD (CyclesWidth n m)
 
-showDigit :: Digit -> Word8
-showDigit n = ascii '0' + fromIntegral n
+showDigit :: Digit -> Char
+showDigit n = chr $ ord '0' + fromIntegral n
 
 data MemCmd sz
     = Read (Index sz)
@@ -66,7 +67,7 @@ data Control n m
     = WaitForIO
     | Consume (Cell n m)
     | Solve
-    | Produce Bool (Either Word8 (Cell n m))
+    | Produce Bool (Either Char (Cell n m))
 
 next :: (Counter a) => (a -> s) -> a -> s -> s
 next cons i after = maybe after cons $ countSuccChecked i
@@ -97,7 +98,7 @@ control (shift_in, out_ack, head_cell, result) = get >>= {-(\x -> traceShowM x >
         wait out_ack $ put $ case result of
             Solved -> ShiftOutSolved 0
             Unsolvable -> ShiftOutUnsolvable
-        pure $ Produce False $ Left $ ascii '#'
+        pure $ Produce False $ Left '#'
     ShiftOutUnsolvable -> do
         wait out_ack $ put $ ShiftIn 0
         pure $ Produce False $ Right conflicted

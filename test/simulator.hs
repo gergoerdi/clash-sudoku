@@ -13,6 +13,7 @@ import qualified Data.List as L
 import qualified Clash.Sized.Vector as V
 import Control.Arrow.Transformer.Automaton
 import Control.Monad (guard)
+import Data.Word
 
 import Sudoku.Iso
 import Sudoku.Grid
@@ -28,7 +29,6 @@ import Text.Printf
 
 showGrid :: forall n m. (Textual n m, Formattable n m) => Sudoku n m -> String
 showGrid =
-    fmap (chr . fromIntegral) .
     formatModel (gridFormat @n @m) .
     fmap showCell .
     toList . embed flatGrid
@@ -38,7 +38,7 @@ instance (Textual n m, Formattable n m) => Show (Sudoku n m) where
 
 sim_board :: forall n m. (Solvable n m, Textual n m, Formattable n m) => [Sudoku n m] -> String
 sim_board =
-    fmap (chr . fromIntegral) .
+    fmap (chr . fromIntegral @Word8) .
     simulateCSE @System (exposeClockResetEnable (board n m)) .
     fmap ascii . L.concatMap showGrid
 

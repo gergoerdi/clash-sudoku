@@ -20,7 +20,7 @@ asciiVal ch = ascii $ charVal (Proxy @ch)
 class (KnownNat (SymbolLength' s)) => SymbolVec' (s :: Maybe (Char, Symbol)) where
     type SymbolLength' s :: Nat
 
-    symbolVec' :: Proxy s -> Vec (SymbolLength' s) Word8
+    symbolVec' :: Proxy s -> Vec (SymbolLength' s) Char
 
 instance SymbolVec' Nothing where
     type SymbolLength' Nothing = 0
@@ -30,10 +30,10 @@ instance SymbolVec' Nothing where
 instance (SymbolVec s, KnownChar c) => SymbolVec' (Just '(c, s)) where
     type SymbolLength' (Just '(c, s)) = 1 + SymbolLength s
 
-    symbolVec' _ = asciiVal c :> symbolVec s
+    symbolVec' _ = charVal (Proxy @c) :> symbolVec s
 
 type SymbolLength s = SymbolLength' (UnconsSymbol s)
 type SymbolVec s = SymbolVec' (UnconsSymbol s)
 
-symbolVec :: forall s -> SymbolVec s => Vec (SymbolLength s) Word8
+symbolVec :: forall s -> SymbolVec s => Vec (SymbolLength s) Char
 symbolVec s = symbolVec' (Proxy @(UnconsSymbol s))

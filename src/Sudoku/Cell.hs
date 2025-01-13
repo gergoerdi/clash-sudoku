@@ -8,6 +8,7 @@ import Format (ascii)
 import Sudoku.Utils ()
 
 import Data.Word (Word8)
+import Data.Char (ord, chr)
 import Data.Monoid.Action
 
 newtype Cell n m = Cell{ cellBits :: BitVector (n * m) }
@@ -51,16 +52,16 @@ decodeOneHot = fold @(n - 1) (.|.) . zipWith mask (reverse indicesI) . bv2v
 
 type Textual n m = (KnownNat n, KnownNat m, 1 <= n * m, n * m <= (9 + 26))
 
-showCell :: (Textual n m) => Cell n m -> Word8
+showCell :: (Textual n m) => Cell n m -> Char
 showCell x
-    | x == wild = ascii '_'
-    | x == conflicted = ascii '!'
+    | x == wild = '_'
+    | x == conflicted = '!'
     | other == conflicted = v'
-    | otherwise = ascii '?'
+    | otherwise = '?'
   where
     (x', other) = splitCell x
-    v = fromIntegral $ decodeOneHot (cellBits x')
-    v' = if v < 9 then ascii '1' + v else ascii 'A' + v - 9
+    v = fromIntegral $ decodeOneHot (cellBits x') :: Word8
+    v' = chr . fromIntegral $ if v < 9 then fromIntegral (ord '1') + v else fromIntegral (ord 'A') + v - 9
 
 parseCell :: forall n m. (Textual n m) => Word8 -> Maybe (Cell n m)
 parseCell x
