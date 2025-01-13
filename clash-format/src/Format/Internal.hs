@@ -23,8 +23,9 @@ type FormatTransition s i o = s -> Transition (Maybe s) i (Maybe o)
 mapState :: (s -> s') -> Transition s i o -> Transition s' i o
 mapState f = fmap \(s, y, consume) -> (f s, y, consume)
 
-class (NFDataX (State fmt)) => Format fmt where
+class (NFDataX (State fmt)) => FormatState fmt where
     type State fmt
-
     start :: fmt -> State fmt
+
+class (FormatState fmt) => Format fmt where
     transition :: fmt -> FormatTransition (State fmt) Word8 Word8
