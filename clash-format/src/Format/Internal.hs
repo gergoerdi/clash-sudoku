@@ -18,6 +18,8 @@ infixr 0 :-
 -- | A state transition of a @compander@ with internal state @s@, input @a@ and output @b@
 type Transition s i o = i :- (s, o, Bool)
 
+type FormatTransition s i o = s -> Transition (Maybe s) i (Maybe o)
+
 mapState :: (s -> s') -> Transition s i o -> Transition s' i o
 mapState f = fmap \(s, y, consume) -> (f s, y, consume)
 
@@ -25,4 +27,4 @@ class (NFDataX (State fmt)) => Format fmt where
     type State fmt
 
     start :: fmt -> State fmt
-    transition :: fmt -> State fmt -> Transition (Maybe (State fmt)) Word8 (Maybe Word8)
+    transition :: fmt -> FormatTransition (State fmt) Word8 Word8
