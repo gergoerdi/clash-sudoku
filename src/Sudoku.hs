@@ -32,7 +32,7 @@ gridFormat :: forall n m. _
 gridFormat = n *: vsep (m *: vsep (m *: hsep (n *: hsep Print)))
   where
     vsep fmt = fmt :++ eol
-    hsep fmt = fmt :++ Chr (ascii ' ')
+    hsep fmt = fmt :++ Lit (ascii ' ')
 
 type Formattable n m = (1 <= n, 1 <= m)
 

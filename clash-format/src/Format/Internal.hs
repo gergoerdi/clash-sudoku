@@ -27,5 +27,5 @@ class (NFDataX (State fmt)) => FormatState fmt where
     type State fmt
     start :: fmt -> State fmt
 
-class (FormatState fmt) => Format fmt where
-    transition :: fmt -> FormatTransition (State fmt) Word8 Word8
+class (FormatState fmt) => Format i o fmt where
+    transition :: fmt -> FormatTransition (State fmt) i o

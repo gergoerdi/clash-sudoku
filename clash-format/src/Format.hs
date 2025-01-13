@@ -10,7 +10,7 @@ module Format
     , Print(..)
     , Drop(..)
     , Wait(..)
-    , Chr(..), str
+    , Lit(..), str
     , (:*), (*:)
     , (:++)(..)
     , If(..)
@@ -55,7 +55,7 @@ instance FormatState Print where
     type State Print = ()
     start _ = ()
 
-instance Format Print where
+instance (i ~ o) => Format i o Print where
     transition _ _ = Varying \x -> (Nothing, Just x, True)
 
 -- | Consume one token of input without producing any output
@@ -65,7 +65,7 @@ instance FormatState Drop where
     type State Drop = ()
     start _ = ()
 
-instance Format Drop where
+instance Format i o Drop where
     transition _ _ = Varying \x -> (Nothing, Nothing, True)
 
 -- | Wait until new input is available, without consuming it
@@ -75,7 +75,7 @@ instance FormatState Wait where
     type State Wait = ()
     start _ = ()
 
-instance Format Wait where
+instance Format i o Wait where
     transition _ _ = Varying \x -> (Nothing, Nothing, False)
 
 -- | Repetition
@@ -89,7 +89,7 @@ instance (FormatState fmt, KnownNat n, 1 <= n) => FormatState (n :* fmt) where
     type State (n :* fmt) = (State fmt, Index n)
     start (Rep fmt) = (start fmt, 0)
 
-instance (Format fmt, KnownNat n, 1 <= n) => Format (n :* fmt) where
+instance (Format i o fmt, KnownNat n, 1 <= n) => Format i o (n :* fmt) where
     transition (Rep fmt) (s, i) = mapState (maybe repeat continue) $ transition fmt s
       where
         continue s' = Just (s', i)
@@ -103,21 +103,21 @@ instance (FormatState fmt1, FormatState fmt2) => FormatState (fmt1 :++ fmt2) whe
     type State (fmt1 :++ fmt2) = Either (State fmt1) (State fmt2)
     start (fmt1 :++ fmt2) = Left (start fmt1)
 
-instance (Format fmt1, Format fmt2) => Format (fmt1 :++ fmt2) where
+instance (Format i o fmt1, Format i o fmt2) => Format i o (fmt1 :++ fmt2) where
     transition (fmt1 :++ fmt2) = either
       (mapState (Just . maybe (Right $ start fmt2) Left) . transition fmt1)
       (mapState (fmap Right) . transition fmt2)
 
--- | Character literal
-data Chr = Chr Word8
+-- | Literal
+data Lit o = Lit o
 
-instance FormatState Chr where
-    type State Chr = ()
+instance FormatState (Lit o) where
+    type State (Lit o) = ()
 
     start _ = ()
 
-instance Format Chr where
-    transition (Chr c) _ = Const (Nothing, Just c, False)
+instance Format i o (Lit o) where
+    transition (Lit x) _ = Const (Nothing, Just x, False)
 
 -- | String literal
 data Str (sym :: Symbol) = Str
@@ -129,7 +129,7 @@ instance (SymbolVec sym, KnownNat (SymbolLength sym), 1 <= SymbolLength sym) => 
     type State (Str sym) = Index (SymbolLength sym)
     start _ = 0
 
-instance (SymbolVec sym, KnownNat (SymbolLength sym), 1 <= SymbolLength sym) => Format (Str sym) where
+instance (o ~ Word8, SymbolVec sym, KnownNat (SymbolLength sym), 1 <= SymbolLength sym) => Format i o (Str sym) where
     transition _ = \i -> Const (countSuccChecked i, Just (s !! i), False)
       where
         s = symbolVec sym
@@ -141,11 +141,11 @@ instance (FormatState fmt) => FormatState (Loop fmt) where
     type State (Loop fmt) = State fmt
     start (Loop fmt) = start fmt
 
-instance (Format fmt) => Format (Loop fmt) where
+instance (Format i o fmt) => Format i o (Loop fmt) where
     transition (Loop fmt) = mapState (Just . fromMaybe (start fmt)) . transition fmt
 
 -- | Branch
-data If thn els = If (Word8 -> Bool) thn els
+data If i thn els = If (i -> Bool) thn els
 
 data IfState thn els
     = Decide
@@ -156,29 +156,29 @@ data IfState thn els
 branch :: (i -> s) -> Transition s i (Maybe o)
 branch p = Varying \x -> (p x, Nothing, False)
 
-instance (FormatState thn, FormatState els) => FormatState (If thn els) where
-    type State (If thn els) = IfState (State thn) (State els)
+instance (FormatState thn, FormatState els) => FormatState (If i thn els) where
+    type State (If i thn els) = IfState (State thn) (State els)
     start _ = Decide
 
-instance (Format thn, Format els) => Format (If thn els) where
+instance (Format i o thn, Format i o els) => Format i o (If i thn els) where
     transition (If cond thn els) = \case
         Decide -> branch \x -> Just $ if cond x then Then (start thn) else Else (start els)
         Then s -> mapState (Then <$>) $ transition thn s
         Else s -> mapState (Else <$>) $ transition els s
 
 -- | Branch
-data Until fmt = Until (Word8 -> Bool) fmt
+data Until i fmt = Until (i -> Bool) fmt
 
 data UntilState fmt
     = Checking
     | Looping fmt
     deriving (Generic, NFDataX, Show)
 
-instance (FormatState fmt) => FormatState (Until fmt) where
-    type State (Until fmt) = UntilState (State fmt)
+instance (FormatState fmt) => FormatState (Until i fmt) where
+    type State (Until i fmt) = UntilState (State fmt)
     start _ = Checking
 
-instance (Format fmt) => Format (Until fmt) where
+instance (Format i o fmt) => Format i o (Until i fmt) where
     transition (Until cond fmt) = \case
         Checking -> branch \x -> if cond x then Nothing else Just $ Looping $ start fmt
         Looping s -> mapState (Just . maybe Checking Looping) $ transition fmt s
@@ -187,8 +187,8 @@ while = Until . (not . )
 
 {-# INLINE format #-}
 format
-    :: forall dom fmt. (HiddenClockResetEnable dom, Format fmt)
-    => fmt -> Circuit (Df dom Word8) (Df dom Word8)
+    :: forall i o dom fmt. (HiddenClockResetEnable dom, Format i o fmt)
+    => fmt -> Circuit (Df dom i) (Df dom o)
 format fmt = compander' (Just $ start fmt) \case
     Nothing -> Varying \_ -> (Nothing, Nothing, True)
     Just s -> transition fmt s
