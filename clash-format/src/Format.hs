@@ -10,7 +10,8 @@ module Format
     , Print(..)
     , Drop(..)
     , Wait(..)
-    , Lit(..), str
+    , Lit(..), Str, str
+    , Map(..)
     , (:*), (*:)
     , (:++)(..)
     , If(..)
@@ -183,6 +184,15 @@ instance (Format i o fmt) => Format i o (Until i fmt) where
         Looping s -> mapState (Just . maybe Checking Looping) $ transition fmt s
 
 while = Until . (not . )
+
+data Map a b fmt = Map (a -> b) fmt
+
+instance (FormatState fmt) => FormatState (Map a b fmt) where
+    type State (Map a b fmt) = State fmt
+    start (Map f fmt) = start fmt
+
+instance (Format i a fmt) => Format i b (Map a b fmt) where
+    transition (Map f fmt) = fmap (\(s, o, c) -> (s, f <$> o, c)) . transition fmt
 
 {-# INLINE format #-}
 format

@@ -10,7 +10,7 @@ import Data.Word
 ascii :: Char -> Word8
 ascii c
     | code <= 0x7f = fromIntegral code
-    | otherwise = clashCompileError "Not an ASCII code point"
+    | otherwise = error "Not an ASCII code point"
   where
     code = ord c
 

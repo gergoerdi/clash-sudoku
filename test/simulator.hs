@@ -19,6 +19,7 @@ import Sudoku.Iso
 import Sudoku.Grid
 import Sudoku.Cell
 import Format (ascii)
+import Data.Char (chr)
 import Format.Model
 import Sudoku
 import Sudoku.Controller
@@ -29,6 +30,7 @@ import Text.Printf
 
 showGrid :: forall n m. (Textual n m, Formattable n m) => Sudoku n m -> String
 showGrid =
+    fmap (chr . fromIntegral) .
     formatModel (gridFormat @n @m) .
     fmap showCell .
     toList . embed flatGrid

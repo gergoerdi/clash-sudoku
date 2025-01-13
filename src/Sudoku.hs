@@ -8,7 +8,6 @@ import Clash.Prelude hiding (lift)
 import Clash.Annotations.TH
 
 import Data.Word
-import Data.Char (ord, chr)
 
 import Protocols
 import qualified Protocols.Df as Df
@@ -19,21 +18,24 @@ import Sudoku.Solve (Solvable)
 import Sudoku.Serial
 import Format
 
-eol = str "\r\n"
+eol = str' "\r\n"
 
 outputFormat :: forall n m. _
 outputFormat = Wait :++ cycles :++ eol :++ solution :++ eol
   where
-    cycles = str "Cycles: " :++ number :++ str "."
-    solution = If (== '!') (Drop :++ str "Unsolvable.") (str "Solution:\r\n" :++ grid)
-    number = while (== '0') Drop :++ Until (== '#') Print :++ Drop
+    cycles = str' "Cycles: " :++ number :++ str' "."
+    solution = If (== ascii '!') (Drop :++ str' "Unsolvable.") (str' "Solution:\r\n" :++ grid)
+    number = while (== ascii '0') Drop :++ Until (== ascii '#') Print :++ Drop
     grid = gridFormat @n @m
+
+str' :: forall s -> Map Char Word8 (Str s)
+str' s = Map ascii $ str s
 
 gridFormat :: forall n m. _
 gridFormat = n *: vsep (m *: vsep (m *: hsep (n *: hsep Print)))
   where
     vsep fmt = fmt :++ eol
-    hsep fmt = fmt :++ Lit ' '
+    hsep fmt = fmt :++ Lit (ascii ' ')
 
 type Formattable n m = (1 <= n, 1 <= m)
 
@@ -45,8 +47,7 @@ board n m =
     Df.mapMaybe parseCell |>
     Circuit (controller @n @m) |>
     Df.map (either id showCell) |>
-    format (Loop (outputFormat @n @m)) |>
-    Df.map (fromIntegral . ord)
+    format (Loop (outputFormat @n @m))
 
 createDomain vXilinxSystem{vName="Dom100", vPeriod = hzToPeriod 100_000_000}
 
