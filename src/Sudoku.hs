@@ -22,9 +22,9 @@ import Format
 eol = str "\r\n"
 
 outputFormat :: forall n m. _
-outputFormat = Wait :++ cycles :++ solution :++ eol
+outputFormat = Wait :++ cycles :++ eol :++ solution :++ eol
   where
-    cycles = str "Cycles: " :++ number :++ str "." :++ eol
+    cycles = str "Cycles: " :++ number :++ str "."
     solution = If (== ascii '!') (Drop :++ str "Unsolvable.") (str "Solution:\r\n" :++ grid)
     number = while (== ascii '0') Drop :++ Until (== ascii '#') Print :++ Drop
     grid = gridFormat @n @m
