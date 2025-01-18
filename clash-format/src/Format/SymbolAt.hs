@@ -1,11 +1,21 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE RequiredTypeArguments #-}
-module Format.SymbolAt (SymbolLength, SymbolVec, symbolVec) where
+module Format.SymbolAt (ascii, asciiVal, SymbolLength, SymbolVec, symbolVec) where
 
 import Clash.Prelude
 import Data.Proxy
-import Format.Cond
+import Data.Char (ord)
 import Data.Word
+
+ascii :: Char -> Word8
+ascii c
+    | code <= 0x7f = fromIntegral code
+    | otherwise = clashCompileError "Not an ASCII code point"
+  where
+    code = ord c
+
+asciiVal :: forall ch -> (KnownChar ch) => Word8
+asciiVal ch = ascii $ charVal (Proxy @ch)
 
 class (KnownNat (SymbolLength' s)) => SymbolVec' (s :: Maybe (Char, Symbol)) where
     type SymbolLength' s :: Nat
