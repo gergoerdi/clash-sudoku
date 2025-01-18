@@ -1,10 +1,9 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RequiredTypeArguments #-}
 {-# LANGUAGE BlockArguments #-}
-{-# LANGUAGE PolyKinds #-}
 module Sudoku where
 
-import Clash.Prelude hiding (lift)
+import Clash.Prelude hiding (lift, print, drop, until)
 import Clash.Annotations.TH
 
 import Data.Word
@@ -18,15 +17,21 @@ import Sudoku.Solve (Solvable)
 import Sudoku.Serial
 import Format
 
-type HSep fmt = fmt :++ " "
-type VSep fmt = fmt :++ "\r\n"
+eol = str "\r\n"
 
--- type GridFormat n m = n *: VSep (m *: VSep ("| " :++ m *: (HSep Print :* n :++ "| ")))
-type GridFormat n m = n *: VSep (m *: VSep (m *: HSep (n *: HSep Print)))
-type SolutionFormat n m = If '!' (Drop :++ VSep "Unsolvable.") ("Solution:\r\n" :++ GridFormat n m)
-type Number = While '0' Drop :++ Until '#' Print :++ Drop
-type WithTiming fmt = Wait :++ "Cycles: " :++ Number :++ ".\r\n" :++ fmt
-type OutputFormat n m = WithTiming (SolutionFormat n m)
+outputFormat :: forall n m -> (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Format Word8 Word8
+outputFormat n m = wait ++: cycles ++: eol ++: solution ++: eol
+  where
+    cycles = str "Cycles: " ++: number ++: str "."
+    solution = cond (== ascii '!') (drop ++: str "Unsolvable.") (str "Solution:\r\n" ++: grid)
+    number = while (== ascii '0') drop ++: until (== ascii '#') print ++: drop
+    grid = gridFormat n m
+
+gridFormat :: forall n m -> (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Format Word8 Word8
+gridFormat n m = n *: vsep (m *: vsep (m *: hsep (n *: hsep print)))
+  where
+    vsep fmt = fmt ++: eol
+    hsep fmt = fmt ++: lit (ascii ' ')
 
 type Formattable n m = (1 <= n, 1 <= m)
 
@@ -38,7 +43,7 @@ board n m =
     Df.mapMaybe parseCell |>
     Circuit (controller @n @m) |>
     Df.map (either id showCell) |>
-    format (Loop (OutputFormat n m))
+    format (loop (outputFormat n m))
 
 createDomain vXilinxSystem{vName="Dom100", vPeriod = hzToPeriod 100_000_000}
 

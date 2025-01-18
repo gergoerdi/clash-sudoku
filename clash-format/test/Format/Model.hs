@@ -13,12 +13,12 @@ import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
-formatModel :: forall fmt -> (Format fmt) => [Word8] -> [Word8]
-formatModel fmt = go (Just $ start fmt)
+formatModel :: Format a b -> [a] -> [b]
+formatModel (MkFormat s0 step) = go (Just s0)
   where
     go s xs = case s of
         Nothing -> []
-        Just s -> case transition fmt s of
+        Just s -> case step s of
             Const step -> proceed step
             Varying f
                 | (x:_) <- xs -> proceed (f x)
@@ -30,7 +30,7 @@ formatModel fmt = go (Just $ start fmt)
             xs' | consume, (_:xs') <- xs = xs'
                 | otherwise = xs
 
-prop_format :: forall fmt -> (Format fmt) => H.Property
+prop_format :: Format Word8 Word8 -> H.Property
 prop_format fmt =
     H.idWithModelSingleDomain
       H.defExpectOptions
