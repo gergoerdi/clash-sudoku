@@ -38,10 +38,10 @@ type Transition s i o = i :- (s, o, Bool)
 mapState :: (s -> s') -> Transition s i o -> Transition s' i o
 mapState f = fmap \(s, y, consume) -> (f s, y, consume)
 
-data Format i o where
-    MkFormat :: (NFDataX s) => s -> (s -> Transition (Maybe s) i (Maybe o)) -> Format i o
+data Format a b where
+    MkFormat :: (NFDataX s) => s -> (s -> Transition (Maybe s) a (Maybe b)) -> Format a b
 
-instance Functor (Format i) where
+instance Functor (Format a) where
     fmap f (MkFormat s0 step) = MkFormat s0 $ fmap (\(s', o, consumed) -> (s', f <$> o, consumed)) . step
 
 instance Profunctor Format where
@@ -93,7 +93,7 @@ loop :: Format a b -> Format a b
 loop (MkFormat s0 step) = MkFormat s0 $ mapState (Just . fromMaybe s0) . step
 
 -- | Concatenation
-instance Semigroup (Format i o) where
+instance Semigroup (Format a b) where
     MkFormat s1 step1 <> MkFormat s2 step2 = MkFormat (Left s1) $ either
         (mapState (Just . maybe (Right s2) Left) . step1)
         (mapState (fmap Right) . step2)
