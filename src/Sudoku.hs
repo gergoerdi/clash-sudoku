@@ -1,6 +1,5 @@
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE RequiredTypeArguments #-}
-{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE RequiredTypeArguments, OverloadedStrings #-}
 module Sudoku where
 
 import Clash.Prelude hiding (lift, print, drop, until)
@@ -20,11 +19,11 @@ import Format
 eol = str "\r\n"
 
 outputFormat :: forall n m -> (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Format Word8 Word8
-outputFormat n m = wait <> cycles <> eol <> solution <> eol
+outputFormat n m = cat [wait, cycles, eol, solution, eol]
   where
-    cycles = str "Cycles: " <> number <> str "."
-    solution = cond (== ascii '!') (drop <> str "Unsolvable.") (str "Solution:\r\n" <> grid)
-    number = while (== ascii '0') drop <> until (== ascii '#') print <> drop
+    cycles = cat ["Cycles: ", number, "."]
+    solution = cond (== ascii '!') (cat [drop, "Unsolvable."]) (cat ["Solution:\r\n", grid])
+    number = cat [while (== ascii '0') drop, until (== ascii '#') print, drop]
     grid = gridFormat n m
 
 gridFormat :: forall n m -> (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Format Word8 Word8

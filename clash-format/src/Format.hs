@@ -12,6 +12,7 @@ module Format
 import Clash.Prelude hiding (Const, drop, print, until)
 
 import Format.Compand
+import Format.Balance
 import Format.SymbolAt
 
 import Clash.Class.Counter
@@ -19,6 +20,7 @@ import Protocols
 import Data.Word
 import Data.Maybe
 import Data.Profunctor
+import Data.String
 
 -- | A @b@ value that potentially depends on an @a@ parameter
 data a :- b
@@ -39,7 +41,7 @@ mapState :: (s -> s') -> Transition s i o -> Transition s' i o
 mapState f = fmap \(s, y, consume) -> (f s, y, consume)
 
 data Format a b where
-    MkFormat :: (NFDataX s) => s -> (s -> Transition (Maybe s) a (Maybe b)) -> Format a b
+    MkFormat :: (NFDataX s, BitPack s) => s -> (s -> Transition (Maybe s) a (Maybe b)) -> Format a b
 
 instance Functor (Format a) where
     fmap f (MkFormat s0 step) = MkFormat s0 $ fmap (\(s', o, consumed) -> (s', f <$> o, consumed)) . step
@@ -98,6 +100,16 @@ instance Semigroup (Format a b) where
         (mapState (Just . maybe (Right s2) Left) . step1)
         (mapState (fmap Right) . step2)
 
+cat :: [Format a b] -> Format a b
+cat = balancedFold \(MkFormat s _) -> bitSize s
+  where
+    bitSize :: forall s. (BitPack s) => s -> Natural
+    bitSize _ = natToNatural @(BitSize s)
+
+instance IsString (Format a Word8) where
+    fromString = cat . fmap (lit . ascii)
+
+
 -- | Repetition
 infix 7 *:
 (*:) :: forall n -> (KnownNat n, 1 <= n) => Format a b -> Format a b
@@ -107,7 +119,7 @@ n *: MkFormat s0 step = MkFormat (s0, (0 :: Index n)) \(s, i) ->
     in mapState (maybe repeat continue) $ step s
 
 data CondState thn els = Decide | Then thn | Else els
-    deriving (Generic, NFDataX)
+    deriving (Generic, NFDataX, BitPack)
 
 -- | Branching
 cond :: (a -> Bool) -> Format a b -> Format a b -> Format a b
@@ -120,7 +132,7 @@ branch :: (i -> s) -> Transition s i (Maybe o)
 branch p = Varying \x -> (p x, Nothing, False)
 
 data UntilState a = Check | Body a
-    deriving (Generic, NFDataX)
+    deriving (Generic, NFDataX, BitPack)
 
 -- | Conditional looping
 until, while :: (a -> Bool) -> Format a b -> Format a b
