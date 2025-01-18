@@ -80,12 +80,13 @@ wait = singleStep $ Varying \x -> (Nothing, False)
 lit :: b -> Format a b
 lit x = singleStep $ Const (Just x, False)
 
+-- | Literal multi-atom
+lits :: forall a n b. (KnownNat n, 1 <= n) => Vec n b -> Format a b
+lits xs = MkFormat (0 :: Index n) \i -> Const (countSuccChecked i, Just (xs !! i), False)
+
 -- | Literal string
 str :: forall (sym :: Symbol) -> (SymbolVec sym, 1 <= SymbolLength sym) => Format a Word8
-str sym = MkFormat (0 :: Index (SymbolLength sym)) \i ->
-    Const (countSuccChecked i, Just (xs !! i), False)
-  where
-    xs = symbolVec sym
+str sym = lits $ symbolVec sym
 
 -- | Unconditional infinite loop
 loop :: Format a b -> Format a b
