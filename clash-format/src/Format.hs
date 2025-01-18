@@ -93,11 +93,10 @@ loop :: Format a b -> Format a b
 loop (MkFormat s0 step) = MkFormat s0 $ mapState (Just . fromMaybe s0) . step
 
 -- | Concatenation
-infixl 6 ++:
-(++:) :: Format a b -> Format a b -> Format a b
-MkFormat s1 step1 ++: MkFormat s2 step2 = MkFormat (Left s1) $ either
-  (mapState (Just . maybe (Right s2) Left) . step1)
-  (mapState (fmap Right) . step2)
+instance Semigroup (Format i o) where
+    MkFormat s1 step1 <> MkFormat s2 step2 = MkFormat (Left s1) $ either
+        (mapState (Just . maybe (Right s2) Left) . step1)
+        (mapState (fmap Right) . step2)
 
 -- | Repetition
 infix 7 *:
