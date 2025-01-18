@@ -11,11 +11,11 @@ module Format
 
 import Clash.Prelude hiding (Const, drop, print, until)
 
+import Format.Compand
 import Format.SymbolAt
 
 import Clash.Class.Counter
 import Protocols
-import qualified Protocols.Df as Df
 import Data.Word
 import Data.Maybe
 import Data.Profunctor
@@ -47,15 +47,15 @@ instance Functor (Format i) where
 instance Profunctor Format where
     dimap f g (MkFormat s0 step) = MkFormat s0 $ dimap f (\(s', o, consumed) -> (s', g <$> o, consumed)) . step
 
-compander'
+toCompander
     :: (HiddenClockResetEnable dom, NFDataX s)
     => s
     -> (s -> Transition s i (Maybe o))
-    -> Circuit (Df dom i) (Df dom o)
-compander' s0 step = Df.compander (s0, True) \(s, ready) x -> case step s of
+    -> Compander i o
+toCompander s0 step = Compander (s0, True) \(s, ready) x -> case step s of
     Const (s', y, consume) -> ((s', ready && not consume), y, False)
     Varying f
-        | ready, (s', y , consume) <- f x -> ((s', not consume), y, False)
+        | ready, (s', y, consume) <- f x -> ((s', not consume), y, False)
         | otherwise -> ((s, True), Nothing, True)
 
 countSuccChecked :: (Counter a) => a -> Maybe a
@@ -131,6 +131,6 @@ while = until . (not . )
 
 {-# INLINE format #-}
 format :: (HiddenClockResetEnable dom) => Format a b -> Circuit (Df dom a) (Df dom b)
-format (MkFormat s0 step) = compander' (Just s0) \case
+format (MkFormat s0 step) = compand $ toCompander (Just s0) \case
     Nothing -> Varying \_ -> (Nothing, Nothing, True)
     Just s -> step s
