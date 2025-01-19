@@ -17,15 +17,25 @@ import Sudoku.Solve (Solvable)
 import Sudoku.Serial
 import Format
 
+eol :: Format a Word8
 eol = str "\r\n"
 
+($$) :: Format a Word8 -> Format a Word8 -> Format a Word8
+x $$ y = x <> eol <> y
+
 outputFormat :: forall n m -> (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Format Word8 Word8
-outputFormat n m = wait <> cycles <> eol <> solution <> eol
+outputFormat n m = wait <> cycles $$ solution <> eol
   where
     cycles = str "Cycles: " <> number <> str "."
-    solution = cond (== ascii '!') (drop <> str "Unsolvable.") (str "Solution:\r\n" <> grid)
-    number = while (== ascii '0') drop <> until (== ascii '#') print <> drop
+    solution = cond (== ascii '!') (drop <> str "Unsolvable.") (str "Solution:" $$ grid)
+    number = skip (ascii '0') <> delimit (ascii '#') print
     grid = gridFormat n m
+
+skip :: (Eq a) => a -> Format a b
+skip x = while (== x) drop
+
+delimit :: (Eq a) => a -> Format a b -> Format a b
+delimit x fmt = until (== x) fmt <> drop
 
 gridFormat :: forall n m -> (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Format Word8 Word8
 gridFormat n m = n *: vsep (m *: vsep (m *: hsep (n *: hsep print)))
