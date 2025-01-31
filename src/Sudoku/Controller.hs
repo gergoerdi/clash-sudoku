@@ -5,6 +5,7 @@ import Clash.Prelude
 import Clash.Class.Counter
 
 import Control.Monad.State.Strict
+import Data.Word
 
 import Protocols
 import qualified Protocols.Df as Df
@@ -17,7 +18,7 @@ type Stream dom a b = (Signal dom (Df.Data a), Signal dom Ack) -> (Signal dom Ac
 
 controller
     :: forall n m dom. (Solvable n m, HiddenClockResetEnable dom)
-    => Stream dom (Cell n m) (Cell n m)
+    => Stream dom (Cell n m) (Either Word8 (Cell n m))
 controller (shift_in, out_ack) = (in_ack, shift_out)
   where
     (shift_in', shift_out, in_ack, enable_solver) =
@@ -35,6 +36,15 @@ controller (shift_in, out_ack) = (in_ack, shift_out)
 
     (head_cell, result) = solver shift_in' enable_solver
 
+type Digit = Index 10
+type BCD n = Vec n Digit
+
+type CyclesWidth (n :: Nat) (m :: Nat) = 6 -- TODO
+type Cycles n m = BCD (CyclesWidth n m)
+
+showDigit :: Digit -> Word8
+showDigit n = ascii '0' + fromIntegral n
+
 data MemCmd sz
     = Read (Index sz)
     | Write (Index sz)
@@ -45,7 +55,9 @@ type CellIndex n m = Index ((n * m) * (m * n))
 
 data St n m
     = ShiftIn (CellIndex n m)
-    | Busy
+    | Busy (Cycles n m)
+    | ShiftOutCycleCount Result (Cycles n m) (Index (CyclesWidth n m))
+    | ShiftOutCycleCountFinished Result
     | ShiftOutSolved (CellIndex n m)
     | ShiftOutUnsolvable
     deriving (Generic, NFDataX, Show)
@@ -54,7 +66,7 @@ data Control n m
     = WaitForIO
     | Consume (Cell n m)
     | Solve
-    | Produce Bool (Cell n m)
+    | Produce Bool (Either Word8 (Cell n m))
 
 next :: (Counter a) => (a -> s) -> a -> s -> s
 next cons i after = maybe after cons $ countSuccChecked i
@@ -68,20 +80,30 @@ control (shift_in, out_ack, head_cell, result) = get >>= {-(\x -> traceShowM x >
         Df.NoData -> do
             pure WaitForIO
         Df.Data shift_in -> do
-            put $ next ShiftIn i Busy
+            put $ next ShiftIn i (Busy countMin)
             pure $ Consume shift_in
-    Busy -> do
+    Busy cnt -> do
+        let cnt' = countSucc cnt
         put $ case result of
-            Nothing -> Busy
-            Just Solved -> ShiftOutSolved 0
-            Just Unsolvable -> ShiftOutUnsolvable
+            Nothing -> Busy cnt'
+            Just result -> ShiftOutCycleCount result cnt' 0
         pure Solve
+    ShiftOutCycleCount result cnt i -> do
+        let cnt' = cnt `rotateLeftS` d1
+        wait out_ack $ do
+            put $ next (ShiftOutCycleCount result cnt') i (ShiftOutCycleCountFinished result)
+        pure $ Produce False $ Left $ showDigit $ head cnt
+    ShiftOutCycleCountFinished result -> do
+        wait out_ack $ put $ case result of
+            Solved -> ShiftOutSolved 0
+            Unsolvable -> ShiftOutUnsolvable
+        pure $ Produce False $ Left $ ascii '#'
     ShiftOutUnsolvable -> do
         wait out_ack $ put $ ShiftIn 0
-        pure $ Produce False conflicted
+        pure $ Produce False $ Right conflicted
     ShiftOutSolved i -> do
         proceed <- wait out_ack $ put $ next ShiftOutSolved i (ShiftIn 0)
-        pure $ Produce proceed head_cell
+        pure $ Produce proceed $ Right head_cell
   where
     wait ack act = do
         s0 <- get
