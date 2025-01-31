@@ -8,7 +8,6 @@ import Sudoku.Cell
 import Sudoku.Grid
 import Sudoku.Utils
 
-import Data.Monoid.Action
 import Data.Traversable
 
 expand :: (KnownNat n, KnownNat m) => Sudoku n m -> (Grid n m Bool, Sudoku n m, Sudoku n m)
@@ -24,10 +23,10 @@ expand = funzip3 . snd . mapAccumR guess False
         (first_guess, next_guess) = splitCell cell
         single = next_guess == conflicted
 
-data Result 
+data Result
     = Blocked
-    | Complete 
-    | Progress 
+    | Complete
+    | Progress
     | Stuck
 
 solve :: (KnownNat n, KnownNat m) => Sudoku n m -> (Result, Sudoku n m, Sudoku n m)
@@ -35,15 +34,15 @@ solve grid = (result, grid', next_guess)
   where
     result
         | blocked   = Blocked
-        | complete  = Complete 
-        | changed   = Progress 
+        | complete  = Complete
+        | changed   = Progress
         | otherwise = Stuck
 
     grid'
         | complete = grid
         | changed = pruned
         | otherwise = first_guess
-    
+
     blocked = void || not safe
     void = any (== conflicted) grid
     safe = allGroups consistent masks
@@ -52,14 +51,11 @@ solve grid = (result, grid', next_guess)
     consistent = not . bitsOverlap . fmap maskBits
 
     (singles, first_guess, next_guess) = expand grid
-    pruned = apply <$> singles <*> group_masks <*> grid
+    pruned = act <$> group_masks <*> singles <*> grid
 
-    masks = maskOf <$> singles <*> grid
+    masks = cellMask <$> singles <*> grid
     group_masks = foldGroups masks
     changed = pruned /= grid
-
-    maskOf single cell = if single then cellMask cell else mempty
-    apply single mask cell = if single then cell else act mask cell
 
 type Stack n m = [Sudoku n m]
 

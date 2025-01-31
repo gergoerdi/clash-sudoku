@@ -7,7 +7,6 @@ import Sudoku.Solve
 import Sudoku.Grid
 import Sudoku.Cell
 
-import Data.Monoid.Action
 import Control.Monad ((<=<), guard)
 import Control.Monad.State.Strict
 import Data.Maybe (maybeToList)
@@ -76,11 +75,11 @@ prune grid = do
     uniques = isUnique <$> grid
     masks = maskOf <$> uniques <*> grid
 
-    maskOf is_unique cell = if is_unique then cellMask cell else mempty
+    maskOf is_unique cell = cellMask is_unique cell
 
     apply is_unique mask cell0 = CellUnit{..}
       where
-        cell = if is_unique then cell0 else act mask cell0
+        cell = act mask is_unique cell0
         guesses = possibilities cell
         is_conflicted = cell == conflicted
 

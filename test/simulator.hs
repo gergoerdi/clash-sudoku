@@ -3,7 +3,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Main where
 
-import Clash.Prelude hiding (lift)
+import Clash.Prelude hiding (lift, (.), imap)
+import Control.Category ((.))
 import Protocols.Internal (simulateCSE)
 import qualified Protocols.Df as Df
 import Protocols (Ack(..))

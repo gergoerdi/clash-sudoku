@@ -8,7 +8,6 @@ import Sudoku.Cell
 import Sudoku.Grid
 import Sudoku.Utils
 
-import Data.Monoid.Action
 import Data.Traversable
 
 expand :: (KnownNat n, KnownNat m) => Sudoku n m -> (Grid n m Bool, Sudoku n m, Sudoku n m)
@@ -35,16 +34,13 @@ sudoku grid
     void = any (== conflicted) grid
     safe = allGroups consistent masks
     complete = and singles
-    
+
     consistent = not . bitsOverlap . fmap maskBits
 
     (singles, grid1, grid2) = expand grid
 
-    masks = maskOf <$> singles <*> grid
+    masks = cellMask <$> singles <*> grid
     group_masks = foldGroups masks
-    
-    pruned = apply <$> singles <*> group_masks <*> grid
-    changed = pruned /= grid
 
-    maskOf single cell = if single then cellMask cell else mempty
-    apply single mask = if single then id else act mask
+    pruned = act <$> group_masks <*> singles <*> grid
+    changed = pruned /= grid

@@ -8,7 +8,6 @@ import Sudoku.Solve (Solvable, Sudoku)
 import Sudoku.Cell
 import Sudoku.Grid
 
-import Data.Monoid.Action
 import Control.Monad.State.Strict
 
 single :: (Solvable n m) => Cell n m -> Bool
@@ -39,15 +38,12 @@ sudoku grid
     void = any (== conflicted) grid
     safe = allGroups consistent masks
     complete = and is_singles
-    
+
     consistent = not . bitsOverlap . fmap maskBits
 
     is_singles = single <$> grid
-    masks = maskOf <$> is_singles <*> grid
+    masks = cellMask <$> is_singles <*> grid
     group_masks = foldGroups masks
-    
-    pruned = apply <$> is_singles <*> group_masks <*> grid
-    changed = pruned /= grid
 
-    maskOf is_single cell = if is_single then cellMask cell else mempty
-    apply is_single mask = if is_single then id else act mask
+    pruned = act <$> group_masks <*> is_singles <*> grid
+    changed = pruned /= grid

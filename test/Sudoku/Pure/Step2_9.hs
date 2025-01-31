@@ -9,7 +9,6 @@ import Sudoku.Cell
 import Sudoku.Grid
 
 import Control.Monad
-import Data.Monoid.Action
 import Control.Monad.State.Strict
 import Control.Arrow (first, second)
 import Control.Arrow.Transformer.Automaton
@@ -37,18 +36,15 @@ solve grid
     splits = splitCell <$> grid
     singles = (== conflicted) . snd <$> splits
 
-    masks = maskOf <$> singles <*> grid
+    masks = cellMask <$> singles <*> grid
     group_masks = foldGroups masks
 
-    pruned = apply <$> singles <*> group_masks <*> grid
-
-    maskOf single = if single then cellMask else mempty
-    apply single mask = if single then id else act mask
+    pruned = act <$> group_masks <*> singles <*> grid
 
     guesses = evalState (traverse (state . guess1) ((,,) <$> singles <*> grid <*> guesses)) False
     (grid1, grid2) = (fst <$> guesses, snd <$> guesses)
 
-    guess1 (single, cell, guess) guessed_before 
+    guess1 (single, cell, guess) guessed_before
         | not guessed_before
         , not single
         = (guess, True)

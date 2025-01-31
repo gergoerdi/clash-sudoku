@@ -18,7 +18,6 @@ dependencies:
 
   - mtl
   - arrows
-  - monoid-extras
   - clash-protocols
   - clash-cores
   - clash-format

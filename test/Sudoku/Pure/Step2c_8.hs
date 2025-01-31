@@ -1,6 +1,6 @@
 -- Open `sudoku`'s recursion
 {-# LANGUAGE RecordWildCards #-}
-module Sudoku.Pure.Step2_7 where
+module Sudoku.Pure.Step2c_8 where
 
 import Clash.Prelude hiding (mapAccumR)
 
@@ -28,15 +28,17 @@ data Result n m
     = Blocked
     | Complete
     | Progress (Sudoku n m)
-    | Stuck (Sudoku n m) (Sudoku n m)
+    | Stuck (Sudoku n m)
 
-solve :: (KnownNat n, KnownNat m) => Sudoku n m -> Result n m
-solve grid
-    | blocked   = Blocked
-    | complete  = Complete
-    | changed   = Progress pruned
-    | otherwise = Stuck grid1 grid2
+solve :: (KnownNat n, KnownNat m) => Sudoku n m -> (Result n m, Sudoku n m)
+solve grid = (result, next_guess)
   where
+    result
+        | blocked   = Blocked
+        | complete  = Complete
+        | changed   = Progress pruned
+        | otherwise = Stuck first_guess
+
     blocked = void || not safe
     void = any (== conflicted) grid
     safe = allGroups consistent masks
@@ -44,7 +46,7 @@ solve grid
 
     consistent = not . bitsOverlap . fmap maskBits
 
-    (singles, grid1, grid2) = expand grid
+    (singles, first_guess, next_guess) = expand grid
 
     masks = cellMask <$> singles <*> grid
     group_masks = foldGroups masks
@@ -57,23 +59,26 @@ type Stack n m = [Sudoku n m]
 sudoku' :: (Alternative f, KnownNat n, KnownNat m) => Sudoku n m -> f (Sudoku n m)
 sudoku' = go
   where
-    go grid = case solve grid of
-        Complete  -> pure grid
-        Progress grid' -> go grid'
-        Blocked -> empty
-        Stuck grid1 grid2 -> go grid1 <|> go grid2
+    go grid =
+      let (result, next_guess) = solve grid
+      in case result of
+        Blocked           -> empty
+        Complete          -> pure grid
+        Progress pruned   -> go pruned
+        Stuck first_guess -> go first_guess <|> go next_guess
 
 sudoku :: (Alternative f, KnownNat n, KnownNat m) => Sudoku n m -> f (Sudoku n m)
 sudoku grid = go (grid, emptyStack)
   where
-    go (grid, stack) = case solve grid of
-        Complete -> pure grid
-        Progress grid' -> go (grid', stack)
-        Blocked -> case pop stack of
-            Just (grid', stack') -> go (grid', stack')
-            Nothing -> empty
-            -- >>= go
-        Stuck grid1 grid2 -> go (grid1, push grid2 stack)
+    go (grid, stack) =
+        let (result, next_guess) = solve grid
+        in case result of
+            Complete -> pure grid
+            Progress grid' -> go (grid', stack)
+            Blocked -> case pop stack of
+                Just (grid', stack') -> go (grid', stack')
+                Nothing -> empty
+            Stuck first_guess -> go (first_guess, push next_guess stack)
 
     emptyStack = []
     push x xs = x:xs

@@ -7,7 +7,6 @@ import Sudoku.Grid
 import Sudoku.Cell
 
 import Data.Maybe
-import Data.Monoid.Action
 import Control.Monad (guard)
 import Control.Monad.State.Strict
 
@@ -23,13 +22,10 @@ prune1 :: (Solvable n m) => Sudoku n m -> Maybe (Sudoku n m)
 prune1 grid = do
     guard $ not (failed grid)
     masks' <- groupMasks masks
-    pure $ apply <$> uniques <*> masks' <*> grid
+    pure $ act <$> masks' <*> uniques <*> grid
   where
     uniques = isUnique <$> grid
-    masks = maskOf <$> uniques <*> grid
-
-    maskOf is_unique cell = if is_unique then cellMask cell else mempty
-    apply is_unique mask = if is_unique then id else act mask
+    masks = cellMask <$> uniques <*> grid
 
 prune :: (Solvable n m) => Sudoku n m -> Maybe (Sudoku n m)
 prune grid = do

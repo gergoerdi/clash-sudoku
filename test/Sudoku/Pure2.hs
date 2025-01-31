@@ -9,7 +9,6 @@ import Sudoku.Grid
 import Sudoku.Cell
 
 import Data.Maybe
-import Data.Monoid.Action
 import Control.Monad (guard)
 import Control.Monad.State.Strict
 
@@ -34,8 +33,8 @@ unit cell group_mask = CellUnit{ cell = cell', ..}
     is_conflicted = cell == conflicted
     possibilities = if is_unique then [cell] else [guess, cont]
 
-    mask = if is_unique then cellMask cell else mempty
-    cell' = if is_unique then cell else act group_mask cell
+    mask = cellMask is_unique cell
+    cell' = act group_mask is_unique cell
 
 propagate1 :: (Solvable n m) => Sudoku n m -> Maybe (Grid n m (CellUnit n m))
 propagate1 grid = do

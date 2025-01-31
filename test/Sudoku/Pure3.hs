@@ -7,7 +7,6 @@ import Sudoku.Solve (Solvable, Sudoku)
 import Sudoku.Cell
 import Sudoku.Grid
 
-import Data.Monoid.Action
 import Control.Monad.State.Strict
 
 isUnique :: (Solvable n m) => Cell n m -> Bool
@@ -62,14 +61,11 @@ search grid
     | otherwise               = sudoku =<< expand possibilities grid
 
 prune :: (Solvable n m) => Sudoku n m -> Sudoku n m
-prune grid = apply <$> uniques <*> group_masks <*> grid
+prune grid = act <$> group_masks <*> uniques <*> grid
   where
     uniques = isUnique <$> grid
-    masks = maskOf <$> uniques <*> grid
+    masks = cellMask <$> uniques <*> grid
     group_masks = foldGroups masks
-
-    maskOf is_unique cell = if is_unique then cellMask cell else mempty
-    apply is_unique mask = if is_unique then id else act mask
 
 fix :: (Eq a) => (a -> a) -> (a -> a)
 fix f x = let x' = f x in if x == x' then x' else f x'

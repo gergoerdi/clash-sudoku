@@ -7,7 +7,6 @@ import Format (ascii)
 import Sudoku.Utils ()
 
 import Data.Word (Word8)
-import Data.Monoid.Action
 
 newtype Cell n m = Cell{ cellBits :: BitVector (n * m) }
     deriving stock (Generic)
@@ -84,11 +83,11 @@ parseCell x
 newtype Mask n m = Mask{ maskBits :: BitVector (n * m) }
     deriving (Semigroup, Monoid) via Ior (BitVector (n * m))
 
-instance (KnownNat n, KnownNat m) => Action (Mask n m) (Cell n m) where
-    act (Mask m) (Cell c) = Cell (c .&. complement m)
+cellMask :: (KnownNat n, KnownNat m) => Bool -> Cell n m -> Mask n m
+cellMask single cell = if single then Mask (cellBits cell) else mempty
 
-cellMask :: (KnownNat n, KnownNat m) => Cell n m -> Mask n m
-cellMask = Mask . cellBits
+act :: (KnownNat n, KnownNat m) => Mask n m -> Bool -> Cell n m -> Cell n m
+act (Mask m) single cell@(Cell c) = if single then cell else Cell (c .&. complement m)
 
 bitsOverlap :: (KnownNat n, KnownNat k) => Vec k (BitVector n) -> Bool
 bitsOverlap = (/= zeroBits) . snd . foldr step (zeroBits, zeroBits)

@@ -16,7 +16,6 @@ import Sudoku.Utils
 import Sudoku.Grid
 import Sudoku.Cell
 
-import Data.Monoid.Action
 import Data.Traversable (mapAccumR)
 import Data.Maybe
 
@@ -59,14 +58,11 @@ solve grid
     complete = and singles
 
     (singles, first_guess, next_guess) = expand grid
-    pruned = apply <$> group_masks <*> singles <*> grid
+    pruned = act <$> group_masks <*> singles <*> grid
 
-    masks = maskOf <$> singles <*> grid
+    masks = cellMask <$> singles <*> grid
     group_masks = foldGroups masks
     changed = pruned /= grid
-
-    maskOf single cell = if single then cellMask cell else mempty
-    apply mask single cell = if single then cell else act mask cell
 
 shiftIn :: (Traversable f) => a -> f a -> f a
 shiftIn shift_in = snd . mapAccumR shift shift_in

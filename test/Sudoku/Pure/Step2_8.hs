@@ -9,7 +9,6 @@ import Sudoku.Cell
 import Sudoku.Grid
 
 import Control.Monad
-import Data.Monoid.Action
 import Control.Monad.State.Strict
 import Control.Arrow (first, second)
 import Control.Arrow.Transformer.Automaton
@@ -54,8 +53,8 @@ solve grid
     pruned = apply <$> group_masks <*> units
     changed = pruned /= grid
 
-    maskOf CellUnit{..} = if single then cellMask cell else mempty
-    apply mask CellUnit{..} = if single then cell else act mask cell
+    maskOf CellUnit{..} = cellMask single cell
+    apply mask CellUnit{..} = act mask single cell
 
     guesses = evalState (traverse (state . guess1) units) False
     (grid1, grid2) = (fst <$> guesses, snd <$> guesses)

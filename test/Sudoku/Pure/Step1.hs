@@ -10,7 +10,6 @@ import Sudoku.Solve (Solvable, Sudoku)
 import Sudoku.Cell
 import Sudoku.Grid
 
-import Data.Monoid.Action
 import Control.Monad.State.Strict
 
 single :: (Solvable n m) => Cell n m -> Bool
@@ -47,14 +46,11 @@ search grid
     | otherwise               = asum [sudoku grid' | grid' <- expand grid]
 
 prune :: (Solvable n m) => Sudoku n m -> Sudoku n m
-prune grid = apply <$> is_singles <*> group_masks <*> grid
+prune grid = act <$> group_masks <*> is_singles <*> grid
   where
     is_singles = single <$> grid
-    masks = maskOf <$> is_singles <*> grid
+    masks = cellMask <$> is_singles <*> grid
     group_masks = foldGroups masks
-
-    maskOf is_single cell = if is_single then cellMask cell else mempty
-    apply is_single mask = if is_single then id else act mask
 
 sudoku :: (Alternative f, Solvable n m) => Sudoku n m -> f (Sudoku n m)
 sudoku = search . prune

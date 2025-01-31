@@ -7,7 +7,6 @@ import Sudoku.Solve (Solvable, Sudoku)
 import Sudoku.Cell
 import Sudoku.Grid
 
-import Data.Monoid.Action
 import Data.Traversable (mapAccumR)
 
 single :: (KnownNat n, KnownNat m) => Cell n m -> Bool
@@ -48,5 +47,5 @@ sudoku grid
     masks = maskOf <$> grid
     group_masks = foldGroups masks
 
-    maskOf cell = if single cell then cellMask cell else mempty
-    apply mask cell = if single cell then cell else act mask cell
+    maskOf cell = cellMask (single cell) cell
+    apply mask cell = act mask (single cell) cell

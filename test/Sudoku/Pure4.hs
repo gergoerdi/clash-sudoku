@@ -8,7 +8,6 @@ import Sudoku.Solve (Solvable)
 import Sudoku.Cell
 
 import Data.Bits
-import Data.Monoid.Action
 import Data.Foldable (fold, toList)
 
 import Data.Functor.Compose
@@ -143,6 +142,6 @@ prune = pruneBy boxs . pruneBy cols . pruneBy rows
     reduce cells = fmap (apply (fixed cells)) cells
 
     fixed :: (Functor f, Foldable f, Solvable n m) => f (Cell n m) -> Mask n m
-    fixed = fold . fmap (\x -> if isUnique x then cellMask x else mempty)
+    fixed = fold . fmap (\x -> cellMask (isUnique x) x)
 
-    apply mask cell = if isUnique cell then cell else act mask cell
+    apply mask cell = act mask (isUnique cell) cell

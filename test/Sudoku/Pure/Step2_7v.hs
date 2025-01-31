@@ -9,7 +9,6 @@ import Sudoku.Cell
 import Sudoku.Grid
 import Sudoku.Utils
 
-import Data.Monoid.Action
 import Data.Traversable
 
 expand :: (KnownNat n, KnownNat m) => Sudoku n m -> (Grid n m Bool, Sudoku n m, Sudoku n m)
@@ -47,14 +46,11 @@ solve grid
 
     (singles, grid1, grid2) = expand grid
 
-    masks = maskOf <$> singles <*> grid
+    masks = cellMask <$> singles <*> grid
     group_masks = foldGroups masks
 
-    pruned = apply <$> singles <*> group_masks <*> grid
+    pruned = act <$> group_masks <*> singles <*> grid
     changed = pruned /= grid
-
-    maskOf single cell = if single then cellMask cell else mempty
-    apply single mask = if single then id else act mask
 
 type StackDepth n m = ((n * m) * (m * n))
 type StackMem n m = Vec (StackDepth n m) (Sudoku n m)
@@ -81,4 +77,3 @@ sudoku = go emptyStack
 
         | otherwise
         = let sp' = sp - 1 in Just (elems !! sp', (elems, sp'))
-        
