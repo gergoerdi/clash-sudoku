@@ -24,18 +24,10 @@ eol = str "\r\n"
 x $$ y = x <> eol <> y
 
 outputFormat :: forall n m -> (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Format Word8 Word8
-outputFormat n m = wait <> cycles $$ solution <> eol
+outputFormat n m = solution <> eol
   where
-    cycles = str "Cycles: " <> number <> str "."
     solution = cond (== ascii '!') (drop <> str "Unsolvable.") (str "Solution:" $$ grid)
-    number = skip (ascii '0') <> delimit (ascii '#') print
     grid = gridFormat n m
-
-skip :: (Eq a) => a -> Format a b
-skip x = while (== x) drop
-
-delimit :: (Eq a) => a -> Format a b -> Format a b
-delimit x fmt = until (== x) fmt <> drop
 
 gridFormat :: forall n m -> (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Format Word8 Word8
 gridFormat n m = n *: vsep (m *: vsep (m *: hsep (n *: hsep print)))
@@ -52,7 +44,7 @@ board
 board n m =
     Df.mapMaybe parseCell |>
     Circuit (controller @n @m) |>
-    Df.map (either id showCell) |>
+    Df.map showCell |>
     format (loop (outputFormat n m))
 
 createDomain vXilinxSystem{vName="Dom100", vPeriod = hzToPeriod 100_000_000}
