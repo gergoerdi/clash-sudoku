@@ -200,3 +200,15 @@ Just hexodoku = readGrid . unlines $
     , "5 . . . | . F E .  | . A B .  | . . . 2"
     , ". 2 . . | 7 . . .  | . . . C  | . . F ."
     ]
+
+pruningExample :: Sudoku 3 2
+Just pruningExample = readGrid . unlines $
+  [ "1 2 .   3 . 4"
+  , ". . 5   . . ."
+  , "             "
+  , ". 1 .   . 4 ."
+  , ". . .   . . 2"
+  , "             "
+  , ". . .   5 . ."
+  , ". . .   . . ."
+  ]
