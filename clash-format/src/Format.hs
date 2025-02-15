@@ -16,6 +16,7 @@ import Format.SymbolAt
 
 import Clash.Class.Counter
 import Protocols
+import Protocols.Internal (simulateCSE)
 import Data.Word
 import Data.Maybe
 import Data.Profunctor
@@ -48,7 +49,7 @@ instance Profunctor Format where
     dimap f g (MkFormat s0 step) = MkFormat s0 $ dimap f (\(s', o, consumed) -> (s', g <$> o, consumed)) . step
 
 toCompander
-    :: (HiddenClockResetEnable dom, NFDataX s)
+    :: (NFDataX s)
     => s
     -> (s -> Transition s i (Maybe o))
     -> Compander i o
@@ -129,8 +130,11 @@ until p (MkFormat s0 step) = MkFormat Check \case
     Body s -> mapState (Just . maybe Check Body) $ step s
 while = until . (not . )
 
-{-# INLINE format #-}
-format :: (HiddenClockResetEnable dom) => Format a b -> Circuit (Df dom a) (Df dom b)
-format (MkFormat s0 step) = compand $ toCompander (Just s0) \case
+fromFormat :: Format a b -> Compander a b
+fromFormat (MkFormat s0 step) = toCompander (Just s0) \case
     Nothing -> Varying \_ -> (Nothing, Nothing, True)
     Just s -> step s
+
+{-# INLINE format #-}
+format :: (HiddenClockResetEnable dom) => Format a b -> Circuit (Df dom a) (Df dom b)
+format = compand . fromFormat
