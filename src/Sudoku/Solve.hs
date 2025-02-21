@@ -79,7 +79,7 @@ data Result
 
 data Transition s r
     = Continue s
-    | Result r
+    | Done r
 
 step
     :: (Solvable n m)
@@ -90,11 +90,11 @@ step
 step stack_rd grid sp = case solve grid of
     _ | Just popped <- stack_rd -> Continue (popped, sp, Nothing)
     Blocked
-        | sp == 0 -> Result Unsolvable
+        | sp == 0 -> Done Unsolvable
         | otherwise -> Continue (grid, sp', Just (Read sp'))
       where
         sp' = sp - 1
-    Complete -> Result Solved
+    Complete -> Done Solved
     Progress pruned -> Continue (pruned, sp, Nothing)
     Stuck guess cont -> Continue (guess, sp + 1, Just (Write sp cont))
 
@@ -128,7 +128,7 @@ solver cell_in en = (cell_out, result)
 
     update cell_in en stack_rd grid sp = case loadOrStep cell_in en stack_rd grid sp of
         Continue (grid', sp', stack_cmd) -> (grid', sp', stack_cmd, Nothing)
-        Result result -> (grid, sp, Nothing, Just result)
+        Done result -> (grid, sp, Nothing, Just result)
 
 data MemCmd n a = Write (Index n) a | Read (Index n)
 
