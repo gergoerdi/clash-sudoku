@@ -50,14 +50,14 @@ solve grid
     | blocked   = Blocked
     | complete  = Complete
     | changed   = Progress pruned
-    | otherwise = Stuck first_guess next_guess
+    | otherwise = Stuck guess cont
   where
     blocked = void || not safe
     void = any (== conflicted) grid
     safe = allGroups consistent masks
     complete = and singles
 
-    (singles, first_guess, next_guess) = expand grid
+    (singles, guess, cont) = expand grid
     pruned = act <$> group_masks <*> singles <*> grid
 
     masks = cellMask <$> singles <*> grid
@@ -96,7 +96,7 @@ step stack_rd grid sp = case solve grid of
         sp' = sp - 1
     Complete -> Result Solved
     Progress pruned -> Continue (pruned, sp, Nothing)
-    Stuck guess1 guess2 -> Continue (guess1, sp + 1, Just (Write sp guess2))
+    Stuck guess cont -> Continue (guess, sp + 1, Just (Write sp cont))
 
 loadOrStep
     :: (Solvable n m)
