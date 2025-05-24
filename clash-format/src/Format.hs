@@ -19,7 +19,6 @@ import Protocols
 import Protocols.Internal (simulateCSE)
 import Data.Word
 import Data.Maybe
-import Data.Profunctor
 
 -- | A @b@ value that potentially depends on an @a@ parameter
 data a :- b
@@ -27,11 +26,6 @@ data a :- b
     | Varying (a -> b)
     deriving (Functor)
 infixr 0 :-
-
-instance Profunctor (:-) where
-    dimap to from = \case
-        Const x -> Const (from x)
-        Varying f -> Varying (from . f . to)
 
 -- | A state transition of a @compander@ with internal state @s@, input @a@ and output @b@
 type Transition s i o = i :- (s, o, Bool)
@@ -44,9 +38,6 @@ data Format a b where
 
 instance Functor (Format a) where
     fmap f (MkFormat s0 step) = MkFormat s0 $ fmap (\(s', o, consumed) -> (s', f <$> o, consumed)) . step
-
-instance Profunctor Format where
-    dimap f g (MkFormat s0 step) = MkFormat s0 $ dimap f (\(s', o, consumed) -> (s', g <$> o, consumed)) . step
 
 toCompander
     :: (NFDataX s)
