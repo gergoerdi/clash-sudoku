@@ -1,6 +1,7 @@
 resolver: clash-1.8.1.yaml
 
 packages:
+  - 'clash-format'
   - '.'
 
 extra-deps:
