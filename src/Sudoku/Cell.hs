@@ -2,9 +2,10 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 module Sudoku.Cell where
 
-import Clash.Prelude
+import Clash.Prelude hiding (foldr)
 import Format (ascii)
 import Sudoku.Utils ()
+import Data.Foldable hiding (fold)
 
 import Data.Word (Word8)
 
@@ -89,7 +90,7 @@ cellMask single cell = if single then Mask (cellBits cell) else mempty
 act :: (KnownNat n, KnownNat m) => Mask n m -> Bool -> Cell n m -> Cell n m
 act (Mask m) single cell@(Cell c) = if single then cell else Cell (c .&. complement m)
 
-bitsOverlap :: (KnownNat n, KnownNat k) => Vec k (BitVector n) -> Bool
+bitsOverlap :: (KnownNat n, Foldable f) => f (BitVector n) -> Bool
 bitsOverlap = (/= zeroBits) . snd . foldr step (zeroBits, zeroBits)
   where
     step x (y, overlaps) = (x .|. y, overlaps .|. (x .&. y))

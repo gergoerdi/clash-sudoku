@@ -22,7 +22,7 @@ import Data.Maybe
 type Sudoku n m = Grid n m (Cell n m)
 type Solvable n m = (KnownNat n, KnownNat m, 1 <= n * m * m * n)
 
-consistent :: (KnownNat n, KnownNat m, KnownNat k) => Vec k (Mask n m) -> Bool
+consistent :: (Functor f, Foldable f, KnownNat n, KnownNat m) => f (Mask n m) -> Bool
 consistent = not . bitsOverlap . fmap maskBits
 
 expand :: (KnownNat n, KnownNat m) => Sudoku n m -> (Grid n m Bool, Sudoku n m, Sudoku n m)
