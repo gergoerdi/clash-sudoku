@@ -24,11 +24,9 @@ eol = str "\r\n"
 x $$ y = x <> eol <> y
 
 outputFormat :: forall n m -> (KnownNat n, KnownNat m, 1 <= n, 1 <= m) => Format Word8 Word8
-outputFormat n m = wait <> cycles $$ solution <> eol
+outputFormat n m = wait <> solution <> eol
   where
-    cycles = str "Cycles: " <> number <> str "."
     solution = cond (== ascii '!') (drop <> str "Unsolvable.") (str "Solution:" $$ grid)
-    number = skip (ascii '0') <> delimit (ascii '#') print
     grid = gridFormat n m
 
 skip :: (Eq a) => a -> Format a b

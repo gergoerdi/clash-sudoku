@@ -39,9 +39,6 @@ controller (shift_in, out_ack) = (in_ack, shift_out)
 type Digit = Index 10
 type BCD n = Vec n Digit
 
-type CyclesWidth (n :: Nat) (m :: Nat) = 6 -- TODO
-type Cycles n m = BCD (CyclesWidth n m)
-
 showDigit :: Digit -> Word8
 showDigit n = ascii '0' + fromIntegral n
 
@@ -55,9 +52,7 @@ type CellIndex n m = Index ((n * m) * (m * n))
 
 data St n m
     = ShiftIn (CellIndex n m)
-    | Busy (Cycles n m)
-    | ShiftOutCycleCount Result (Cycles n m) (Index (CyclesWidth n m))
-    | ShiftOutCycleCountFinished Result
+    | Busy
     | ShiftOutSolved (CellIndex n m)
     | ShiftOutUnsolvable
     deriving (Generic, NFDataX, Show)
@@ -80,24 +75,14 @@ control (shift_in, out_ack, head_cell, result) = get >>= {-(\x -> traceShowM x >
         Df.NoData -> do
             pure WaitForIO
         Df.Data shift_in -> do
-            put $ next ShiftIn i (Busy countMin)
+            put $ next ShiftIn i Busy
             pure $ Consume shift_in
-    Busy cnt -> do
-        let cnt' = countSucc cnt
+    Busy -> do
         put $ case result of
-            Nothing -> Busy cnt'
-            Just result -> ShiftOutCycleCount result cnt' 0
+            Nothing -> Busy
+            Just Solved -> ShiftOutSolved 0
+            Just Unsolvable -> ShiftOutUnsolvable
         pure Solve
-    ShiftOutCycleCount result cnt i -> do
-        let cnt' = cnt `rotateLeftS` d1
-        wait out_ack $ do
-            put $ next (ShiftOutCycleCount result cnt') i (ShiftOutCycleCountFinished result)
-        pure $ Produce False $ Left $ showDigit $ head cnt
-    ShiftOutCycleCountFinished result -> do
-        wait out_ack $ put $ case result of
-            Solved -> ShiftOutSolved 0
-            Unsolvable -> ShiftOutUnsolvable
-        pure $ Produce False $ Left $ ascii '#'
     ShiftOutUnsolvable -> do
         wait out_ack $ put $ ShiftIn 0
         pure $ Produce False $ Right conflicted
