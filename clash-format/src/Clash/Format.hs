@@ -16,7 +16,6 @@ import Clash.Format.SymbolAt
 
 import Clash.Class.Counter
 import Protocols
-import Protocols.Internal (simulateCSE)
 import Data.Word
 import Data.Maybe
 
@@ -120,6 +119,12 @@ until p (MkFormat s0 step) = MkFormat Check \case
     Check -> branch \x -> if p x then Nothing else Just $ Body s0
     Body s -> mapState (Just . maybe Check Body) $ step s
 while = until . (not . )
+
+skip :: (Eq a) => a -> Format a b
+skip x = while (== x) drop
+
+delimit :: (Eq a) => a -> Format a b -> Format a b
+delimit x fmt = until (== x) fmt <> drop
 
 fromFormat :: Format a b -> Compander a b
 fromFormat (MkFormat s0 step) = toCompander (Just s0) \case
