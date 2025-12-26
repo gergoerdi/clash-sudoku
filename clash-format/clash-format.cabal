@@ -1,0 +1,63 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.37.0.
+--
+-- see: https://github.com/sol/hpack
+
+name:           clash-format
+version:        1.0.0
+category:       hardware
+author:         Gergő Érdi <gergo@erdi.hu>
+maintainer:     Gergő Érdi <gergo@erdi.hu>
+license:        MIT
+build-type:     Simple
+extra-source-files:
+    README.md
+
+library
+  exposed-modules:
+      Format
+      Format.Compand
+      Format.SymbolAt
+      Format.Model
+  other-modules:
+      Paths_clash_format
+  hs-source-dirs:
+      src
+      test
+  default-extensions:
+      BinaryLiterals
+      ConstraintKinds
+      DataKinds
+      DeriveAnyClass
+      DeriveGeneric
+      DeriveLift
+      DerivingStrategies
+      ExplicitForAll
+      ExplicitNamespaces
+      FlexibleContexts
+      FlexibleInstances
+      KindSignatures
+      MagicHash
+      MonoLocalBinds
+      NoImplicitPrelude
+      NoStarIsType
+      NoStrictData
+      NoStrict
+      QuasiQuotes
+      ScopedTypeVariables
+      TemplateHaskellQuotes
+      TemplateHaskell
+      TypeApplications
+      TypeFamilies
+      TypeOperators
+  ghc-options: -fexpose-all-unfoldings -fno-worker-wrapper -fplugin GHC.TypeLits.KnownNat.Solver -fplugin GHC.TypeLits.Normalise -fplugin GHC.TypeLits.Extra.Solver -Wunused-imports
+  build-depends:
+      base
+    , clash-prelude
+    , clash-protocols
+    , ghc-typelits-extra
+    , ghc-typelits-knownnat
+    , ghc-typelits-natnormalise
+    , hedgehog
+  default-language: Haskell2010
