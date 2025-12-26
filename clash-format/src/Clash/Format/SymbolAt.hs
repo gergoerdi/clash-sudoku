@@ -1,6 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE RequiredTypeArguments #-}
-module Format.SymbolAt (ascii, asciiVal, SymbolLength, SymbolVec, symbolVec) where
+module Clash.Format.SymbolAt (ascii, asciiVal, SymbolLength, SymbolVec, symbolVec) where
 
 import Clash.Prelude
 import Data.Proxy

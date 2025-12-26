@@ -16,10 +16,10 @@ extra-source-files:
 
 library
   exposed-modules:
-      Format
-      Format.Compand
-      Format.SymbolAt
-      Format.Model
+      Clash.Format
+      Clash.Format.Compand
+      Clash.Format.SymbolAt
+      Clash.Format.Model
   other-modules:
       Paths_clash_format
   hs-source-dirs:

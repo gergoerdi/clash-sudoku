@@ -2,7 +2,7 @@
 {-# LANGUAGE RequiredTypeArguments, RankNTypes #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DeriveFunctor #-}
-module Format.Compand where
+module Clash.Format.Compand where
 
 import Clash.Prelude
 

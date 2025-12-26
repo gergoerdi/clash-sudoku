@@ -2,8 +2,8 @@
 {-# LANGUAGE RequiredTypeArguments, RankNTypes #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DeriveFunctor #-}
-module Format
-    ( module Format
+module Clash.Format
+    ( module Clash.Format
 
     , ascii
     , asciiVal
@@ -11,8 +11,8 @@ module Format
 
 import Clash.Prelude hiding (Const, drop, print, until)
 
-import Format.Compand
-import Format.SymbolAt
+import Clash.Format.Compand
+import Clash.Format.SymbolAt
 
 import Clash.Class.Counter
 import Protocols

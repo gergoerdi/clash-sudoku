@@ -1,9 +1,9 @@
 {-# LANGUAGE RequiredTypeArguments #-}
-module Format.Model where
+module Clash.Format.Model where
 
 import Clash.Prelude hiding (Const)
 
-import Format
+import Clash.Format
 
 import Data.Word
 

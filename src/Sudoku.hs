@@ -15,7 +15,7 @@ import Sudoku.Cell
 import Sudoku.Controller
 import Sudoku.Solve (Solvable)
 import Sudoku.Serial
-import Format
+import Clash.Format
 
 eol :: Format a Word8
 eol = str "\r\n"
