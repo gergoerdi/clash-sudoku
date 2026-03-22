@@ -12,7 +12,7 @@ import qualified Protocols.Df as Df
 
 import Sudoku.Cell
 import Sudoku.Solve
-import Format
+import Clash.Format
 
 type Stream dom a b = (Signal dom (Df.Data a), Signal dom Ack) -> (Signal dom Ack, Signal dom (Df.Data b))
 

@@ -3,7 +3,7 @@
 module Sudoku.Cell where
 
 import Clash.Prelude hiding (foldr)
-import Format (ascii)
+import Clash.Format (ascii)
 import Sudoku.Utils ()
 import Data.Foldable hiding (fold)
 
